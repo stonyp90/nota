@@ -574,19 +574,20 @@ test('the FAQ fills the story column: collapsed disclosures, no literal amounts'
   assert.ok(faq.compareDocumentPosition(note) & 4, 'the fine print still closes the column');
 });
 
-test('the pane is flat: the big containers carry no border', () => {
-  // Owner (2026-08-27): « remove those big borders ». The hero band, the two
-  // reward cards and the claim form shed their outlines — the wash, the brand
-  // tint and the shadows carry each region. Hairlines stay only on small
-  // controls (FAQ disclosures, inputs) where the affordance needs an edge.
+test('the reward cards stay transparent and use a quiet outline', () => {
+  // The reward cards remain part of the page background rather than becoming
+  // two opaque slabs. A hairline groups each stat, while the notary card gets
+  // the stronger brand edge.
   const block = (sel) => {
     const m = CSS_SRC.match(new RegExp(sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*\\{[^}]*\\}'));
     assert.ok(m, sel + ' rule exists');
     return m[0];
   };
   assert.ok(!/border:(?!\s*0)|border-color/.test(block('.pr-hero')), 'the hero band has no border');
-  assert.ok(!/border:(?!\s*0)|border-color/.test(block('.pr-card')), 'a reward card has no border');
-  assert.ok(!/border/.test(block('.pr-card--notaire')), 'the highlight is the tint, not a ring');
+  assert.match(block('.pr-card'), /background:\s*transparent/, 'a reward card does not fill its background');
+  assert.match(block('.pr-card'), /border:\s*1px solid/, 'a reward card has a quiet outline');
+  assert.match(block('.pr-card'), /box-shadow:\s*none/, 'a reward card does not float as a slab');
+  assert.match(block('.pr-card--notaire'), /border-color:\s*var\(--brand\)/, 'the highlight uses the brand edge');
   assert.match(block('.pr-form-panel'), /border:\s*0/, 'the form strips the .panel ring and the top accent');
 });
 

@@ -263,6 +263,25 @@ services:
     depends_on:
       - admin-api
 
+  # The shareable business plan on :4175. It serves the generated HTML plus
+  # the French summary and the planning evidence linked from that document.
+  # The server reads files per request and runs under the same content watcher
+  # as the application surfaces, so an updated plan is visible without a
+  # container rebuild. Add `127.0.0.1 plan.gonata.ca pitch.gonota.ca` to
+  # /etc/hosts when you want to exercise the production hostnames locally;
+  # the Host header is not required by the server.
+  plan:
+    image: node:20-alpine
+    working_dir: /repo
+    volumes:
+      - ./:/repo
+    environment:
+      PORT: 4175
+      NOTA_WATCH_PATHS: docs/pitch-deck.html,docs/pitch-deck,docs/business-plan.html,docs/plan-affaires-sommaire.md,docs/planning/business-plan-model.json,docs/planning/business-plan-review-2026-09-09.md,docs/planning/serve-business-plan.mjs
+    command: ["node", "apps/api/scripts/dev-watch.js", "docs/planning/serve-business-plan.mjs"]
+    ports:
+      - "4175:4175"
+
   # Keycloak — le fournisseur d'identité qui NE CAPTE QUE LE COURRIEL (ADR 0045).
   #
   # Le royaume importé (docker/keycloak/realm-nota.json) pose trois choses et

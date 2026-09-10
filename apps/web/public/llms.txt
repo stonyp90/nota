@@ -87,3 +87,5 @@ no legal services.
 - Site : https://gonota.ca/
 - Version anglaise : https://gonota.ca/?lang=en
 - Carnet public (JSON) : https://gonota.ca/api/bids
+- Vidéos Nota : https://www.youtube.com/@gonotaca
+- Page LinkedIn officielle : https://www.linkedin.com/company/gonota/

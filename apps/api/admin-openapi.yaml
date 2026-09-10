@@ -65,6 +65,72 @@ components:
         protectedDecisions:
           type: array
           items: { type: string }
+    CrmStage:
+      type: object
+      required: [id, nom, nomEn]
+      properties:
+        id: { type: string, enum: [nouveau, contacte, qualifie, converti, perdu] }
+        nom: { type: string }
+        nomEn: { type: string }
+    CrmLead:
+      type: object
+      required: [bidId, serviceId, dateISO, stage, stageNom, stageNomEn, stageSource, readiness, revision]
+      properties:
+        bidId: { type: string }
+        serviceId: { type: string }
+        serviceNom: { type: string }
+        serviceNomEn: { type: string }
+        dateISO: { type: string, format: date }
+        createdAt: { type: [string, 'null'], format: date-time }
+        bidStatus: { type: [string, 'null'] }
+        stage: { type: string, enum: [nouveau, contacte, qualifie, converti, perdu] }
+        stageNom: { type: string }
+        stageNomEn: { type: string }
+        stageSource: { type: string, enum: [manual, derived] }
+        nom: { type: [string, 'null'], description: 'Masqué sans pii:read.' }
+        courriel: { type: [string, 'null'], format: email, description: 'Masqué sans pii:read.' }
+        telephone: { type: [string, 'null'], description: 'Masqué sans pii:read.' }
+        hasEmail: { type: boolean }
+        hasTelephone: { type: boolean }
+        consentement: { type: [object, 'null'], additionalProperties: true }
+        acquisition: { type: object, additionalProperties: true }
+        readiness: { type: object, required: [ready, done, total, missing], additionalProperties: true }
+        retainedAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        completionAvailable: { type: boolean }
+        note: { type: [string, 'null'], maxLength: 2000, description: 'Visible avec pii:read.' }
+        nextFollowUpAt: { type: [string, 'null'], format: date }
+        revision: { type: integer, minimum: 0 }
+        followUpOverdue: { type: boolean }
+    CrmLeadWorkflow:
+      type: object
+      required: [bidId, stage, note, nextFollowUpAt, revision, createdAt, createdBy, updatedAt, updatedBy]
+      properties:
+        bidId: { type: string }
+        stage: { type: string, enum: [nouveau, contacte, qualifie, converti, perdu] }
+        note: { type: [string, 'null'], maxLength: 2000, description: 'Null without pii:read.' }
+        nextFollowUpAt: { type: [string, 'null'], format: date }
+        revision: { type: integer, minimum: 0 }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: string }
+        updatedAt: { type: string, format: date-time }
+        updatedBy: { type: string }
+    CrmLeadsResponse:
+      type: object
+      required: [leads, stages, summary, range, dataQuality]
+      properties:
+        leads: { type: array, items: { $ref: '#/components/schemas/CrmLead' } }
+        stages: { type: array, items: { $ref: '#/components/schemas/CrmStage' } }
+        summary: { type: object, additionalProperties: true }
+        range: { type: object, required: [from, to, field, months], additionalProperties: true }
+        dataQuality:
+          type: object
+          required: [exact, source, ga4, completionAvailable]
+          properties:
+            exact: { type: boolean, description: Exact for persisted lead, retention and completion facts in the selected date window. }
+            source: { type: string, enum: [persisted_bids_and_act_ledger] }
+            ga4: { type: string, enum: [supplementary_only] }
+            completionAvailable: { type: boolean }
     SupportMessage:
       type: object
       required: [id, de, texte, createdAt]
@@ -120,6 +186,22 @@ components:
             messageMax: { type: integer }
     AdminGroup:
       type: object
+      required: [id, nom, permissions, groupesPermissions]
+      properties:
+        id: { type: string }
+        nom: { type: string }
+        description: { type: string }
+        permissions:
+          description: Permissions directes legacy du groupe; préférer groupesPermissions.
+          type: array
+          items: { type: string }
+        groupesPermissions:
+          description: Identifiants des groupes de permissions attachés à ce groupe d’usagers.
+          type: array
+          items: { type: string }
+        updatedAt: { type: string, format: date-time }
+    PermissionGroup:
+      type: object
       required: [id, nom, permissions]
       properties:
         id: { type: string }
@@ -128,6 +210,42 @@ components:
         permissions:
           type: array
           items: { type: string }
+        updatedAt: { type: string, format: date-time }
+    CabinetPlan:
+      type: object
+      required: [id, nom, nomEn, multiNotaires, tarification]
+      properties:
+        id: { type: string, enum: [independant, cabinet, reseau] }
+        nom: { type: string }
+        nomEn: { type: string }
+        multiNotaires: { type: boolean }
+        tarification: { type: string, enum: [standard, volume, sur_mesure] }
+    Cabinet:
+      type: object
+      required: [id, nom, planId, statut, notaires, membres]
+      properties:
+        id: { type: string }
+        nom: { type: string }
+        planId: { type: string }
+        plan: { oneOf: [{ $ref: "#/components/schemas/CabinetPlan" }, { type: "null" }] }
+        statut: { type: string, enum: [prospect, actif, suspendu] }
+        contactEmail: { type: [string, "null"], format: email }
+        prixMensuelCents: { type: [integer, "null"], minimum: 0 }
+        siegesInclus: { type: [integer, "null"], minimum: 1 }
+        notaires:
+          type: array
+          items: { type: string }
+        membres:
+          type: array
+          items:
+            type: object
+            required: [id]
+            properties:
+              id: { type: string }
+              email: { type: [string, "null"], format: email }
+              etude: { type: [string, "null"] }
+              statut: { type: [string, "null"] }
+        notes: { type: string }
         updatedAt: { type: string, format: date-time }
     AdminUser:
       type: object
@@ -148,7 +266,7 @@ components:
           type: array
           items: { type: string }
         effectives:
-          description: L'union du role, des grants directs et de chaque groupe.
+          description: L'union du role, des grants directs, des groupes de permissions et de chaque groupe.
           type: array
           items: { type: string }
         derniereConnexion:
@@ -1639,6 +1757,188 @@ paths:
               schema:
                 $ref: "#/components/schemas/Errors"
 
+  /admin/permission-groups:
+    get:
+      operationId: listAdminPermissionGroups
+      summary: Les groupes de permissions réutilisables.
+      description: >-
+        Requiert `groups:read`. Un groupe de permissions réunit des capacités
+        et peut être attaché à plusieurs groupes d’usagers.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Les groupes de permissions connus.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, groupes]
+                properties:
+                  ok: { type: boolean }
+                  groupes:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/PermissionGroup"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /admin/permission-groups/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: putAdminPermissionGroup
+      summary: Créer ou modifier un groupe de permissions.
+      description: Requiert `groups:write`; le joker `*` est refusé.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nom, permissions]
+              properties:
+                nom: { type: string, maxLength: 80 }
+                description: { type: string, maxLength: 240 }
+                permissions:
+                  type: array
+                  items: { type: string }
+      responses:
+        "200":
+          description: Le groupe de permissions enregistré.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, groupe]
+                properties:
+                  ok: { type: boolean }
+                  groupe: { $ref: "#/components/schemas/PermissionGroup" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      operationId: deleteAdminPermissionGroup
+      summary: Supprimer un groupe de permissions non utilisé.
+      description: Requiert `groups:write`; il faut d’abord retirer ses attaches.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Supprimé.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/ValidationError" }
+
+  /admin/cabinets:
+    get:
+      operationId: listAdminCabinets
+      summary: Cabinets, forfaits et notaires membres.
+      description: Requiert `cabinets:read`.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Les cabinets et le catalogue de forfaits.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, cabinets, plans]
+                properties:
+                  ok: { type: boolean }
+                  plans:
+                    type: array
+                    items: { $ref: "#/components/schemas/CabinetPlan" }
+                  cabinets:
+                    type: array
+                    items: { $ref: "#/components/schemas/Cabinet" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/cabinets/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: putAdminCabinet
+      summary: Créer ou modifier un cabinet et ses membres.
+      description: >-
+        Requiert `cabinets:write`. Un notaire ne peut appartenir qu’à un cabinet
+        à la fois. Le prix et le nombre de sièges sont négociables par cabinet.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nom, planId]
+              properties:
+                nom: { type: string, maxLength: 80 }
+                planId: { type: string, enum: [independant, cabinet, reseau] }
+                statut: { type: string, enum: [prospect, actif, suspendu] }
+                contactEmail: { type: [string, "null"], format: email }
+                prixMensuelCents: { type: [integer, "null"], minimum: 0 }
+                siegesInclus: { type: [integer, "null"], minimum: 1 }
+                notaires:
+                  type: array
+                  items: { type: string }
+                notes: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: Le cabinet enregistré.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, cabinet]
+                properties:
+                  ok: { type: boolean }
+                  cabinet: { $ref: "#/components/schemas/Cabinet" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { $ref: "#/components/responses/ValidationError" }
+        "422": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      operationId: deleteAdminCabinet
+      summary: Supprimer un cabinet vide.
+      description: Requiert `cabinets:write`; les membres doivent d’abord être retirés.
+      security:
+        - adminSession: []
+      responses:
+        "200":
+          description: Supprimé.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/ValidationError" }
+
   /admin/groups:
     get:
       operationId: listAdminGroups
@@ -1692,6 +1992,11 @@ paths:
                 nom: { type: string, maxLength: 80 }
                 description: { type: string, maxLength: 240 }
                 permissions:
+                  description: Permissions directes legacy du groupe; préférer groupesPermissions.
+                  type: array
+                  items: { type: string }
+                groupesPermissions:
+                  description: Groupes de permissions réutilisables attachés à ce groupe d’usagers.
                   type: array
                   items: { type: string }
       responses:
@@ -2689,6 +2994,110 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Errors"
+  /admin/crm/leads:
+    get:
+      operationId: listAdminCrmLeads
+      summary: Liste CRM des leads et métriques de conversion first-party.
+      description: >-
+        Reads persisted bids from bounded MONTH# partitions and joins the
+        write-once completed-act ledger. The response is exact for those facts
+        in the requested `dateISO` window; GA4 is supplementary only. Requires
+        `leads:read`. Personal data is masked unless `pii:read` is also held.
+      security:
+        - adminSession: []
+      parameters:
+        - name: from
+          in: query
+          schema: { type: string, format: date }
+          description: Inclusive requested signing date, `YYYY-MM-DD`.
+        - name: to
+          in: query
+          schema: { type: string, format: date }
+          description: Inclusive requested signing date, `YYYY-MM-DD`.
+        - name: stage
+          in: query
+          schema: { type: string, enum: [nouveau, contacte, qualifie, converti, perdu] }
+        - name: source
+          in: query
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 500, default: 100 }
+      responses:
+        "200":
+          description: CRM rows, exact persisted summary and data-quality declaration.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CrmLeadsResponse' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "422":
+          description: Invalid stage or range.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Errors' }
+        "503":
+          description: The source data could not be read consistently.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Errors' }
+  /admin/crm/leads/{bidId}:
+    parameters:
+      - name: bidId
+        in: path
+        required: true
+        schema: { type: string }
+    put:
+      operationId: updateAdminCrmLead
+      summary: Mettre à jour l’étape et la prochaine relance d’un lead.
+      description: >-
+        Revision-checked update of admin-table CRM metadata. It cannot change
+        the customer bid or act facts. Requires `leads:write`; `pii:read` is
+        only needed to view or replace the private note. A stale revision gets
+        `409` so two operators cannot silently overwrite each other.
+      security:
+        - adminSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dateISO, revision]
+              properties:
+                dateISO: { type: string, format: date }
+                stage: { type: string, enum: [nouveau, contacte, qualifie, converti, perdu] }
+                note: { type: string, maxLength: 2000 }
+                nextFollowUpAt: { type: [string, 'null'], format: date }
+                revision: { type: integer, minimum: 0 }
+      responses:
+        "200":
+          description: Updated CRM metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, lead]
+                properties:
+                  ok: { type: boolean, const: true }
+                  lead: { $ref: '#/components/schemas/CrmLeadWorkflow' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404":
+          description: Bid not found.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Errors' }
+        "409":
+          description: Stale CRM revision.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Errors' }
+        "422":
+          description: Invalid CRM patch.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Errors' }
   /admin/segments:
     get:
       operationId: getAdminSegments

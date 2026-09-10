@@ -56,6 +56,10 @@
   var rangeDays = 30;      // default range: last 30 days
   var overviewBody = null; // metrics region node, so a preset change re-renders it alone
   var overviewGen = 0;     // monotonic fetch generation, so a stale response can't overwrite a newer one
+  var crmBody = null;
+  var crmGen = 0;
+  var crmStageFilter = '';
+  var crmSourceFilter = '';
 
   // ---------------------------------------------------------------------------
   // DOM helpers
@@ -119,7 +123,7 @@
     var x = Number(v) || 0;
     if (x > 0 && x <= 1) x = x * 100;
     var r = Math.round(x * 10) / 10;
-    return (Number.isInteger(r) ? String(r) : r.toFixed(1)).replace('.', ',') + ' %';
+    return (Number.isInteger(r) ? String(r) : r.toFixed(1)).replace('.', isEnglish() ? '.' : ',') + ' %';
   }
 
   // ---------------------------------------------------------------------------
@@ -148,12 +152,19 @@
     var p = iso.split('-').map(Number);
     return new Date(Date.UTC(p[0], p[1] - 1, p[2] - n)).toISOString().slice(0, 10);
   }
+  function isoPlusDays(iso, n) { return isoMinusDays(iso, -n); }
   var fmtShort = new Intl.DateTimeFormat('fr-CA', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+  var fmtShortEn = new Intl.DateTimeFormat('en-CA', { day: 'numeric', month: 'short', timeZone: 'UTC' });
   function shortDate(iso) {
     if (!iso) return '';
     var d = new Date(iso + 'T00:00:00Z');
     // Never let one malformed date from the API blank an entire chart.
     return isNaN(d.getTime()) ? String(iso) : fmtShort.format(d);
+  }
+  function crmShortDate(iso) {
+    if (!iso) return '';
+    var d = new Date(iso + 'T00:00:00Z');
+    return isNaN(d.getTime()) ? String(iso) : (isEnglish() ? fmtShortEn.format(d) : fmtShort.format(d));
   }
 
   // ---------------------------------------------------------------------------
@@ -646,10 +657,15 @@
     node.setAttribute('data-i18n-skip', '');
     return node;
   }
+  function crmText(fr, en) { return isEnglish() ? en : fr; }
+  function crmNode(tag, cls, fr, en) { return dynamicText(el(tag, cls), crmText(fr, en)); }
   function collectionLabel(count, fr, en) {
     count = Number(count) || 0;
     var word = isEnglish() ? en : fr;
-    return count + ' ' + word + (isEnglish() ? (count === 1 ? '' : 's') : (count < 2 ? '' : 's'));
+    var suffix = isEnglish()
+      ? (count === 1 ? '' : 's')
+      : (count < 2 || /s$/.test(word) ? '' : 's');
+    return count + ' ' + word + suffix;
   }
   function collectionCount(count, fr, en) {
     return dynamicText(el('p', 'collection-count'), collectionLabel(count, fr, en));
@@ -769,6 +785,38 @@
     custom.appendChild(list); body.appendChild(custom);
   }
 
+  // The cabinet registry is an existing admin surface. Keep its read view
+  // deliberately small here: CRM ownership and conversion data remain in the
+  // dedicated CRM section below, while this prerequisite route must still be
+  // defined so the admin shell can boot safely.
+  async function renderCabinets() {
+    if (!me || !me.email) {
+      var loaded = await loadMe();
+      if (!loaded.ok) { if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderCabinets); return; }
+    }
+    renderUserbar();
+    var content = el('div', 'admin-content');
+    content.appendChild(buildPageHeader('Réseau', 'Cabinets', 'Organisations commerciales et membres notaires — lecture du registre.'));
+    var body = el('div'); content.appendChild(body); mountAuthed('cabinets', content); focusTitle();
+    if (!canReadCabinets()) { body.appendChild(buildDenied('Voir les cabinets et leurs forfaits')); return; }
+    body.appendChild(buildLoadingGrid(2));
+    var response = await call('GET', '/cabinets'); clear(body);
+    if (response.status === 403) { body.appendChild(buildDenied('Voir les cabinets et leurs forfaits')); return; }
+    if (!response.ok || !response.json) { body.appendChild(buildErrorBanner(function () { renderCabinets(); })); return; }
+    var cabinets = response.json.cabinets || [];
+    if (!cabinets.length) { body.appendChild(collectionEmpty(0, 'cabinet', 'practice', 'Aucun cabinet configuré.', 'No practices configured.')); return; }
+    cabinets.forEach(function (cabinet) {
+      var card = el('section', 'chart-card service-card');
+      var head = el('div', 'chart-card-head');
+      dynamicText(head.appendChild(el('h2', 'chart-card-title')), cabinet.nom || cabinet.id);
+      dynamicText(head.appendChild(el('span', 'status-pill')), cabinet.statut || '—');
+      card.appendChild(head);
+      var plan = cabinet.plan && (isEnglish() ? cabinet.plan.nomEn : cabinet.plan.nom);
+      dynamicText(card.appendChild(el('p', 'chart-card-sub')), (plan || cabinet.planId || '—') + ' · ' + ((cabinet.membres || []).length) + ' ' + (isEnglish() ? 'member(s)' : 'membre(s)'));
+      body.appendChild(card);
+    });
+  }
+
   // Section registry: navigation and routes share one source of truth.
   var ADMIN_SECTIONS = [
     { key: 'overview', label: 'Aperçu', icon: iconGrid, render: renderOverview },
@@ -781,7 +829,9 @@
     { key: 'paiements', label: 'Paiements', icon: iconShield, render: renderPaiements },
     { key: 'acces', label: 'Accès', icon: iconUsers, render: renderAcces },
     { key: 'annulation', label: 'Annulation', icon: iconCalendarX, render: renderAnnulation },
+    { key: 'cabinets', label: 'Cabinets', icon: iconUsers, render: renderCabinets, allowed: canReadCabinets },
     { key: 'support', label: 'Messagerie', icon: iconMail, render: renderSupport, allowed: canReadSupport },
+    { key: 'crm', label: 'CRM / Leads', icon: iconFolderUser, render: renderCRM, allowed: canReadLeads },
     { key: 'notaires', label: 'Notaires', icon: iconUsers, render: renderNotaires, allowed: canReadPii },
     { key: 'audit', label: 'Audit', icon: iconShield, render: renderAudit, allowed: canReadAudit },
     { key: 'usagers', label: 'Usagers', icon: iconFolderUser, render: renderUsagers, allowed: canReadSubjects }
@@ -1302,6 +1352,294 @@
     }
     if (data.acquisition) view.appendChild(buildAcquisition(data.acquisition));
     container.appendChild(view);
+  }
+
+  // ---------------------------------------------------------------------------
+  // CRM / leads — persisted facts first, operator workflow second.
+  // ---------------------------------------------------------------------------
+  function crmRange() {
+    var to = isoPlusDays(todayISO(), 120);
+    return { from: isoMinusDays(todayISO(), rangeDays - 1), to: to };
+  }
+  function buildCRMRangeControl() {
+    var wrap = el('div', 'range-control');
+    var seg = el('div', 'seg');
+    seg.setAttribute('role', 'group');
+    seg.setAttribute('aria-label', crmText('Période CRM', 'CRM period'));
+    var note = el('span', 'range-note');
+    RANGE_PRESETS.forEach(function (days) {
+      var button = crmNode('button', 'seg-btn' + (days === rangeDays ? ' is-on' : ''), days + ' jours', days + ' days');
+      button.type = 'button';
+      button.setAttribute('aria-pressed', days === rangeDays ? 'true' : 'false');
+      button.addEventListener('click', function () {
+        if (rangeDays === days) return;
+        rangeDays = days;
+        seg.querySelectorAll('.seg-btn').forEach(function (item) {
+          var on = item === button;
+          item.classList.toggle('is-on', on);
+          item.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+        crmUpdateRangeNote(note);
+        if (crmBody) loadCRMInto(crmBody);
+      });
+      seg.appendChild(button);
+    });
+    crmUpdateRangeNote(note);
+    wrap.appendChild(seg); wrap.appendChild(note);
+    return wrap;
+  }
+  function crmUpdateRangeNote(note) {
+    var range = crmRange();
+    dynamicText(note, crmText('du ', 'from ') + crmShortDate(range.from) + crmText(' au ', ' to ') + crmShortDate(range.to));
+  }
+  async function renderCRM() {
+    if (!me || !me.email) {
+      var loaded = await loadMe();
+      if (!loaded.ok) {
+        if (loaded.status !== 401) renderFatal(crmText('Impossible de charger votre profil.', 'Could not load your profile.'), renderCRM);
+        return;
+      }
+    }
+    renderUserbar();
+    var content = el('div', 'admin-content');
+    var head = buildPageHeader(
+      crmText('Croissance', 'Growth'),
+      crmText('CRM / leads', 'CRM / leads'),
+      crmText('Un pipeline simple pour traiter chaque demande, mesurer la conversion et relancer au bon moment.', 'A simple pipeline to handle every request, measure conversion and follow up at the right time.')
+    );
+    head.appendChild(el('span', 'admin-spacer'));
+    head.appendChild(buildCRMRangeControl());
+    content.appendChild(head);
+    crmBody = el('div');
+    content.appendChild(crmBody);
+    mountAuthed('crm', content);
+    focusTitle();
+    await loadCRMInto(crmBody);
+  }
+  async function loadCRMInto(container, opts) {
+    opts = opts || {};
+    var generation = ++crmGen;
+    clear(container);
+    container.appendChild(buildSkeletons());
+    var range = crmRange();
+    var path = '/crm/leads?from=' + encodeURIComponent(range.from) + '&to=' + encodeURIComponent(range.to) + '&limit=500';
+    if (crmStageFilter) path += '&stage=' + encodeURIComponent(crmStageFilter);
+    if (crmSourceFilter) path += '&source=' + encodeURIComponent(crmSourceFilter);
+    var response = await call('GET', path);
+    if (generation !== crmGen) return;
+    if (response.status === 401) return;
+    clear(container);
+    if (response.status === 403) { container.appendChild(buildDenied(crmText('Lire le CRM et les leads', 'Read the CRM and leads'))); return; }
+    if (!response.ok || !response.json) {
+      container.appendChild(buildErrorBanner(function () { loadCRMInto(container, { afterError: true }); }));
+      return;
+    }
+    if (opts.afterError) toast(crmText('CRM chargé.', 'CRM loaded.'));
+    container.appendChild(buildCRMView(response.json, container));
+  }
+  function buildCRMView(data, container) {
+    var summary = data.summary || {};
+    var view = el('div', 'view-enter');
+    var trust = el('section', 'crm-trust');
+    trust.appendChild(crmNode('strong', null, 'Source de vérité : base Nota', 'Source of truth: Nota database'));
+    trust.appendChild(crmNode('span', null, ' Les leads, retenues et actes viennent des enregistrements persistés. GA4 reste complémentaire pour les visites et les parcours consentis; il ne remplace pas ce registre.', ' Leads, retentions and completed acts come from persisted records. GA4 remains supplementary for visits and consented journeys; it does not replace this register.'));
+    view.appendChild(trust);
+
+    var grid = el('div', 'stat-grid');
+    grid.appendChild(crmTile(grid, 'Leads reçus', 'Leads received', summary.total || 0, 'dans la période', 'in the period'));
+    grid.appendChild(crmTile(grid, 'Contactables', 'Contactable', summary.contactables || 0, 'courriel ou téléphone', 'email or phone'));
+    grid.appendChild(crmTile(grid, 'Prêts à traiter', 'Ready to handle', summary.ready || 0, 'intake et consentement complets', 'complete intake and consent'));
+    grid.appendChild(crmTile(grid, 'Retenus', 'Accepted', summary.retained || 0, formatRate(summary.total ? (summary.retained / summary.total) : 0) + ' des leads', formatRate(summary.total ? (summary.retained / summary.total) : 0) + ' of leads'));
+    var completionRate = summary.total ? formatRate((summary.completed || 0) / summary.total) : formatRate(0);
+    grid.appendChild(crmTile(grid, 'Convertis', 'Converted', summary.completed || 0, 'acte complété · ' + completionRate + ' des leads', 'completed act · ' + completionRate + ' of leads'));
+    grid.appendChild(crmTile(grid, 'À relancer', 'Follow up', summary.overdueFollowUps || 0, 'relance échue', 'follow-up overdue'));
+    view.appendChild(grid);
+
+    var filters = el('section', 'chart-card crm-toolbar');
+    filters.appendChild(crmNode('h2', 'chart-card-title', 'Filtrer le pipeline', 'Filter the pipeline'));
+    filters.appendChild(crmNode('p', 'chart-card-sub', 'Les compteurs et graphiques correspondent aux filtres sélectionnés.', 'Counters and charts match the selected filters.'));
+    var fields = el('div', 'crm-filter-fields');
+    var stageLabel = crmNode('label', 'crm-filter', 'Étape CRM', 'CRM stage');
+    var stageSelect = el('select', 'input');
+    stageSelect.appendChild(crmOption('', crmText('Toutes les étapes', 'All stages')));
+    (data.stages || []).forEach(function (item) { stageSelect.appendChild(crmOption(item.id, isEnglish() ? item.nomEn : item.nom)); });
+    stageSelect.value = crmStageFilter;
+    stageLabel.appendChild(stageSelect); fields.appendChild(stageLabel);
+    var sourceLabel = crmNode('label', 'crm-filter', 'Source', 'Source');
+    var sourceSelect = el('select', 'input');
+    sourceSelect.appendChild(crmOption('', crmText('Toutes les sources', 'All sources')));
+    (summary.bySource || []).forEach(function (item) { sourceSelect.appendChild(crmOption(item.source, item.source === 'unknown' ? crmText('Non attribuée', 'Unattributed') : item.source)); });
+    sourceSelect.value = crmSourceFilter;
+    sourceLabel.appendChild(sourceSelect); fields.appendChild(sourceLabel);
+    filters.appendChild(fields);
+    stageSelect.addEventListener('change', function () { crmStageFilter = stageSelect.value; loadCRMInto(container); });
+    sourceSelect.addEventListener('change', function () { crmSourceFilter = sourceSelect.value; loadCRMInto(container); });
+    view.appendChild(filters);
+
+    var charts = el('div', 'chart-grid');
+    charts.appendChild(buildCRMConversionChart(summary));
+    charts.appendChild(buildCRMSourceChart(summary));
+    view.appendChild(charts);
+
+    var rowsCard = el('section', 'chart-card crm-leads-card');
+    var rowsHead = el('div', 'chart-card-head');
+    rowsHead.appendChild(crmNode('div', 'chart-card-title', 'Leads', 'Leads'));
+    rowsHead.appendChild(dynamicText(el('div', 'chart-card-sub'), crmText(String((data.leads || []).length) + ' affichés · résumé calculé sur tous les résultats.', String((data.leads || []).length) + ' shown · summary calculated across all results.')));
+    rowsCard.appendChild(rowsHead);
+    rowsCard.appendChild(buildCRMLeadTable(data));
+    view.appendChild(rowsCard);
+    return view;
+  }
+  function crmTile(grid, fr, en, value, subFr, subEn) {
+    return tile(crmText(fr, en), num(value), crmText(subFr, subEn), false);
+  }
+  function crmOption(value, label) {
+    var option = el('option'); option.value = value; dynamicText(option, label); return option;
+  }
+  function buildCRMConversionChart(summary) {
+    var card = el('section', 'chart-card crm-chart-card');
+    card.appendChild(crmNode('h2', 'chart-card-title', 'Entonnoir de conversion', 'Conversion funnel'));
+    card.appendChild(crmNode('p', 'chart-card-sub', 'Faits persistés : leads → retenues → actes complétés.', 'Persisted facts: leads → accepted → completed acts.'));
+    var total = Number(summary.total) || 0;
+    var values = [
+      { fr: 'Leads reçus', en: 'Leads received', value: total },
+      { fr: 'Retenus', en: 'Accepted', value: Number(summary.retained) || 0 },
+      { fr: 'Convertis', en: 'Converted', value: Number(summary.completed) || 0 },
+    ];
+    var max = Math.max.apply(null, values.map(function (item) { return item.value; }).concat([1]));
+    values.forEach(function (item) {
+      var row = el('div', 'crm-bar-row');
+      var label = el('div', 'crm-bar-label');
+      dynamicText(label.appendChild(el('span')), crmText(item.fr, item.en));
+      dynamicText(label.appendChild(el('strong')), num(item.value));
+      row.appendChild(label);
+      var track = el('div', 'crm-bar-track');
+      var fill = el('div', 'crm-bar-fill'); fill.style.width = Math.round(item.value / max * 100) + '%';
+      track.appendChild(fill); row.appendChild(track); card.appendChild(row);
+    });
+    return card;
+  }
+  function buildCRMSourceChart(summary) {
+    var card = el('section', 'chart-card crm-chart-card');
+    card.appendChild(crmNode('h2', 'chart-card-title', 'Sources des leads', 'Lead sources'));
+    card.appendChild(crmNode('p', 'chart-card-sub', 'Attribution enregistrée sur la demande; aucune déduction de visiteurs uniques.', 'Attribution saved on the request; no unique-visitor inference.'));
+    var rows = Array.isArray(summary.bySource) ? summary.bySource : [];
+    if (!rows.length) { card.appendChild(crmNode('p', 'chart-card-sub', 'Aucune source dans la période.', 'No source in this period.')); return card; }
+    var max = Math.max.apply(null, rows.map(function (item) { return Number(item.total) || 0; }).concat([1]));
+    rows.forEach(function (item) {
+      var row = el('div', 'crm-bar-row');
+      var label = el('div', 'crm-bar-label');
+      dynamicText(label.appendChild(el('span')), item.source === 'unknown' ? crmText('Non attribuée', 'Unattributed') : item.source);
+      dynamicText(label.appendChild(el('strong')), num(item.total));
+      row.appendChild(label);
+      var track = el('div', 'crm-bar-track');
+      var fill = el('div', 'crm-bar-fill is-source'); fill.style.width = Math.round((Number(item.total) || 0) / max * 100) + '%';
+      track.appendChild(fill); row.appendChild(track);
+      var detail = el('div', 'crm-source-sub');
+      dynamicText(detail, crmText(
+        'Retenues : ' + num(item.retained) + ' · convertis : ' + num(item.completed) + ' · conversion : ' + formatRate(item.total ? item.completed / item.total : 0),
+        'Accepted: ' + num(item.retained) + ' · converted: ' + num(item.completed) + ' · conversion: ' + formatRate(item.total ? item.completed / item.total : 0)
+      ));
+      row.appendChild(detail); card.appendChild(row);
+    });
+    return card;
+  }
+  function crmStageLabel(row) { return isEnglish() ? row.stageNomEn || row.stageNom : row.stageNom; }
+  function crmStatusLabel(status) {
+    var labels = {
+      ouverte: ['Ouverte', 'Open'], retenue: ['Retenue', 'Accepted'], annulee: ['Annulée', 'Cancelled'],
+    };
+    return labels[status] ? crmText(labels[status][0], labels[status][1]) : status || '—';
+  }
+  function buildCRMLeadTable(data) {
+    var leads = Array.isArray(data.leads) ? data.leads : [];
+    if (!leads.length) {
+      var empty = el('div', 'collection-empty');
+      empty.appendChild(collectionCount(0, 'lead', 'lead'));
+      empty.appendChild(crmNode('p', 'collection-empty-detail', 'Aucun lead dans cette période ou avec ces filtres.', 'No lead in this period or with these filters.'));
+      return empty;
+    }
+    var scroll = el('div', 'ptable-scroll');
+    var table = el('table', 'ptable crm-table');
+    var head = el('thead'); var trh = el('tr');
+    [['Contact', 'Contact'], ['Service', 'Service'], ['Date demandée', 'Requested date'], ['Étape', 'Stage'], ['Source', 'Source'], ['Intake', 'Intake'], ['Relance', 'Follow-up'], ['', '']].forEach(function (pair) {
+      var th = crmNode('th', null, pair[0], pair[1]); th.scope = 'col'; trh.appendChild(th);
+    });
+    head.appendChild(trh); table.appendChild(head);
+    var body = el('tbody');
+    leads.forEach(function (row) {
+      var tr = el('tr'); tr.dataset.bidId = row.bidId;
+      var contact = el('td');
+      dynamicText(contact.appendChild(el('strong', 'crm-contact-name')), row.nom || crmText('Contact sans nom', 'Unnamed contact'));
+      if (row.courriel) dynamicText(contact.appendChild(el('span', 'ptable-sub crm-contact-detail')), row.courriel);
+      else if (row.telephone) dynamicText(contact.appendChild(el('span', 'ptable-sub crm-contact-detail')), row.telephone);
+      else contact.appendChild(crmNode('span', 'ptable-sub crm-contact-detail', 'Aucune coordonnée', 'No contact detail'));
+      dynamicText(contact.appendChild(el('span', 'ptable-sub crm-contact-detail')), crmStatusLabel(row.bidStatus));
+      tr.appendChild(contact);
+      tr.appendChild(dynamicText(el('td'), isEnglish() ? row.serviceNomEn || row.serviceNom : row.serviceNom));
+      tr.appendChild(dynamicText(el('td'), crmShortDate(row.dateISO)));
+      var stageCell = el('td');
+      var chip = crmNode('span', 'crm-chip crm-chip-' + row.stage, crmStageLabel(row), crmStageLabel(row));
+      stageCell.appendChild(chip);
+      if (row.stageSource === 'derived') stageCell.appendChild(crmNode('span', 'ptable-sub', ' automatique', ' automatic'));
+      tr.appendChild(stageCell);
+      var source = ((row.acquisition || {}).last || {}).source || 'unknown';
+      tr.appendChild(dynamicText(el('td'), source === 'unknown' ? crmText('Non attribuée', 'Unattributed') : source));
+      var intake = el('td'); dynamicText(intake.appendChild(el('span', row.readiness && row.readiness.ready ? 'crm-ready' : 'crm-not-ready'), row.readiness && row.readiness.ready ? crmText('Prêt', 'Ready') : crmText('À compléter', 'Incomplete'))); tr.appendChild(intake);
+      var follow = el('td');
+      if (row.nextFollowUpAt) dynamicText(follow.appendChild(el('span', row.followUpOverdue ? 'crm-overdue' : '')), crmShortDate(row.nextFollowUpAt));
+      else dynamicText(follow, '—');
+      tr.appendChild(follow);
+      var action = el('td');
+      if (canWriteLeads()) {
+        var edit = crmNode('button', 'btn btn-sm crm-edit', 'Modifier', 'Edit'); edit.type = 'button';
+        edit.addEventListener('click', function () {
+          var currentEditor = body.querySelector('.crm-editor-row');
+          if (currentEditor) currentEditor.remove();
+          var editor = buildCRMEditor(row, data, body);
+          tr.after(editor);
+        });
+        action.appendChild(edit);
+      }
+      tr.appendChild(action); body.appendChild(tr);
+    });
+    table.appendChild(body); scroll.appendChild(table); return scroll;
+  }
+  function buildCRMEditor(row, data, body) {
+    var tr = el('tr', 'crm-editor-row'); var td = el('td'); td.colSpan = 8;
+    var form = el('form', 'crm-editor'); form.noValidate = true;
+    form.appendChild(crmNode('strong', null, 'Mise à jour du lead', 'Update lead'));
+    var fields = el('div', 'crm-editor-fields');
+    var stageLabel = crmNode('label', 'crm-editor-field', 'Étape', 'Stage');
+    var stageSelect = el('select', 'input');
+    (data.stages || []).forEach(function (item) { stageSelect.appendChild(crmOption(item.id, isEnglish() ? item.nomEn : item.nom)); });
+    stageSelect.value = row.stage; stageLabel.appendChild(stageSelect); fields.appendChild(stageLabel);
+    var followLabel = crmNode('label', 'crm-editor-field', 'Prochaine relance', 'Next follow-up');
+    var followInput = el('input', 'input'); followInput.type = 'date'; followInput.value = row.nextFollowUpAt || '';
+    followLabel.appendChild(followInput); fields.appendChild(followLabel);
+    var noteLabel = crmNode('label', 'crm-editor-field crm-editor-note', 'Note privée', 'Private note');
+    if (canReadPii()) {
+      var noteInput = el('textarea', 'input'); noteInput.rows = 3; noteInput.maxLength = 2000; noteInput.value = row.note || '';
+      noteLabel.appendChild(noteInput);
+    } else {
+      noteLabel.appendChild(crmNode('span', 'help', 'Note masquée sans la permission renseignements personnels.', 'Note hidden without personal-information permission.'));
+    }
+    fields.appendChild(noteLabel); form.appendChild(fields);
+    var actions = el('div', 'tpl-actions');
+    var save = crmNode('button', 'btn btn-primary', 'Enregistrer', 'Save'); save.type = 'submit';
+    var cancel = crmNode('button', 'btn btn-sm', 'Annuler', 'Cancel'); cancel.type = 'button'; cancel.addEventListener('click', function () { tr.remove(); });
+    actions.appendChild(save); actions.appendChild(cancel); form.appendChild(actions);
+    var error = el('p', 'form-error'); error.hidden = true; error.setAttribute('role', 'alert'); form.appendChild(error);
+    form.addEventListener('submit', async function (event) {
+      event.preventDefault(); save.disabled = true;
+      var payload = { dateISO: row.dateISO, stage: stageSelect.value, nextFollowUpAt: followInput.value || null, revision: row.revision };
+      if (canReadPii()) payload.note = noteLabel.querySelector('textarea').value;
+      var result = await call('PUT', '/crm/leads/' + encodeURIComponent(row.bidId), payload);
+      if (result.ok) { toast(crmText('Lead mis à jour.', 'Lead updated.')); loadCRMInto(crmBody); return; }
+      save.disabled = false; error.hidden = false;
+      dynamicText(error, result.status === 409 ? crmText('Le lead a changé. Rechargez avant de sauvegarder.', 'The lead changed. Reload before saving.') : crmText('Enregistrement impossible. Vérifiez les champs.', 'Could not save. Check the fields.'));
+    });
+    td.appendChild(form); tr.appendChild(td); return tr;
   }
 
   function buildAcquisition(rows) {
@@ -3743,13 +4081,14 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Accès — utilisateurs, groupes, permissions.
+  // Accès — utilisateurs, groupes d'utilisateurs, groupes de permissions et permissions.
   //
   // Le découplage est le sujet, pas un détail d'implémentation : une PERMISSION
-  // est une capacité, un GROUPE en réunit, une PERSONNE reçoit des groupes ET
-  // des permissions directes. Ses accès effectifs sont l'union des trois, et le
-  // serveur les recalcule à chaque requête — retirer un groupe mord tout de
-  // suite, y compris sur une session déjà ouverte.
+  // est une capacité, un GROUPE DE PERMISSIONS en réunit, un GROUPE D'USAGERS
+  // en attache autant qu'il faut, une PERSONNE reçoit des groupes ET des
+  // permissions directes. Ses accès effectifs sont l'union de tout cela, et le
+  // serveur les recalcule à chaque requête — retirer un groupe mord tout de suite,
+  // y compris sur une session déjà ouverte.
   //
   // Deux règles que l'écran rend visibles plutôt que de les cacher :
   //   • le joker « accès complet » ne s'offre PAS sur un groupe. Un groupe qui
@@ -3764,7 +4103,7 @@
   // l'écriture, et une clé qu'elle oublierait deviendrait invisible.
   // ---------------------------------------------------------------------------
   var accesBody = null;
-  var accesEtat = { catalogue: [], groupes: [], utilisateurs: [], edition: null, groupesRefuses: false, utilisateursRefuses: false };
+  var accesEtat = { catalogue: [], groupesPermissions: [], groupes: [], utilisateurs: [], edition: null, groupesPermissionsRefuses: false, groupesRefuses: false, utilisateursRefuses: false };
 
   function canWriteUsers() { return can('users:write'); }
   function canWriteGroups() { return can('groups:write'); }
@@ -3804,6 +4143,7 @@
     // Sans le catalogue il n'y a rien à lire : la section se ferme et le dit
     // (P1-12) — un 403 n'est pas une panne à réessayer.
     if (perms.status === 403) { clear(container); container.appendChild(buildDenied('Lire le catalogue des permissions')); return; }
+    var groupesPermissions = await call('GET', '/permission-groups');
     var groupes = await call('GET', '/groups');
     var users = await call('GET', '/users');
     clear(container);
@@ -3815,6 +4155,8 @@
     // Une porte fermée n'est pas une panne : un compte sans « groups:read » ou
     // « users:read » voit la section, et la raison — jamais un faux « Aucun
     // groupe » (P1-12). La console garde sa forme.
+    accesEtat.groupesPermissionsRefuses = groupesPermissions.status === 403;
+    accesEtat.groupesPermissions = (groupesPermissions.ok && groupesPermissions.json && groupesPermissions.json.groupes) || [];
     accesEtat.groupesRefuses = groupes.status === 403;
     accesEtat.utilisateursRefuses = users.status === 403;
     accesEtat.groupes = (groupes.ok && groupes.json && groupes.json.groupes) || [];
@@ -3830,6 +4172,10 @@
       view.appendChild(note);
     }
     view.appendChild(buildGroupesCard());
+    // Keep the user-group form first in the access view. Older operators and
+    // integrations target the primary `.acces-groupe-form`; the permission
+    // package editor remains available immediately after it.
+    view.appendChild(buildPermissionGroupesCard());
     view.appendChild(buildUsersCard());
     container.appendChild(view);
   }
@@ -3873,12 +4219,136 @@
     return el('p', 'tpl-note acces-reserve', 'Réservé — cette liste demande la permission « ' + label + ' ».');
   }
 
+  function permissionGroupLabel(id) {
+    for (var i = 0; i < accesEtat.groupesPermissions.length; i++) {
+      if (accesEtat.groupesPermissions[i].id === id) return accesEtat.groupesPermissions[i].nom;
+    }
+    return id;
+  }
+
+  function permissionGroupMembers(id) {
+    return accesEtat.groupes.filter(function (g) {
+      return (g.groupesPermissions || g.permissionGroups || []).indexOf(id) >= 0;
+    }).length;
+  }
+
+  function buildPermissionGroupesCard() {
+    var card = el('section', 'chart-card acces-groupes-permissions');
+    card.appendChild(el('div', 'chart-card-title', 'Groupes de permissions'));
+    card.appendChild(collectionCount(accesEtat.groupesPermissions.length, 'groupe de permissions', 'permission group'));
+    card.appendChild(el('p', 'tpl-note',
+      'Un groupe de permissions est un paquet réutilisable. Il peut être attaché à autant de groupes d’usagers que nécessaire; modifier le paquet met à jour tous ses membres effectifs.'));
+
+    if (accesEtat.groupesPermissionsRefuses) {
+      card.appendChild(buildReservedLine('Voir les groupes de permissions'));
+    } else if (!accesEtat.groupesPermissions.length) {
+      card.appendChild(el('p', 'tpl-note', 'Aucun groupe de permissions pour le moment.'));
+    }
+    accesEtat.groupesPermissions.forEach(function (g) { card.appendChild(buildPermissionGroupRow(g)); });
+    if (canWriteGroups() && !accesEtat.groupesPermissionsRefuses) card.appendChild(buildPermissionGroupForm(null));
+    return card;
+  }
+
+  function buildPermissionGroupRow(g) {
+    var row = el('div', 'acces-groupe acces-groupe-permission');
+    row.dataset.id = g.id;
+    var h = el('div', 'acces-groupe-h');
+    var nom = el('strong', null, g.nom);
+    nom.setAttribute('data-i18n-skip', '');
+    h.appendChild(nom);
+    h.appendChild(el('span', 'ptable-sub', ' · ' + g.id));
+    row.appendChild(h);
+    if (g.description) {
+      var desc = el('p', 'ptable-sub', g.description);
+      desc.setAttribute('data-i18n-skip', '');
+      row.appendChild(desc);
+    }
+    var ul = el('ul', 'acces-perm-list');
+    (g.permissions || []).forEach(function (p) {
+      var li = el('li', null, permLabel(p));
+      li.setAttribute('data-i18n-skip', '');
+      ul.appendChild(li);
+    });
+    if (!(g.permissions || []).length) ul.appendChild(el('li', 'ptable-sub', 'Aucune permission'));
+    row.appendChild(ul);
+    row.appendChild(dynamicText(el('p', 'ptable-sub'), collectionLabel(permissionGroupMembers(g.id), 'groupe d’usagers attaché', 'user group attached')));
+    if (!canWriteGroups()) return row;
+
+    var err = el('div', 'tpl-error acces-erreur'); err.hidden = true;
+    var actions = el('div', 'tpl-actions');
+    var edit = el('button', 'btn btn-sm acces-groupe-edit', 'Modifier'); edit.type = 'button';
+    var editor = null;
+    edit.addEventListener('click', function () {
+      if (editor) { editor.remove(); editor = null; return; }
+      editor = buildPermissionGroupForm(g); row.appendChild(editor);
+      var first = editor.querySelector('[name="nom"]'); if (first) first.focus();
+    });
+    actions.appendChild(edit);
+    var del = el('button', 'btn btn-sm acces-groupe-del', 'Supprimer'); del.type = 'button'; actions.appendChild(del);
+    row.appendChild(actions);
+
+    var confirmBox = el('div', 'bareme-confirm'); confirmBox.hidden = true;
+    var textBox = el('p', 'bareme-confirm-text');
+    textBox.appendChild(el('strong', null, 'Supprimer le groupe de permissions « ' + g.nom + ' » ?'));
+    textBox.appendChild(document.createTextNode(' Retirez-le d’abord des groupes d’usagers qui l’utilisent.'));
+    confirmBox.appendChild(textBox);
+    var cActions = el('div', 'tpl-actions');
+    var yes = el('button', 'btn btn-sm btn-danger', 'Confirmer la suppression'); yes.type = 'button';
+    var no = el('button', 'btn btn-sm btn-ghost', 'Annuler'); no.type = 'button';
+    cActions.appendChild(yes); cActions.appendChild(no); confirmBox.appendChild(cActions); row.appendChild(confirmBox); row.appendChild(err);
+    del.addEventListener('click', function () { confirmBox.hidden = false; del.hidden = true; yes.focus(); });
+    no.addEventListener('click', function () { confirmBox.hidden = true; del.hidden = false; del.focus(); });
+    yes.addEventListener('click', async function () {
+      yes.disabled = true; no.disabled = true;
+      var r = await call('DELETE', '/permission-groups/' + encodeURIComponent(g.id));
+      yes.disabled = false; no.disabled = false;
+      if (r.status === 401) return;
+      if (!r.ok) { confirmBox.hidden = true; del.hidden = false; montrerErreurs(err, r); return; }
+      toast('Groupe de permissions supprimé.'); await loadAccesInto(accesBody);
+    });
+    return row;
+  }
+
+  function buildPermissionGroupForm(existing) {
+    var edition = !!existing;
+    var form = el('form', 'acces-groupe-form acces-groupe-permission-form'); form.noValidate = true;
+    form.appendChild(el('div', 'chart-card-sub', edition ? 'Modifier le groupe de permissions' : 'Nouveau groupe de permissions'));
+    var idRow = el('div', 'field'); var idLab = el('label', null, 'Identifiant'); idRow.appendChild(idLab);
+    var id = el('input', 'input'); id.name = 'id'; id.type = 'text'; id.placeholder = 'soutien-lecture'; if (edition) { id.value = existing.id; id.readOnly = true; } idRow.appendChild(id); form.appendChild(idRow);
+    var nomRow = el('div', 'field'); var nomLab = el('label', null, 'Nom'); nomRow.appendChild(nomLab);
+    var nom = el('input', 'input'); nom.name = 'nom'; nom.type = 'text'; nom.placeholder = 'Lecture du soutien'; nom.maxLength = GROUP_NAME_MAX; if (edition) nom.value = existing.nom || ''; nomRow.appendChild(nom); form.appendChild(nomRow);
+    var descRow = el('div', 'field'); var descLab = el('label', null, 'Description'); descRow.appendChild(descLab);
+    var desc = el('input', 'input'); desc.name = 'description'; desc.type = 'text'; desc.placeholder = 'À quoi sert ce paquet'; desc.maxLength = 240; if (edition) desc.value = existing.description || ''; descRow.appendChild(desc); form.appendChild(descRow);
+    var permsBox = el('fieldset', 'acces-perms'); permsBox.appendChild(el('legend', null, 'Permissions incluses'));
+    var deja = (existing && existing.permissions) || [];
+    accesEtat.catalogue.forEach(function (p) { if (p.cle !== '*') permsBox.appendChild(permCheckbox(p, 'acces-permission-group-perm', deja.indexOf(p.cle) >= 0)); });
+    form.appendChild(permsBox);
+    var err = el('div', 'tpl-error acces-erreur'); err.hidden = true; form.appendChild(err);
+    var actions = el('div', 'tpl-actions'); var submit = el('button', 'btn btn-primary', edition ? 'Enregistrer le groupe de permissions' : 'Créer le groupe de permissions'); submit.type = 'submit'; actions.appendChild(submit);
+    if (edition) { var cancel = el('button', 'btn btn-sm btn-ghost', 'Annuler'); cancel.type = 'button'; cancel.addEventListener('click', function () { form.remove(); }); actions.appendChild(cancel); }
+    form.appendChild(actions);
+    form.addEventListener('submit', async function (ev) {
+      if (ev.preventDefault) ev.preventDefault(); clear(err); err.hidden = true;
+      var cle = id.value.trim(); var n = nom.value.trim(); var errors = [];
+      if (!GROUP_ID_RE.test(cle)) errors.push({ code: 'identifiant_invalide', champ: id });
+      else if (!edition && accesEtat.groupesPermissions.some(function (g) { return g.id === cle; })) errors.push({ code: 'groupe_permissions_existant', champ: id });
+      if (!n || n.length > GROUP_NAME_MAX) errors.push({ code: 'nom_invalide', champ: nom });
+      if (errors.length) { showErrorLines(err, errors); errors.forEach(function (e) { e.champ.setAttribute('aria-invalid', 'true'); }); errors[0].champ.focus(); return; }
+      var permissions = []; permsBox.querySelectorAll('input[type="checkbox"]').forEach(function (cb) { if (cb.checked) permissions.push(cb.value); });
+      submit.disabled = true;
+      var r = await call('PUT', '/permission-groups/' + encodeURIComponent(cle), { nom: n, description: desc.value.trim(), permissions: permissions });
+      submit.disabled = false; if (r.status === 401) return; if (!r.ok) { montrerErreurs(err, r); return; }
+      toast('Groupe de permissions enregistré.'); await loadAccesInto(accesBody);
+    });
+    return form;
+  }
+
   function buildGroupesCard() {
     var card = el('section', 'chart-card acces-groupes');
     card.appendChild(el('div', 'chart-card-title', 'Groupes'));
     card.appendChild(collectionCount(accesEtat.groupes.length, 'groupe', 'group'));
     card.appendChild(el('p', 'tpl-note',
-      'Un groupe réunit des permissions et s’attribue à des personnes. Le supprimer retire ses permissions à tous ses membres, immédiatement.'));
+      'Un groupe d’usagers regroupe des personnes et attache autant de groupes de permissions que nécessaire. Le supprimer retire ses accès hérités à tous ses membres, immédiatement.'));
 
     if (accesEtat.groupesRefuses) {
       card.appendChild(buildReservedLine('Voir les groupes'));
@@ -3906,12 +4376,17 @@
       row.appendChild(desc);
     }
     var ul = el('ul', 'acces-perm-list');
+    (g.groupesPermissions || g.permissionGroups || []).forEach(function (id) {
+      var li = el('li', null, permissionGroupLabel(id) + ' · groupe de permissions');
+      li.setAttribute('data-i18n-skip', '');
+      ul.appendChild(li);
+    });
     (g.permissions || []).forEach(function (p) {
       var li = el('li', null, permLabel(p));
       li.setAttribute('data-i18n-skip', '');
       ul.appendChild(li);
     });
-    if (!(g.permissions || []).length) ul.appendChild(el('li', 'ptable-sub', 'Aucune permission'));
+    if (!(g.permissions || []).length && !(g.groupesPermissions || g.permissionGroups || []).length) ul.appendChild(el('li', 'ptable-sub', 'Aucun groupe de permissions'));
     row.appendChild(ul);
 
     if (!canWriteGroups()) return row;
@@ -4023,8 +4498,19 @@
     descRow.appendChild(desc);
     form.appendChild(descRow);
 
+    var groupsBox = el('fieldset', 'acces-groupes-permissions-attach');
+    groupsBox.appendChild(el('legend', null, 'Groupes de permissions'));
+    var groupesPermissions = (existing && (existing.groupesPermissions || existing.permissionGroups)) || [];
+    accesEtat.groupesPermissions.forEach(function (g) {
+      var line = el('label', 'check-line');
+      var cb = el('input'); cb.type = 'checkbox'; cb.value = g.id; cb.className = 'acces-groupe-permission'; cb.checked = groupesPermissions.indexOf(g.id) >= 0;
+      line.appendChild(cb); line.appendChild(document.createTextNode(' ' + g.nom)); groupsBox.appendChild(line);
+    });
+    if (!accesEtat.groupesPermissions.length) groupsBox.appendChild(el('p', 'ptable-sub', 'Créez d’abord un groupe de permissions.'));
+    form.appendChild(groupsBox);
+
     var permsBox = el('fieldset', 'acces-perms');
-    permsBox.appendChild(el('legend', null, 'Permissions'));
+    permsBox.appendChild(el('legend', null, 'Permissions directes du groupe (compatibilité)'));
     var deja = (existing && existing.permissions) || [];
     accesEtat.catalogue.forEach(function (p) {
       // Le joker ne figure JAMAIS au catalogue offert sur un groupe.
@@ -4061,6 +4547,8 @@
       permsBox.querySelectorAll('input[type="checkbox"]').forEach(function (cb) {
         if (cb.checked) permissions.push(cb.value);
       });
+      var groupesPermissions = [];
+      groupsBox.querySelectorAll('.acces-groupe-permission').forEach(function (cb) { if (cb.checked) groupesPermissions.push(cb.value); });
       var cle = id.value.trim();
       // Ce que le serveur refusera à coup sûr se dit AVANT le voyage, avec ses
       // mots à lui — et le champ fautif reçoit la marque et le focus.
@@ -4080,6 +4568,7 @@
         nom: n,
         description: desc.value.trim(),
         permissions: permissions,
+        groupesPermissions: groupesPermissions,
       });
       submit.disabled = false;
       if (r.status === 401) return; // handled by call()
@@ -4238,6 +4727,103 @@
     return form;
   }
 
+  // ---------------------------------------------------------------------------
+  // Cabinets — organisations commerciales, membres notaires et forfaits.
+  // Le prix négocié appartient au cabinet; il ne change jamais les honoraires
+  // d’un notaire et ne donne aucun droit RBAC par effet de bord.
+  // ---------------------------------------------------------------------------
+  var cabinetsBody = null;
+  var cabinetsEtat = { cabinets: [], plans: [], notaires: [], notairesRefus: false };
+  var CABINET_ID_RE = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+
+  async function renderCabinets() {
+    if (!me || !me.email) {
+      var loaded = await loadMe();
+      if (!loaded.ok) { if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderCabinets); return; }
+    }
+    renderUserbar();
+    var content = el('div', 'admin-content');
+    content.appendChild(buildPageHeader('Commercial', 'Cabinets', 'Gérez les cabinets notariaux, leurs notaires et leurs forfaits négociés depuis un seul endroit.'));
+    cabinetsBody = el('div'); content.appendChild(cabinetsBody); mountAuthed('cabinets', content); focusTitle();
+    await loadCabinetsInto(cabinetsBody);
+  }
+
+  async function loadCabinetsInto(container) {
+    clear(container); container.appendChild(buildLoadingGrid(3));
+    var r = await call('GET', '/cabinets');
+    if (r.status === 401) return;
+    clear(container);
+    if (r.status === 403) { container.appendChild(buildDenied('Voir les cabinets et leurs forfaits')); return; }
+    if (!r.ok || !r.json) { container.appendChild(buildErrorBanner(function () { loadCabinetsInto(container); })); return; }
+    cabinetsEtat.cabinets = r.json.cabinets || []; cabinetsEtat.plans = r.json.plans || [];
+    cabinetsEtat.notaires = []; cabinetsEtat.notairesRefus = false;
+    if (canReadPii()) {
+      var nr = await call('GET', '/notaries');
+      if (nr.ok && nr.json) cabinetsEtat.notaires = nr.json.notaires || [];
+      else cabinetsEtat.notairesRefus = nr.status === 403;
+    } else cabinetsEtat.notairesRefus = true;
+    var view = el('div', 'view-enter');
+    view.appendChild(buildCabinetsCard());
+    container.appendChild(view);
+  }
+
+  function planLabel(plan) { return isEnglish() && plan.nomEn ? plan.nomEn : (plan.nom || plan.id); }
+  function planFor(id) { for (var i = 0; i < cabinetsEtat.plans.length; i++) if (cabinetsEtat.plans[i].id === id) return cabinetsEtat.plans[i]; return null; }
+  function cabinetPlanLabel(c) { var p = c.plan || planFor(c.planId); return p ? planLabel(p) : c.planId; }
+
+  function buildCabinetsCard() {
+    var card = el('section', 'chart-card cabinets-card');
+    card.appendChild(el('div', 'chart-card-title', 'Cabinets notariaux'));
+    card.appendChild(collectionCount(cabinetsEtat.cabinets.length, 'cabinet', 'practice'));
+    card.appendChild(el('p', 'tpl-note', 'Le forfait, le prix mensuel négocié et les sièges inclus sont indépendants des permissions d’administration et des honoraires des notaires.'));
+    if (!cabinetsEtat.cabinets.length) card.appendChild(el('p', 'tpl-note', 'Aucun cabinet pour le moment.'));
+    cabinetsEtat.cabinets.forEach(function (c) { card.appendChild(buildCabinetRow(c)); });
+    if (canWriteCabinets()) card.appendChild(buildCabinetForm(null));
+    return card;
+  }
+
+  function buildCabinetRow(c) {
+    var row = el('div', 'cabinet-row'); row.dataset.id = c.id;
+    var h = el('div', 'acces-groupe-h'); var title = el('strong', null, c.nom); title.setAttribute('data-i18n-skip', '');
+    h.appendChild(title); h.appendChild(el('span', 'status-pill', cabinetPlanLabel(c) + ' · ' + (c.statut || 'prospect'))); row.appendChild(h);
+    var meta = el('p', 'ptable-sub'); meta.appendChild(document.createTextNode((c.prixMensuelCents == null ? 'Prix sur mesure' : moneyCents(c.prixMensuelCents) + ' / mois') + ' · ' + (c.siegesInclus == null ? 'Sièges à définir' : collectionLabel(c.siegesInclus, 'siège', 'seat')))); row.appendChild(meta);
+    var members = c.membres || [];
+    row.appendChild(dynamicText(el('p', 'ptable-sub'), collectionLabel(members.length, 'notaire membre', 'notary member')));
+    var list = el('ul', 'acces-perm-list');
+    members.forEach(function (m) { var li = el('li', null, m.email || m.id); li.setAttribute('data-i18n-skip', ''); list.appendChild(li); });
+    if (!members.length) list.appendChild(el('li', 'ptable-sub', 'Aucun notaire membre'));
+    row.appendChild(list);
+    if (!canWriteCabinets()) return row;
+    var err = el('div', 'tpl-error acces-erreur'); err.hidden = true; row.appendChild(err);
+    var actions = el('div', 'tpl-actions');
+    var edit = el('button', 'btn btn-sm', 'Modifier'); edit.type = 'button';
+    edit.addEventListener('click', function () { var old = row.querySelector('.cabinet-form'); if (old) { old.remove(); return; } row.appendChild(buildCabinetForm(c)); }); actions.appendChild(edit);
+    var del = el('button', 'btn btn-sm btn-danger', 'Supprimer'); del.type = 'button';
+    del.addEventListener('click', async function () { del.disabled = true; var r = await call('DELETE', '/cabinets/' + encodeURIComponent(c.id)); del.disabled = false; if (!r.ok) { montrerErreurs(err, r); return; } toast('Cabinet supprimé.'); await loadCabinetsInto(cabinetsBody); }); actions.appendChild(del);
+    row.appendChild(actions); return row;
+  }
+
+  function buildCabinetForm(existing) {
+    var edition = !!existing; var form = el('form', 'cabinet-form'); form.noValidate = true;
+    form.appendChild(el('div', 'chart-card-sub', edition ? 'Modifier le cabinet' : 'Nouveau cabinet'));
+    var idRow = el('div', 'field'); idRow.appendChild(el('label', null, 'Identifiant')); var id = el('input', 'input'); id.name = 'id'; id.type = 'text'; id.placeholder = 'etude-rive-nord'; if (edition) { id.value = existing.id; id.readOnly = true; } idRow.appendChild(id); form.appendChild(idRow);
+    var nomRow = el('div', 'field'); nomRow.appendChild(el('label', null, 'Nom')); var nom = el('input', 'input'); nom.name = 'nom'; nom.type = 'text'; nom.maxLength = 80; if (edition) nom.value = existing.nom || ''; nomRow.appendChild(nom); form.appendChild(nomRow);
+    var planRow = el('div', 'field'); planRow.appendChild(el('label', null, 'Forfait')); var plan = el('select', 'input'); plan.name = 'planId'; cabinetsEtat.plans.forEach(function (p) { var o = el('option', null, planLabel(p)); o.value = p.id; plan.appendChild(o); }); if (edition) plan.value = existing.planId; planRow.appendChild(plan); form.appendChild(planRow);
+    var statusRow = el('div', 'field'); statusRow.appendChild(el('label', null, 'Statut')); var status = el('select', 'input'); status.name = 'statut'; [['prospect','Prospect'],['actif','Actif'],['suspendu','Suspendu']].forEach(function (p) { var o = el('option', null, p[1]); o.value = p[0]; status.appendChild(o); }); if (edition) status.value = existing.statut || 'prospect'; statusRow.appendChild(status); form.appendChild(statusRow);
+    var priceRow = el('div', 'field'); priceRow.appendChild(el('label', null, 'Prix mensuel négocié ($)')); var price = el('input', 'input'); price.name = 'prix'; price.type = 'number'; price.min = '0'; price.step = '0.01'; if (edition && existing.prixMensuelCents != null) price.value = (Number(existing.prixMensuelCents) / 100).toFixed(2); priceRow.appendChild(price); form.appendChild(priceRow);
+    var seatsRow = el('div', 'field'); seatsRow.appendChild(el('label', null, 'Sièges inclus')); var seats = el('input', 'input'); seats.name = 'sieges'; seats.type = 'number'; seats.min = '1'; if (edition && existing.siegesInclus != null) seats.value = existing.siegesInclus; seatsRow.appendChild(seats); form.appendChild(seatsRow);
+    var members = el('fieldset', 'cabinet-members'); members.appendChild(el('legend', null, 'Notaires membres'));
+    var current = (existing && existing.notaires) || [];
+    cabinetsEtat.notaires.forEach(function (n) { var line = el('label', 'check-line'); var cb = el('input'); cb.type = 'checkbox'; cb.className = 'cabinet-member'; cb.value = n.id; cb.checked = current.indexOf(n.id) >= 0; line.appendChild(cb); line.appendChild(document.createTextNode(' ' + (n.email || n.id) + (n.etude ? ' · ' + n.etude : ''))); members.appendChild(line); });
+    if (!cabinetsEtat.notaires.length) members.appendChild(el('p', 'ptable-sub', cabinetsEtat.notairesRefus ? 'La permission « Voir les renseignements personnels » est requise pour choisir des notaires.' : 'Aucun notaire disponible.'));
+    form.appendChild(members);
+    var notesRow = el('div', 'field'); notesRow.appendChild(el('label', null, 'Notes commerciales')); var notes = el('textarea', 'input'); notes.name = 'notes'; notes.maxLength = 500; if (edition) notes.value = existing.notes || ''; notesRow.appendChild(notes); form.appendChild(notesRow);
+    var err = el('div', 'tpl-error acces-erreur'); err.hidden = true; form.appendChild(err);
+    var actions = el('div', 'tpl-actions'); var save = el('button', 'btn btn-primary', edition ? 'Enregistrer le cabinet' : 'Créer le cabinet'); save.type = 'submit'; actions.appendChild(save); form.appendChild(actions);
+    form.addEventListener('submit', async function (ev) { if (ev.preventDefault) ev.preventDefault(); clear(err); err.hidden = true; var cle = id.value.trim(); var n = nom.value.trim(); if (!CABINET_ID_RE.test(cle) || !n) { showErrorLines(err, [{ message: 'Identifiant et nom requis.' }]); return; } var notaires = []; members.querySelectorAll('.cabinet-member').forEach(function (cb) { if (cb.checked) notaires.push(cb.value); }); save.disabled = true; var r = await call('PUT', '/cabinets/' + encodeURIComponent(cle), { nom: n, planId: plan.value, statut: status.value, prixMensuelCents: price.value === '' ? null : Math.round(Number(price.value) * 100), siegesInclus: seats.value === '' ? null : Number(seats.value), notaires: notaires, notes: notes.value.trim() }); save.disabled = false; if (!r.ok) { montrerErreurs(err, r); return; } toast('Cabinet enregistré.'); await loadCabinetsInto(cabinetsBody); });
+    return form;
+  }
+
   // Les messages du serveur, rendus près du formulaire — par la région
   // commune (showErrorLines), pour qu'un 409 « dernier_administrateur » se
   // lise en clair ET en anglais : c'est une décision du serveur, pas une
@@ -4296,6 +4882,10 @@
   function canReadAnalytics() {
     return can('analytics:read');
   }
+  function canReadLeads() { return can('leads:read'); }
+  function canWriteLeads() { return can('leads:write'); }
+  function canReadCabinets() { return can('cabinets:read'); }
+  function canWriteCabinets() { return can('cabinets:write'); }
   function canReadPii() {
     return can('pii:read');
   }
@@ -5551,6 +6141,12 @@
     acces_modifie: 'Accès modifiés',
     groupe_modifie: 'Groupe enregistré',
     groupe_supprime: 'Groupe supprimé',
+    groupe_permissions_modifie: 'Permissions du groupe modifiées',
+    groupe_permissions_supprime: 'Permissions du groupe supprimées',
+    cabinet_modifie: 'Cabinet modifié',
+    cabinet_supprime: 'Cabinet supprimé',
+    crm_leads_read: 'Leads CRM consultés',
+    crm_lead_updated: 'Lead CRM modifié',
     // Les groupes d'AUDIENCE — des listes de destinataires — se nomment
     // autrement que les groupes RBAC juste au-dessus, qui réunissent des
     // permissions. Confondre les deux dans le journal rejouerait à la lecture

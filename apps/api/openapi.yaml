@@ -412,6 +412,103 @@ paths:
                   review: { $ref: '#/components/schemas/FinancingAIReview' }
                   workPacket: { $ref: '#/components/schemas/ActWorkPacketResult' }
         default: { $ref: '#/components/responses/FinancingAIError' }
+  /notary/ai-access:
+    get:
+      summary: Read the notary's AI beta and subscription entitlement
+      description: Returns the usage ledger and published monthly plans. The normal dossier remains available regardless of this entitlement.
+      security: [{ notarySession: [] }]
+      responses:
+        '200':
+          description: Current AI access and plans.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enabled, reason, beta, subscription, paidUses, plans, maxPieceQuantity]
+                properties:
+                  enabled: { type: boolean }
+                  reason: { type: string }
+                  beta: { type: object, additionalProperties: true }
+                  subscription: { type: object, additionalProperties: true }
+                  paidUses: { type: integer, minimum: 0 }
+                  plans: { type: array, items: { type: object, additionalProperties: true } }
+                  maxPieceQuantity: { type: integer, minimum: 1 }
+        default: { $ref: '#/components/responses/FinancingAIError' }
+  /notary/ai-beta/enroll:
+    post:
+      summary: Opt the notary into the one-time AI beta
+      security: [{ notarySession: [] }]
+      responses:
+        '200':
+          description: Beta activated idempotently.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, access]
+                properties:
+                  ok: { const: true }
+                  access: { type: object, additionalProperties: true }
+        default: { $ref: '#/components/responses/FinancingAIError' }
+  /notary/ai/checkout:
+    post:
+      summary: Start a hosted Stripe checkout for an AI plan or units
+      security: [{ notarySession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, planId]
+              properties:
+                kind: { type: string, enum: [subscription, usage] }
+                planId: { type: string, enum: [essentiel, cabinet, equipe] }
+                quantity: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200':
+          description: Hosted Checkout URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, url, sessionId]
+                properties:
+                  ok: { const: true }
+                  url: { type: string, format: uri }
+                  sessionId: { type: string }
+        default: { $ref: '#/components/responses/FinancingAIError' }
+  /notary/ai-feedback:
+    post:
+      summary: Record structured notary feedback on an AI uncertainty
+      description: The question is derived from the server-validated analysis. Feedback is appended as a minimized learning signal and never authorizes a legal or signing decision.
+      security: [{ notarySession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, questionId, decision]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                questionId: { type: string, pattern: '^(missing|conflict):[a-zA-Z0-9_-]{1,80}$' }
+                decision: { type: string, enum: [confirmed, resolved, not_applicable, escalated] }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Structured feedback recorded in the learning signal stream.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, feedback, recorded]
+                properties:
+                  ok: { const: true }
+                  feedback: { type: object, additionalProperties: true }
+                  recorded: { type: boolean }
+        default: { $ref: '#/components/responses/FinancingAIError' }
   /auth/oauth/providers:
     get:
       summary: List Google, Microsoft and LinkedIn sign-in availability

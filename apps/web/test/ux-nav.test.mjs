@@ -285,12 +285,16 @@ test('desktop nav: marketplace and Beta flat doors, and no submenu machinery sur
     'Carnet · Espace notaire · Partenaires · Bêta');
   // The retired chevron/submenu layer must not linger in any form.
   assert.equal(doc.querySelector('.nav-more'), null, 'no chevron toggles');
+  assert.equal(doc.querySelector('.nav-history'), null, 'the header has no back/forward arrow rail');
+  assert.equal(doc.querySelector('.mnav-history'), null, 'the drawer has no back/forward arrow rail');
   assert.equal(doc.querySelector('[id^="submenu-"]'), null, 'no desktop submenus');
   assert.equal(doc.querySelector('.mnav-more'), null, 'no drawer accordions');
   assert.equal(doc.querySelector('#mobile-nav [id^="msub-"]:not(#msub-legal)'), null,
     'the only drawer fold is the legal one');
   // No "Services" door either — the catalogue lives inside the carnet.
   assert.ok(!tabs.some((t) => /services/i.test(t.textContent)), 'no Services tab');
+  assert.equal($(doc, 'tab-beta').textContent.replace(/\s+/g, '').trim(), 'SignatureBêta');
+  assert.ok($(doc, 'tab-beta').querySelector('.nav-tab-badge'), 'Signature carries the Bêta flag');
 });
 
 test('the Partenaires door opens the partner pane with domain-driven rewards', async () => {
@@ -430,22 +434,22 @@ test('theme switches show the current theme, stay in sync, and never close the d
   const { doc } = await boot();
   const header = $(doc, 'theme-toggle');
   const drawerSwitch = $(doc, 'mnav-theme');
-  // Dark is the boot default; both switches must say so (checked = dark).
-  assert.equal(doc.documentElement.getAttribute('data-theme'), 'dark');
-  assert.equal(header.getAttribute('aria-checked'), 'true');
-  assert.equal(drawerSwitch.getAttribute('aria-checked'), 'true');
-  header.click();
+  // Light is the boot default; both switches must say so (checked = dark).
   assert.equal(doc.documentElement.getAttribute('data-theme'), 'light');
-  assert.equal(header.getAttribute('aria-checked'), 'false', 'the header switch reflects the flip');
-  assert.equal(drawerSwitch.getAttribute('aria-checked'), 'false', 'the drawer twin follows');
+  assert.equal(header.getAttribute('aria-checked'), 'false');
+  assert.equal(drawerSwitch.getAttribute('aria-checked'), 'false');
+  header.click();
+  assert.equal(doc.documentElement.getAttribute('data-theme'), 'dark');
+  assert.equal(header.getAttribute('aria-checked'), 'true', 'the header switch reflects the flip');
+  assert.equal(drawerSwitch.getAttribute('aria-checked'), 'true', 'the drawer twin follows');
   // The drawer's switch drives the same state — and adjusting a preference is
   // not a navigation choice, so the drawer must stay open.
   $(doc, 'nav-burger').click();
   await wait(10);
   drawerSwitch.click();
   await wait(10);
-  assert.equal(doc.documentElement.getAttribute('data-theme'), 'dark');
-  assert.equal(header.getAttribute('aria-checked'), 'true');
+  assert.equal(doc.documentElement.getAttribute('data-theme'), 'light');
+  assert.equal(header.getAttribute('aria-checked'), 'false');
   assert.equal($(doc, 'mobile-nav').classList.contains('is-open'), true,
     'flipping the theme keeps the drawer open');
 });
@@ -620,12 +624,13 @@ test('P2-19: the logomark is drawn once as a <symbol>; every inline copy is a <u
   const ramp = (step) => /--nota-blue-STEP:\s*(#[0-9a-fA-F]{6})/.source.replace('STEP', step);
   const brand = new RegExp(ramp('700')).exec(CSS_SRC)[1].toLowerCase();
   const bright = new RegExp(ramp('500')).exec(CSS_SRC)[1].toLowerCase();
+  const mark = new RegExp(ramp('900')).exec(CSS_SRC)[1].toLowerCase();
   const symbol = /<symbol[\s\S]*?<\/symbol>/.exec(HTML_SRC)[0].toLowerCase();
-  assert.ok(symbol.includes('fill="' + brand + '"'), 'the symbol’s square is --nota-blue-700');
+  assert.ok(symbol.includes('fill="' + mark + '"'), 'the symbol’s square is --nota-blue-900');
   assert.ok(symbol.includes('fill="' + bright + '"'), 'the symbol’s dot is --nota-blue-500');
   for (const f of ['../public/favicon.svg', '../public/og.svg']) {
     const svg = read(f).toLowerCase();
-    assert.ok(svg.includes(brand) && !svg.includes('#2c5f34') && !svg.includes('#50b848'), f + ' carries the current brand green');
+    assert.ok(svg.includes(mark) && svg.includes(bright) && !svg.includes('#2c5f34') && !svg.includes('#50b848'), f + ' carries the current Nota blue-teal mark');
   }
   const light = [...doc.querySelectorAll('meta[name="theme-color"]')].find((m) => !m.getAttribute('media'));
   assert.equal(light.getAttribute('content').toLowerCase(), brand, 'the light theme-color is the brand token');
@@ -679,6 +684,38 @@ test('P2-7: the service worker ignores other origins and never answers a failed 
     'only the navigation branch falls back to the shell — an asset must not get index.html');
 });
 
+
+test('notary landing keeps beta out of the acquisition path', async () => {
+  const { doc } = await boot();
+  doc.querySelector('.nav-tab[data-tab="notaires"]').click();
+  await wait(10);
+
+  const note = doc.getElementById('notary-ai-beta-note');
+  assert.ok(note, 'the beta markup remains available to its dedicated tab flow');
+  assert.equal(note.hidden, true, 'the beta teaser is hidden on the notary landing');
+  assert.equal(note.parentElement.classList.contains('notary-landing-left'), true,
+    'the hidden beta teaser stays with the landing content it describes');
+  assert.match(CSS_SRC, /\.notary-landing-left\s*\{/,
+    'the landing has a dedicated left content rail');
+  assert.match(CSS_SRC, /\.notary-landing-right\s*\{/,
+    'the landing has a dedicated right content rail');
+  assert.match(CSS_SRC, /#pane-notaires[^{}]*\.notary-ai-beta-note\s*\{\s*display:\s*none/s,
+    'the landing keeps the beta teaser out of the visible acquisition path');
+
+  const toggle = doc.getElementById('notary-ai-beta-toggle');
+  const details = doc.getElementById('notary-ai-beta-details');
+  assert.equal(toggle.getAttribute('aria-haspopup'), 'dialog');
+  assert.equal(details.getAttribute('role'), 'dialog');
+  note.dispatchEvent(new doc.defaultView.Event('pointerenter'));
+  assert.equal(details.getAttribute('aria-hidden'), 'false');
+  note.dispatchEvent(new doc.defaultView.Event('pointerleave'));
+  assert.equal(details.getAttribute('aria-hidden'), 'true');
+  toggle.click();
+  assert.equal(details.getAttribute('aria-hidden'), 'false');
+  assert.ok(!note.classList.contains('is-open'), 'clicking the info control never expands the announcement');
+  assert.match(CSS_SRC, /\.beta-teaser-details\s*\{[^}]*position:\s*absolute/, 'the explanation floats over the page');
+  assert.match(CSS_SRC, /\.beta-teaser:hover \.beta-teaser-details,\s*\.beta-teaser:focus-within \.beta-teaser-details/, 'hover and keyboard focus reveal the same surface');
+});
 
 test('Beta opens from the footer, participates in history and exposes the public preview', async () => {
   const { win, doc } = await boot();

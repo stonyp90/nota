@@ -41,7 +41,7 @@ test('money format converts in English mode', () => {
 // Coverage of index.html
 // ---------------------------------------------------------------------------
 
-const ALLOW = new Set(['Nota', 'Admin', 'Nota · Admin', 'FR', 'EN', 'Français', 'English']);
+const ALLOW = new Set(['Nota', 'OTA', 'Admin', 'Nota · Admin', 'FR', 'EN', 'Français', 'English']);
 
 function needsTranslation(s) {
   if (!s || s.length < 2) return false;

@@ -374,11 +374,11 @@ function buildNotaryPreferenceDataset(records, options = {}) {
 function createNotaryLearning({ nowMs = Date.now, newId, append = async () => {} } = {}) {
   const idFactory = typeof newId === 'function' ? newId : () => require('node:crypto').randomUUID();
 
-  async function record(kind, data, { bid = null, serviceId = null, actor: eventActor = SYSTEM_ACTOR } = {}) {
+  async function record(kind, data, { bid = null, serviceId = null, actor: eventActor = SYSTEM_ACTOR, id = null } = {}) {
     if (!D.NOTARY_LEARNING_EVENT_KINDS.includes(kind) || !clonePolicy(kind)) return null;
     const event = {
       eventVersion: EVENT_VERSION,
-      id: String(idFactory()),
+      id: safeId(id, 160) || String(idFactory()),
       at: isoAt(nowMs),
       kind,
       serviceId: serviceOf(bid, serviceId),
@@ -427,6 +427,17 @@ function createNotaryLearning({ nowMs = Date.now, newId, append = async () => {}
     },
     async notaryReview({ bid, analysis, review, owner } = {}) {
       return record('notary_review', reviewSummary(analysis, review), { bid, actor: actor(NOTARY_ACTOR, owner) });
+    },
+    async uncertaintyFeedback({ bid, analysis, feedback, owner, eventId } = {}) {
+      const value = feedback && typeof feedback === 'object' ? feedback : {};
+      return record('notary_question', {
+        analysisId: safeId(analysis?.id),
+        questionId: safeId(value.questionId),
+        fieldId: safeId(value.fieldId),
+        questionKind: safeId(value.kind),
+        decision: ['confirmed', 'resolved', 'not_applicable', 'escalated'].includes(value.decision) ? value.decision : 'unknown',
+        ...(value.note ? { note: textMeta(value.note, 500) } : {}),
+      }, { bid, actor: actor(NOTARY_ACTOR, owner), id: eventId });
     },
     async customerInput({ bid, before, after, readiness, beforeReadiness } = {}) {
       const diff = diffKeys(before, after);

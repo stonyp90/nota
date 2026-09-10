@@ -140,6 +140,24 @@ resource "aws_iam_role_policy" "customer_improvement_scheduler_invoke" {
   policy = data.aws_iam_policy_document.customer_improvement_scheduler_invoke.json
 }
 
+resource "aws_sqs_queue" "customer_improvement_dlq" {
+  name                      = "${var.project_name}-customer-improvement-dlq"
+  message_retention_seconds = 1209600
+}
+
+resource "aws_iam_role_policy" "customer_improvement_scheduler_dlq" {
+  name = "${var.project_name}-customer-improvement-scheduler-dlq"
+  role = aws_iam_role.customer_improvement_scheduler.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "sqs:SendMessage"
+      Resource = aws_sqs_queue.customer_improvement_dlq.arn
+    }]
+  })
+}
+
 # A little after the reminders run so its complete-day window includes the
 # prior day and cannot compete with the reminder batch for a hot partition.
 resource "aws_scheduler_schedule" "customer_improvement" {
@@ -155,6 +173,10 @@ resource "aws_scheduler_schedule" "customer_improvement" {
   target {
     arn      = aws_lambda_function.customer_improvement.arn
     role_arn = aws_iam_role.customer_improvement_scheduler.arn
+
+    dead_letter_config {
+      arn = aws_sqs_queue.customer_improvement_dlq.arn
+    }
 
     retry_policy {
       maximum_event_age_in_seconds = 3600

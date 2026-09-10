@@ -72,13 +72,15 @@ const SENDER = {
 // reads that file and holds every key here to it, so the mail can never drift
 // from the site. The card is light-only on purpose (see layout()).
 const PALETTE = {
-  ink: '#0d1b27', // --ink
-  muted: '#526574', // --ink-muted (AA on every light surface)
-  bg: '#f2f5f7', // --bg — the page canvas the card floats on
-  card: '#fbfcfd', // --surface
-  border: '#d9e3e9', // --border
-  brand: '#174a63', // --brand (nota-blue-700) — fills, rules, links
-  brandDark: '#113a51', // --brand-hover (nota-blue-800) — the button's edge
+  ink: '#173b52', // --ink
+  muted: '#607986', // --ink-muted (AA on every light surface)
+  bg: '#eef5f7', // --bg — the page canvas the card floats on
+  card: '#fbfdfd', // --surface
+  border: '#c5d8df', // --border
+  brand: '#386888', // --brand (Nota blue-teal) — fills, rules, links
+  brandDark: '#274a62', // --brand-hover — the button's edge
+  markBg: '#264961', // the reference lockup's deep blue-teal square
+  brandBright: '#407598', // the reference lockup's cyan signal
   brandInk: '#ffffff', // --brand-ink — text on the brand fill
   tint: '#f1f7fb', // nota-blue-50 — the callout wash
 };
@@ -255,17 +257,17 @@ function logoHeader(lang) {
     ';">' +
     '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>' +
     '<td width="40" height="40" align="center" valign="middle" aria-hidden="true" style="width:40px;height:40px;background-color:' +
-    PALETTE.brand +
+    PALETTE.markBg +
     ';border-radius:' + RADIUS.control + ';font-family:' +
     FONT +
     ';font-size:22px;line-height:40px;font-weight:800;color:' +
     PALETTE.brandInk +
-    ';text-align:center;">N</td>' +
+    ';text-align:center;">N<span style="display:inline-block;margin-left:-4px;vertical-align:top;font-size:11px;line-height:16px;color:' + PALETTE.brandBright + ';">●</span></td>' +
     '<td valign="middle" style="padding-left:12px;">' +
     '<div style="font-family:' +
     FONT +
     ';font-size:21px;line-height:1.1;font-weight:800;letter-spacing:-0.02em;color:' +
-    PALETTE.brand +
+    PALETTE.ink +
     ';">Nota</div>' +
     '<div style="font-family:' +
     FONT +

@@ -160,6 +160,14 @@ test('full notary lifecycle keeps client context, AI evidence and human decision
   assert.equal(aiCalls.length, 1);
   assert.equal((await repo.get(bid.id, DATE)).financingAnalysis.pages, undefined);
 
+  const question = preparedBody.workPacket.uncertaintyQuestions[0];
+  const feedback = await call(app, 'POST', '/notary/ai-feedback', {
+    token: notaryToken,
+    body: { id: bid.id, dateISO: DATE, questionId: question.id, decision: 'confirmed', note: 'À vérifier dans la pièce officielle.' },
+  });
+  assert.equal(feedback.statusCode, 200, feedback.body);
+  assert.equal(parse(feedback).feedback.questionId, question.id);
+
   const reviewed = await call(app, 'POST', '/notary/financing/review', {
     token: notaryToken,
     body: {
@@ -197,7 +205,7 @@ test('full notary lifecycle keeps client context, AI evidence and human decision
   const learningKinds = (await repo.queryNotaryLearningByDay(TODAY))
     .filter(entry => entry.action === 'notary_learning_signal' && entry.meta?.bidId === bid.id)
     .map(entry => entry.meta.kind);
-  for (const kind of ['customer_input', 'customer_behavior', 'communication', 'ai_output', 'notary_review', 'official_outcome']) {
+  for (const kind of ['customer_input', 'customer_behavior', 'communication', 'ai_output', 'notary_review', 'notary_question', 'official_outcome']) {
     assert.ok(learningKinds.includes(kind), kind);
   }
 });

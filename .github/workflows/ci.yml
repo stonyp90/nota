@@ -54,6 +54,43 @@ jobs:
       - name: Install workspaces
         run: npm ci
 
+      - name: Assemble shareable business plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build --workspace @nota/web
+          cp docs/business-plan.html apps/web/dist/business-plan.html
+          cp docs/pitch-deck.html apps/web/dist/pitch-deck.html
+          cp -R docs/pitch-deck apps/web/dist/pitch-deck
+          cp docs/plan-affaires-sommaire.md apps/web/dist/plan-affaires-sommaire.md
+          cp docs/nota-pitch-deck-legal.pptx apps/web/dist/nota-pitch-deck-legal.pptx
+          mkdir -p apps/web/dist/planning
+          cp docs/planning/business-plan-model.json docs/planning/business-plan-review-2026-09-09.md apps/web/dist/planning/
+          grep -q '<title>Nota Business Plan</title>' apps/web/dist/business-plan.html
+          grep -qi '#386888' apps/web/dist/business-plan.html
+          grep -q 'Slide 1 of 16' apps/web/dist/pitch-deck.html
+          if grep -qiE 'Version[[:space:]]+1\.6|Reviewed[[:space:]]+2026' apps/web/dist/pitch-deck.html; then
+            echo 'Pitch deck must not expose internal version metadata' >&2
+            exit 1
+          fi
+          test -f apps/web/dist/pitch-deck/dark-slide-16.png
+          test -f apps/web/dist/pitch-deck/dark-slide-fr-16.png
+          unzip -tq apps/web/dist/nota-pitch-deck-legal.pptx >/dev/null
+
+      - name: Upload business plan bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: nota-business-plan-${{ github.sha }}
+          path: |
+            apps/web/dist/business-plan.html
+            apps/web/dist/pitch-deck.html
+            apps/web/dist/pitch-deck/
+            apps/web/dist/plan-affaires-sommaire.md
+            apps/web/dist/nota-pitch-deck-legal.pptx
+            apps/web/dist/planning/
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Unit tests (domain + api)
         run: npm test
 

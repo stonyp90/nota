@@ -20,9 +20,18 @@ const { createApp } = require(path.join(apiRoot, 'src', 'handler'));
 const { createBilling } = require(path.join(apiRoot, 'src', 'billing'));
 const { createMemoryRepo } = require(path.join(apiRoot, 'src', 'repo-memory'));
 const { createLocalAdminApp } = require(path.join(apiRoot, 'admin-local-server'));
+const { createOAuth } = require(path.join(apiRoot, 'src', 'oauth'));
 const domain = require('@nota/domain');
 
 const PORT = Number(process.env.PORT || 8811);
+const SITE_URL = process.env.NOTA_SITE_URL || 'http://localhost:4311';
+process.env.NOTA_OAUTH_LOCAL = 'true';
+process.env.NOTA_OAUTH_ORIGIN = SITE_URL;
+process.env.NOTA_OAUTH_ENCRYPTION_KEY ||= '11'.repeat(32);
+for (const id of ['google', 'microsoft', 'linkedin']) {
+  process.env['NOTA_OAUTH_' + id.toUpperCase() + '_CLIENT_ID'] ||= 'nota-local-' + id;
+  process.env['NOTA_OAUTH_' + id.toUpperCase() + '_CLIENT_SECRET'] ||= 'nota-local-' + id + '-secret';
+}
 // Effectively unthrottled for the test run; still a finite guard.
 const RL_MAX = Number(process.env.E2E_RL_MAX || 100000);
 
@@ -54,8 +63,15 @@ const demoBilling = createBilling({
   now: () => new Date().toISOString(),
 });
 
+const oauth = createOAuth({ repo, env: process.env, now: () => Date.now() });
+for (const id of ['google', 'microsoft', 'linkedin']) {
+  const identity = oauth.localDemoIdentity(id);
+  repo.putOAuthIdentity(identity.subject, identity);
+}
+
 const app = createApp(repo, {
-  siteUrl: process.env.NOTA_SITE_URL,
+  siteUrl: SITE_URL,
+  oauth,
   billing: demoBilling,
   billingConfigured: false,
   // Same LOCAL-date clock as the fixtures above and the web client's

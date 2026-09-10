@@ -103,8 +103,8 @@ const BRAND = WEB['--brand'];
 test('the email palette mirrors the web light-theme tokens, key by key', () => {
   const P = emails.PALETTE;
   assert.match(BRAND, /^#[0-9a-f]{6}$/, 'the web brand token must resolve to a hex colour');
-  assert.equal(P.brand, WEB['--brand'], 'brand = --brand (nota-blue-700)');
-  assert.equal(P.brandDark, WEB['--brand-hover'], 'brandDark = --brand-hover (nota-blue-800)');
+ assert.equal(P.brand, WEB['--brand'], 'brand = --brand (Nota blue-teal)');
+ assert.equal(P.brandDark, WEB['--brand-hover'], 'brandDark = --brand-hover');
   assert.equal(P.brandInk, WEB['--brand-ink'], 'brandInk = --brand-ink');
   assert.equal(P.ink, WEB['--ink'], 'ink = --ink');
   assert.equal(P.muted, WEB['--ink-muted'], 'muted = --ink-muted');
@@ -264,10 +264,10 @@ test('every radius sits on the web square scale — no pills, no circles', () =>
   }
 });
 
-test('the logo header: a cobalt mark hidden from screen readers, the Nota wordmark, the bilingual tagline', () => {
+test('the logo header: the reference mark and signal stay hidden from screen readers, with the Nota wordmark and bilingual tagline', () => {
   for (const name of names) {
     const { html } = emails.TEMPLATES[name](CTX);
-    assert.ok(/aria-hidden="true"[^>]*>N<\/td>/.test(html), `${name}: the N mark must be aria-hidden (the wordmark carries the name)`);
+    assert.ok(/aria-hidden="true"[^>]*>N<span[\s\S]*>●<\/span><\/td>/.test(html), name + ': the N mark and signal must be aria-hidden (the wordmark carries the name)');
     assert.ok(/>Nota<\/div>/.test(html), `${name}: the wordmark`);
     assert.ok(html.includes('La place de marché notariale · The notarial marketplace'), `${name}: the tagline`);
   }

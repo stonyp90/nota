@@ -95,7 +95,7 @@ Cordialement,
 
 Anthony Paquet
 Gestion A.Paquet inc.
-418-564-6162 · anthonypaquet1508@gmail.com · anthonypaquet.com
+418-564-6162 · info@gonota.ca · gonota.ca
 [adresse postale de l'entreprise — requise par la LCAP]
 Pour ne plus recevoir de communication de notre part, répondez « retrait ».
 ```
@@ -158,7 +158,7 @@ Bonjour Me [Nom],
 Je clos ma boucle de relances — vous n'aurez plus de message de ma part.
 
 Si l'idée de mesurer ce que vaut une date de signature vous revient un jour,
-ma porte est ouverte : anthonypaquet1508@gmail.com.
+ma porte est ouverte : info@gonota.ca.
 
 Bonne fin d'année,
 Anthony Paquet
@@ -199,7 +199,7 @@ que ça implique concrètement :
 Je vous ouvre un accès cette semaine ?
 
 Anthony Paquet — Nota
-[adresse postale complète] · [téléphone] · anthonypaquet1508@gmail.com
+[adresse postale complète] · [téléphone] · info@gonota.ca
 
 Pour ne plus recevoir de message de Nota, répondez « désabonnement » : le
 retrait est traité sous 10 jours. Vos coordonnées, trouvées sur [source],
@@ -267,6 +267,6 @@ Would a slot work this week or next? I will fit your schedule.
 Thank you for your time,
 
 Anthony Paquet
-[mailing address] · [phone] · anthonypaquet1508@gmail.com
+[mailing address] · [phone] · info@gonota.ca
 Reply "no thanks" and you will not hear from me again.
 ```

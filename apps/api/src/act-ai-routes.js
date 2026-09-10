@@ -12,9 +12,13 @@ const DEFAULT_DAILY_CALL_LIMIT = 100;
 const MAX_IN_FLIGHT = 32;
 
 function createActAIRoutes({ repo, env, authenticate, json, parseBody, getSecret,
-  port, nowMs = Date.now, newId = randomUUID, audit = async () => {}, learning = null }) {
+  port, nowMs = Date.now, newId = randomUUID, audit = async () => {}, learning = null, aiAccess = null }) {
   const setting = value => typeof value === 'string' ? value.trim() : '';
-  const error = (status, code) => json(status, { errors: [{ code }] });
+  const error = (status, code) => json(status, { errors: [{ code, message: {
+    ai_access_required: 'Activez la bêta IA ou choisissez une formule pour continuer.',
+    quota_epuise: 'Votre quota de préparation IA est épuisé. Choisissez une formule ou achetez des unités.',
+    paiement_requis: 'Votre abonnement IA nécessite une mise à jour du paiement.',
+  }[code] || undefined }] });
   const packet = bid => D.actWorkPacket(bid, { todayISO: D.businessDay(nowMs(), D.BUSINESS_TIMEZONE) });
   const inFlight = new Map();
   let cachedProvider;
@@ -76,6 +80,11 @@ function createActAIRoutes({ repo, env, authenticate, json, parseBody, getSecret
     if (bid.notaryId !== owner) return error(403, 'interdit');
     if (!['testament', 'procuration'].includes(bid.serviceId)) return error(422, 'service_inconnu');
     if (bid.status !== D.STATUS.RETENUE || bid.efface) return error(409, 'dossier_indisponible');
+    const entitlement = aiAccess && await aiAccess.get(owner);
+    // Keep already-created work available for review when a trial or plan ends;
+    // entitlement is required only before a new AI provider call.
+    const needsEntitlement = route.endsWith('/preparation') && method === 'POST';
+    if (needsEntitlement && aiAccess && aiAccess.monetized() && (!entitlement || !entitlement.enabled)) return error(402, entitlement?.reason === 'paiement_requis' ? 'paiement_requis' : 'ai_access_required');
     if (method === 'GET') return json(200, { analysis: analysisOf(bid), workPacket: packet(bid) });
 
     if (route.endsWith('/review')) {
@@ -100,6 +109,7 @@ function createActAIRoutes({ repo, env, authenticate, json, parseBody, getSecret
     if (input.processingAuthorized !== true) return error(422, 'autorisation_traitement_requise');
     const validated = D.validateActAIInput({ serviceId: bid.serviceId, pages: input.pages });
     if (!validated.ok) return json(422, { errors: validated.errors });
+    let consumedSource = null;
     try {
       const config = configuration();
       if (!config) return error(503, 'act_ai_unavailable');
@@ -112,8 +122,12 @@ function createActAIRoutes({ repo, env, authenticate, json, parseBody, getSecret
         const key = JSON.stringify([bid.id, bid.dateISO, owner, identity.fingerprint]);
         let pending = inFlight.get(key);
         reused = !!pending;
+        let consumed = null;
         if (!pending) {
           if (inFlight.size >= MAX_IN_FLIGHT) return error(429, 'trop_de_requetes');
+          consumed = aiAccess ? await aiAccess.consume(owner) : { ok: true, source: 'legacy_open' };
+          if (!consumed.ok) return error(402, consumed.code);
+          consumedSource = consumed.source;
           pending = (async () => {
             const rawLimit = setting(env.NOTA_ACT_AI_MAX_CALLS_PER_DAY || env.NOTA_FINANCING_AI_MAX_CALLS_PER_DAY);
             const dailyLimit = rawLimit ? Number(rawLimit) : DEFAULT_DAILY_CALL_LIMIT;
@@ -143,14 +157,18 @@ function createActAIRoutes({ repo, env, authenticate, json, parseBody, getSecret
         }
         let result;
         try { result = await pending; } finally { if (inFlight.get(key) === pending) inFlight.delete(key); }
-        if (result.status) return error(result.status, result.code);
+        if (result.status) { if (aiAccess && consumed) await aiAccess.refund(owner, consumed.source); consumedSource = null; return error(result.status, result.code); }
         analysisId = result.analysisId;
       }
       const current = await repo.get(input.id, input.dateISO, { consistentRead: true });
       if (!current || current.notaryId !== owner || current.status !== D.STATUS.RETENUE || current.efface || current.actAnalysis?.id !== analysisId) return error(409, 'analyse_modifiee');
       await learn('aiOutput', { bid: current, analysis: current.actAnalysis, input: validated.value, owner, reused });
+      consumedSource = null;
       return json(200, { ok: true, analysis: current.actAnalysis, workPacket: packet(current), reused });
-    } catch { return error(503, 'act_ai_unavailable'); }
+    } catch {
+      if (aiAccess && consumedSource) await aiAccess.refund(owner, consumedSource);
+      return error(503, 'act_ai_unavailable');
+    }
   };
 }
 

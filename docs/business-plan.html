@@ -1,28 +1,28 @@
-<title>Nota Business Plan</title>
-
+<!doctype html>
+<html lang="en-CA"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" /><title>Nota Business Plan</title>
 <style>
 /* ─────────────────────────────────────────────────────────────
-   Palette: registry ink on cool paper, brass seal accent.
-   Neutrals carry a blue bias so they read as chosen, not default.
+   Palette: Nota blue-teal on cool paper, with the Québec signal preserved.
+   The lockup follows the production mark used by the application.
    ───────────────────────────────────────────────────────────── */
 :root{
-  --paper:#F4F6F8;
-  --surface:#FFFFFF;
-  --surface-2:#EDF1F5;
-  --ink:#111823;
-  --ink-2:#33404F;
-  --muted:#5D6C7E;
+  --paper:#eef5f7;
+  --surface:#fbfdfd;
+  --surface-2:#e6f0f4;
+  --ink:#173b52;
+  --ink-2:#274a62;
+  --muted:#607986;
   --faint:#8896A6;
-  --rule:#DCE3EA;
-  --rule-strong:#C3CEDA;
-  --brass:#8F6714;
-  --brass-bright:#A8791F;
-  --brass-wash:#F6EEDC;
-  --verdigris:#2F6B57;
-  --verdigris-wash:#E6F0EB;
+  --rule:#c5d8df;
+  --rule-strong:#a9c3ce;
+  --brass:#386888;
+  --brass-bright:#407598;
+  --brass-wash:#f1f7fb;
+  --verdigris:#274a62;
+  --verdigris-wash:#e6f0f4;
   --oxide:#8E4034;
   --oxide-wash:#F8EAE7;
-  --shadow:0 1px 2px rgba(17,24,35,.05),0 8px 24px -12px rgba(17,24,35,.14);
+  --shadow:0 1px 2px rgba(16,27,38,.05),0 8px 24px -12px rgba(16,27,38,.14);
 
   --display:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua","Sitka Text",Georgia,serif;
   --body:"Avenir Next",Avenir,"Segoe UI",system-ui,-apple-system,"Helvetica Neue",sans-serif;
@@ -33,40 +33,40 @@
 }
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
-    --paper:#0D131B;
-    --surface:#141C26;
-    --surface-2:#1B2531;
-    --ink:#E6EBF2;
-    --ink-2:#C4CEDA;
-    --muted:#93A1B2;
-    --faint:#71808F;
-    --rule:#25313F;
-    --rule-strong:#33424F;
-    --brass:#D9A441;
-    --brass-bright:#E3B45C;
-    --brass-wash:#2A2113;
-    --verdigris:#63B394;
-    --verdigris-wash:#132620;
+    --paper:#101b26;
+    --surface:#0f2030;
+    --surface-2:#132b3f;
+    --ink:#f4f8fa;
+    --ink-2:#e5eef3;
+    --muted:#afc2cf;
+    --faint:#78a9bf;
+    --rule:#294353;
+    --rule-strong:#3f5f70;
+    --brass:#78a9bf;
+    --brass-bright:#9cc7d8;
+    --brass-wash:#19384d;
+    --verdigris:#78a9bf;
+    --verdigris-wash:#19384d;
     --oxide:#D08376;
     --oxide-wash:#2A1613;
     --shadow:0 1px 2px rgba(0,0,0,.30),0 10px 28px -14px rgba(0,0,0,.55);
   }
 }
 :root[data-theme="dark"]{
-  --paper:#0D131B;
-  --surface:#141C26;
-  --surface-2:#1B2531;
-  --ink:#E6EBF2;
-  --ink-2:#C4CEDA;
-  --muted:#93A1B2;
-  --faint:#71808F;
-  --rule:#25313F;
-  --rule-strong:#33424F;
-  --brass:#D9A441;
-  --brass-bright:#E3B45C;
-  --brass-wash:#2A2113;
-  --verdigris:#63B394;
-  --verdigris-wash:#132620;
+  --paper:#101b26;
+  --surface:#0f2030;
+  --surface-2:#132b3f;
+  --ink:#f4f8fa;
+  --ink-2:#e5eef3;
+  --muted:#afc2cf;
+  --faint:#78a9bf;
+  --rule:#294353;
+  --rule-strong:#3f5f70;
+  --brass:#78a9bf;
+  --brass-bright:#9cc7d8;
+  --brass-wash:#19384d;
+  --verdigris:#78a9bf;
+  --verdigris-wash:#19384d;
   --oxide:#D08376;
   --oxide-wash:#2A1613;
   --shadow:0 1px 2px rgba(0,0,0,.30),0 10px 28px -14px rgba(0,0,0,.55);
@@ -122,9 +122,14 @@ code{font-family:var(--mono);font-size:.87em;background:var(--surface-2);padding
 /* ── Masthead ─────────────────────────────────────────────── */
 .mast{padding:5.5rem 0 3.2rem}
 .mast .mark{
-  font-family:var(--display);font-size:clamp(3.4rem,9vw,5.6rem);line-height:.94;
-  letter-spacing:-.03em;font-weight:600;margin:0 0 .5rem;
+  display:flex;align-items:center;gap:.8rem;
+  font-family:var(--body);font-size:clamp(3.4rem,9vw,5.6rem);line-height:.94;
+  letter-spacing:-.04em;font-weight:800;margin:0 0 .8rem;color:var(--ink);
 }
+.mark-symbol{width:1.05em;height:1.05em;display:block;flex:none}
+.mark-region{display:inline-block;align-self:center;margin-left:.15rem;padding:.34em .62em .3em;
+  border-radius:999px;background:var(--brass-wash);color:var(--brass);font-family:var(--body);
+  font-size:.22em;line-height:1;letter-spacing:.12em;font-weight:750}
 .mast .thesis{
   font-family:var(--display);font-style:italic;font-size:clamp(1.3rem,3.2vw,1.8rem);
   line-height:1.3;color:var(--brass);margin:0 0 1.4rem;max-width:22ch;
@@ -252,1141 +257,959 @@ footer h3{font-size:.95rem;margin:0 0 .9rem;font-family:var(--body);font-weight:
   border-bottom:1px solid var(--rule);padding-bottom:.42rem}
 .srcs a:hover{color:var(--brass)}
 @media (max-width:640px){.srcs{columns:1}}
-</style>
+</style><style>
+:root{
+  color-scheme:dark;
+  --paper:#0e1f33;--surface:#122744;--surface-2:#1b3d64;
+  --ink:#f4f6f8;--ink-2:#d9e4ec;--muted:#aebdca;--faint:#7f9db1;
+  --rule:#36516a;--rule-strong:#4f7088;
+  --brass:#386888;--brass-bright:#78a9bf;--brass-wash:#193652;
+  --verdigris:#78a9bf;--verdigris-wash:#193652;
+  --oxide:#e39b8f;--oxide-wash:#3a211f;
+  --shadow:0 1px 2px rgba(0,0,0,.28),0 18px 48px -24px rgba(0,0,0,.62);
+  --nota-orange-600:#d77f2f;--nota-orange-400:#f0a45d;--accent-warm:var(--nota-orange-400)
+}
+main{max-width:1140px;margin:0 auto;padding:3rem 28px 6rem;background:var(--surface)}
+main>h1{font-size:clamp(2.2rem,5vw,4rem);line-height:1.05;margin:0 0 1.2rem}
+main>h2{border-top:1px solid var(--rule);padding-top:2.6rem;margin-top:3.6rem}
+main>h3{margin-top:2.2rem}
+main p,main ul,main ol,main pre,main blockquote{max-width:76ch}
+main a{overflow-wrap:anywhere}
+.table-scroll{overflow-x:auto;margin:1.25rem 0 1.8rem}
+table{border-collapse:collapse;width:100%;font-size:.9rem;line-height:1.35;background:var(--surface)}
+th,td{border-bottom:1px solid var(--rule);padding:.7rem .65rem;text-align:left;vertical-align:top}
+th{font-weight:650;color:var(--ink-2);background:var(--surface-2)}
+tr:last-child td{border-bottom:0}
+pre{overflow:auto;background:var(--surface-2);padding:1rem;border-radius:5px}
+blockquote{border-left:3px solid var(--brass);margin:1.5rem 0;padding:.25rem 1rem;color:var(--ink-2)}
+code{overflow-wrap:anywhere}
+@media(max-width:700px){main{padding:2rem 16px 4rem}table{font-size:.82rem}}
 
-<main>
+/* ── Interactive decision surface ───────────────────────── */
+html{scroll-behavior:smooth}
+body{background:linear-gradient(135deg,var(--paper),var(--surface-2) 42%,var(--paper));}
+main{position:relative;overflow:hidden}
+main::before{content:"";position:absolute;inset:0 0 auto;height:22rem;pointer-events:none;background:radial-gradient(circle at 8% 12%,color-mix(in srgb,var(--brass) 15%,transparent),transparent 42%),radial-gradient(circle at 92% 4%,color-mix(in srgb,var(--accent-warm) 10%,transparent),transparent 38%)}
+main>h1,main>p{position:relative}
+.experience-console{position:relative;margin:3rem 0 4.5rem;padding:1.5rem;border:1px solid color-mix(in srgb,var(--brass) 28%,var(--rule));border-radius:14px;background:color-mix(in srgb,var(--surface) 92%,transparent);box-shadow:0 24px 60px -36px color-mix(in srgb,var(--brass) 45%,transparent);overflow:hidden}
+.language-bar{position:sticky;top:12px;z-index:10;display:flex;justify-content:flex-end;align-items:center;gap:.35rem;margin:0 0 1rem;padding:.4rem .55rem;border:1px solid var(--rule);border-radius:999px;background:color-mix(in srgb,var(--surface) 94%,transparent);box-shadow:0 8px 24px -18px color-mix(in srgb,var(--ink) 40%,transparent);font:600 .68rem var(--mono);letter-spacing:.04em;color:var(--muted)}
+.language-bar .deck-link{margin-right:auto;color:var(--brass);text-decoration:none;padding:.35rem .6rem;border-radius:999px}.language-bar .deck-link:hover{background:var(--brass-wash)}
+.language-bar button{appearance:none;border:1px solid transparent;background:transparent;color:var(--muted);padding:.35rem .6rem;border-radius:999px;font:600 .68rem var(--mono);cursor:pointer;transition:all .2s ease}
+.language-bar [data-plan-focus]{margin-left:auto;border-color:var(--rule);color:var(--ink-2)}
+.language-bar button:hover,.language-bar button[aria-pressed=true]{border-color:var(--brass);background:var(--brass);color:var(--surface)}
+.plan-brand{display:flex;align-items:center;gap:.78rem;margin:0 0 1.4rem;color:var(--ink)}
+.plan-brand-mark{width:clamp(3rem,7vw,4.6rem);height:clamp(3rem,7vw,4.6rem);display:block;flex:none}
+.plan-brand-word{font:800 clamp(3rem,7vw,4.6rem)/.9 var(--body);letter-spacing:-.08em}
+.plan-brand-region{align-self:center;margin-left:.12rem;padding:.42em .7em .36em;border-radius:999px;background:var(--brass-wash);color:var(--brass);font:750 clamp(.65rem,1.2vw,.85rem)/1 var(--body);letter-spacing:.12em}
+.french-summary{max-width:76ch}.french-summary h1{font-size:clamp(2rem,4vw,3.2rem);line-height:1.08;margin:0 0 1rem}.french-summary h2{border-top:1px solid var(--rule);padding-top:2rem;margin-top:2.8rem}.french-summary li{margin:.4rem 0}
+.experience-console::after{content:"";position:absolute;width:18rem;height:18rem;right:-7rem;top:-8rem;border:1px solid color-mix(in srgb,var(--brass) 30%,transparent);border-radius:50%;box-shadow:0 0 0 1.2rem color-mix(in srgb,var(--brass) 7%,transparent),0 0 0 2.4rem color-mix(in srgb,var(--brass) 4%,transparent);animation:signalOrbit 18s linear infinite;pointer-events:none}
+.console-intro{max-width:62ch}.console-intro h2{margin:.2rem 0 .7rem;font-size:clamp(1.7rem,3vw,2.4rem)}
+.lens-switch{display:flex;gap:.45rem;flex-wrap:wrap;margin:1.4rem 0 .9rem;position:relative;z-index:1}
+.lens-switch button{appearance:none;border:1px solid var(--rule);background:var(--surface);color:var(--muted);padding:.5rem .8rem;border-radius:999px;font:600 .78rem var(--body);cursor:pointer;transition:all .2s ease}
+.lens-switch button:hover,.lens-switch button[aria-selected=true]{border-color:var(--brass);color:var(--surface);background:var(--brass);transform:translateY(-1px)}
+.lens-panel{display:flex;gap:.8rem;align-items:baseline;max-width:72ch;padding:.8rem 1rem;border-left:3px solid var(--brass);background:var(--brass-wash);animation:lensIn .35s ease both}.lens-panel[hidden]{display:none}.lens-panel strong{font-family:var(--mono);font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--brass);white-space:nowrap}.lens-panel span{color:var(--ink-2)}
+.console-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;margin:1.5rem 0 1.2rem;background:var(--rule);border:1px solid var(--rule);border-radius:9px;overflow:hidden;position:relative;z-index:1}.console-metrics div{display:grid;gap:.25rem;padding:1rem;background:var(--surface)}.console-metrics b{font:600 clamp(1.35rem,3vw,2rem) var(--display);color:var(--brass);letter-spacing:-.02em}.console-metrics span{font-size:.76rem;line-height:1.35;color:var(--muted)}
+.learning-loop{position:relative;z-index:1;margin:1.35rem 0 1.2rem;padding:1.15rem 1.2rem 1rem;border:1px solid color-mix(in srgb,var(--blue,var(--brass)) 32%,var(--rule));border-radius:10px;background:linear-gradient(120deg,color-mix(in srgb,var(--surface-2) 88%,transparent),color-mix(in srgb,var(--surface) 92%,transparent));overflow:hidden}.learning-loop::before{content:"";position:absolute;inset:auto 4% 1.05rem;height:1px;background:repeating-linear-gradient(90deg,var(--brass) 0 10px,transparent 10px 18px);opacity:.6;animation:loopTravel 5s linear infinite}.learning-loop-heading{display:flex;align-items:baseline;gap:.7rem;margin-bottom:1rem}.learning-loop-heading strong{font-size:1rem;color:var(--ink-2)}.learning-loop-track{display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr;align-items:center;gap:.6rem;position:relative;z-index:1}.learning-node{display:grid;gap:.25rem;min-height:4.1rem;padding:.75rem .8rem;border:1px solid var(--rule);border-radius:9px;background:var(--surface);box-shadow:0 8px 20px -18px var(--ink)}.learning-node b{font:700 .82rem var(--mono);letter-spacing:.07em;text-transform:uppercase}.learning-node span{font-size:.75rem;color:var(--muted);line-height:1.3}.learning-node.user b,.learning-node.version b{color:var(--brass-bright)}.learning-node.model b{color:var(--accent-warm)}.learning-node.notary b{color:var(--verdigris)}.learning-loop-track>i{font-style:normal;font-size:1.35rem;color:var(--brass);animation:arrowPulse 1.8s ease-in-out infinite}.learning-loop-track>i:nth-of-type(2){animation-delay:.25s}.learning-loop-track>i:nth-of-type(3){animation-delay:.5s}.learning-loop-note{margin:.85rem 0 0;max-width:none;font-size:.78rem;line-height:1.45;color:var(--ink-2)}
+.chapter-nav{display:flex;gap:.25rem;flex-wrap:wrap;position:relative;z-index:1}.chapter-nav a{padding:.35rem .55rem;border-radius:4px;text-decoration:none;color:var(--muted);font:600 .7rem var(--mono);letter-spacing:.04em;transition:color .2s,background .2s}.chapter-nav a:hover,.chapter-nav a[aria-current]{color:var(--brass);background:var(--brass-wash)}
+.chapter-controls{display:flex;align-items:center;gap:.7rem;margin-top:1.15rem;position:relative;z-index:1}.chapter-controls button{appearance:none;border:1px solid var(--rule);background:var(--surface);color:var(--ink-2);padding:.45rem .7rem;border-radius:6px;font:600 .72rem var(--body);cursor:pointer;transition:all .2s ease}.chapter-controls button:hover:not(:disabled){border-color:var(--brass);color:var(--brass);transform:translateY(-1px)}.chapter-controls button:disabled{opacity:.42;cursor:not-allowed}.chapter-controls span{font:600 .68rem var(--mono);letter-spacing:.05em;color:var(--muted)}
+.focus-toggle{appearance:none;border:1px solid var(--brass);background:var(--brass-wash);color:var(--brass);padding:.55rem .75rem;border-radius:7px;font:650 .75rem var(--body);cursor:pointer;transition:all .2s ease;position:relative;z-index:1}.focus-toggle:hover{background:var(--brass);color:var(--surface);transform:translateY(-1px)}
+/* ── Chapter motion system: every chapter gets its own visual metaphor ── */
+.plan-section{display:grid;grid-template-columns:3.2rem minmax(0,1fr);gap:1.2rem;margin:0 0 4.6rem;scroll-margin-top:1.2rem;opacity:1;transform:none}.js-motion .plan-section{opacity:0;transform:translateY(18px);transition:opacity .65s ease,transform .65s cubic-bezier(.2,.8,.2,1)}.js-motion .plan-section.is-visible{opacity:1;transform:none}.section-rail{padding-top:2.65rem;display:flex;flex-direction:column;align-items:center;gap:1rem}.section-count{font:600 .72rem var(--mono);color:var(--faint);letter-spacing:.06em}.section-content>h2{border-top:0;padding-top:0;margin-top:0}.section-signal{width:2.25rem;height:2.25rem;position:relative;color:var(--accent-warm)}.section-signal i{position:absolute;display:block;border:1px solid currentColor}.signal--thesis i:nth-child(1){inset:2px;border-radius:50%;animation:pulse 2.8s ease-in-out infinite}.signal--thesis i:nth-child(2){inset:8px;transform:rotate(45deg);animation:pulse 2.8s .35s ease-in-out infinite}.signal--thesis i:nth-child(3){inset:14px;background:currentColor;border:0;border-radius:50%}.signal--market i:nth-child(1){inset:2px;border-radius:50%;border-style:dashed;animation:spin 8s linear infinite}.signal--market i:nth-child(2){inset:8px;border-radius:50%}.signal--market i:nth-child(3){width:5px;height:5px;left:16px;top:16px;background:currentColor;border:0;border-radius:50%}.signal--catalogue i{height:4px;left:3px;right:3px;background:currentColor;border:0;animation:barRise 1.8s ease-in-out infinite}.signal--catalogue i:nth-child(1){top:5px;width:55%}.signal--catalogue i:nth-child(2){top:12px;width:78%;animation-delay:.2s}.signal--catalogue i:nth-child(3){top:19px;width:38%;animation-delay:.4s}.signal--evidence i:nth-child(1){inset:2px;border-radius:4px}.signal--evidence i:nth-child(2){left:5px;right:5px;top:11px;height:1px;background:currentColor;border:0;animation:scan 2.2s ease-in-out infinite}.signal--evidence i:nth-child(3){left:8px;right:8px;bottom:6px;height:1px;background:currentColor;border:0}.signal--competition i:nth-child(1){left:2px;top:4px;width:12px;height:18px;transform:skewY(-22deg)}.signal--competition i:nth-child(2){right:2px;top:4px;width:12px;height:18px;transform:skewY(22deg)}.signal--competition i:nth-child(3){left:10px;right:10px;bottom:3px;height:1px;background:currentColor;border:0}.signal--growth i:nth-child(1){left:3px;bottom:4px;width:17px;height:12px;border-width:0 0 1px 1px}.signal--growth i:nth-child(2){left:8px;top:8px;width:13px;height:13px;border-width:1px 1px 0 0;transform:rotate(-45deg);animation:arrow 1.8s ease-in-out infinite}.signal--growth i:nth-child(3){left:5px;right:5px;top:17px;border-width:0 0 1px 0}.signal--economics i:nth-child(1),.signal--economics i:nth-child(2),.signal--economics i:nth-child(3){bottom:3px;width:5px;background:currentColor;border:0;transform-origin:bottom;animation:barGrow 2s ease-in-out infinite}.signal--economics i:nth-child(1){left:3px;height:10px}.signal--economics i:nth-child(2){left:10px;height:18px;animation-delay:.2s}.signal--economics i:nth-child(3){left:17px;height:14px;animation-delay:.4s}.signal--operations i:nth-child(1){inset:3px;border-radius:50%;border-style:dashed;animation:spin 12s linear infinite}.signal--operations i:nth-child(2){inset:9px;border-radius:50%}.signal--operations i:nth-child(3){inset:14px;border-radius:50%;background:currentColor;border:0}.signal--roadmap i:nth-child(1){left:2px;right:2px;top:15px;border-width:1px 0 0;border-style:dashed;transform:rotate(-22deg)}.signal--roadmap i:nth-child(2){left:4px;top:8px;width:5px;height:5px;border-radius:50%;background:currentColor;border:0}.signal--roadmap i:nth-child(3){right:4px;bottom:6px;width:5px;height:5px;border-radius:50%;background:currentColor;border:0}.signal--governance i:nth-child(1){inset:3px;border-radius:50%;animation:pulse 3s ease-in-out infinite}.signal--governance i:nth-child(2){left:4px;top:4px;width:5px;height:5px;border-radius:50%;background:currentColor;border:0;box-shadow:14px 0 0 currentColor,7px 14px 0 currentColor}.signal--governance i:nth-child(3){left:7px;right:7px;top:10px;height:1px;background:currentColor;border:0;transform:rotate(30deg)}.signal--milestones i:nth-child(1){left:2px;right:2px;top:15px;height:1px;background:currentColor;border:0}.signal--milestones i:nth-child(2),.signal--milestones i:nth-child(3){width:6px;height:6px;border-radius:50%;background:var(--surface);border:2px solid currentColor;top:12px}.signal--milestones i:nth-child(2){left:3px}.signal--milestones i:nth-child(3){right:3px}.signal--cash i:nth-child(1){inset:3px;border-radius:4px}.signal--cash i:nth-child(2){left:7px;right:7px;top:12px;height:1px;background:currentColor;border:0}.signal--cash i:nth-child(3){left:11px;top:8px;width:5px;height:5px;border-radius:50%;background:currentColor;border:0;animation:pulse 2s ease-in-out infinite}.signal--capital i:nth-child(1){inset:3px;border-radius:50%;border-style:dashed;animation:spin 10s linear infinite}.signal--capital i:nth-child(2){left:7px;right:7px;top:11px;height:1px;background:currentColor;border:0;transform:rotate(45deg)}.signal--capital i:nth-child(3){left:7px;right:7px;top:11px;height:1px;background:currentColor;border:0;transform:rotate(-45deg)}.signal--risk i:nth-child(1){left:5px;top:3px;width:14px;height:18px;border-radius:9px 9px 4px 4px;transform:rotate(45deg)}.signal--risk i:nth-child(2){left:11px;top:9px;width:2px;height:8px;background:currentColor;border:0}.signal--risk i:nth-child(3){left:11px;top:19px;width:2px;height:2px;background:currentColor;border:0;border-radius:50%}.signal--sources i:nth-child(1){inset:3px;border-radius:3px}.signal--sources i:nth-child(2){left:7px;right:7px;top:10px;height:1px;background:currentColor;border:0;box-shadow:0 5px 0 currentColor}.signal--sources i:nth-child(3){left:7px;top:8px;width:4px;height:4px;border-radius:50%;background:currentColor;border:0}
+.focus-summary{display:flex;align-items:baseline;gap:.8rem;margin:0 0 1.2rem;padding:.78rem 1rem;border-left:3px solid var(--brass);border-radius:0 7px 7px 0;background:var(--brass-wash);color:var(--ink-2)}.focus-summary span{font:650 .67rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--brass);white-space:nowrap}.focus-summary strong{font-size:.97rem;font-weight:650;color:var(--ink)}
+.js-motion .plan-section{transition:opacity .65s ease,transform .65s cubic-bezier(.2,.8,.2,1),filter .65s ease}.js-motion .plan-section:not(.is-visible).motion-thesis{transform:scale(.94);filter:saturate(.6)}.js-motion .plan-section:not(.is-visible).motion-market{transform:translateX(-24px)}.js-motion .plan-section:not(.is-visible).motion-catalogue{transform:translateY(20px) scale(.96)}.js-motion .plan-section:not(.is-visible).motion-evidence{transform:rotate(-.8deg) scale(.98);filter:blur(2px)}.js-motion .plan-section:not(.is-visible).motion-competition{transform:translateX(24px)}.js-motion .plan-section:not(.is-visible).motion-growth{transform:translateY(26px) rotate(.6deg)}.js-motion .plan-section:not(.is-visible).motion-economics{transform:scaleY(.9);transform-origin:50% 100%}.js-motion .plan-section:not(.is-visible).motion-operations{transform:scale(.95) rotate(1.2deg)}.js-motion .plan-section:not(.is-visible).motion-roadmap{transform:translate(-16px,14px)}.js-motion .plan-section:not(.is-visible).motion-governance{transform:scale(.97);filter:blur(3px)}.js-motion .plan-section:not(.is-visible).motion-milestones{transform:translateY(18px) scale(.97)}.js-motion .plan-section:not(.is-visible).motion-cash{transform:translate(18px,10px)}.js-motion .plan-section:not(.is-visible).motion-capital{transform:scale(.92) rotate(-1deg)}.js-motion .plan-section:not(.is-visible).motion-risk{transform:translateY(-18px)}.js-motion .plan-section:not(.is-visible).motion-sources{transform:scale(.98);filter:saturate(.65)}.js-motion .plan-section.is-visible{filter:none}
+.focus-view #plan-en .plan-section .section-content> :not(h2):not(.focus-summary){display:none}.focus-view #plan-en .plan-section{margin-bottom:2.2rem}.focus-view #plan-en .section-content>h2{margin-bottom:.65rem}
+@keyframes signalOrbit{to{transform:rotate(360deg)}}@keyframes lensIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}@keyframes pulse{0%,100%{transform:scale(.85);opacity:.55}50%{transform:scale(1.05);opacity:1}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes scan{0%,100%{transform:translateY(-6px);opacity:.35}50%{transform:translateY(7px);opacity:1}}@keyframes barRise{0%,100%{transform:scaleX(.55);transform-origin:left;opacity:.5}50%{transform:scaleX(1);opacity:1}}@keyframes barGrow{0%,100%{transform:scaleY(.55);opacity:.55}50%{transform:scaleY(1);opacity:1}}@keyframes arrow{0%,100%{transform:translate(0,4px) rotate(-45deg);opacity:.5}50%{transform:translate(4px,0) rotate(-45deg);opacity:1}}@keyframes arrowPulse{0%,100%{opacity:.4;transform:translateX(-2px)}50%{opacity:1;transform:translateX(2px)}}@keyframes loopTravel{to{background-position:36px 0}}
+@media(max-width:700px){.language-bar{justify-content:center;position:sticky;top:8px}.console-metrics{grid-template-columns:repeat(2,1fr)}.learning-loop-track{grid-template-columns:1fr;gap:.35rem}.learning-loop-track>i{justify-self:center;transform:rotate(90deg)}.learning-loop-track>i:nth-of-type(2){animation-delay:0}.learning-loop-track>i:nth-of-type(3){animation-delay:0}.lens-panel{display:block}.lens-panel strong{display:block;margin-bottom:.25rem}.plan-section{grid-template-columns:1fr;gap:.35rem;margin-bottom:3.4rem}.section-rail{padding-top:0;flex-direction:row;justify-content:flex-start;gap:.65rem}.section-signal{width:1.8rem;height:1.8rem;transform:scale(.82);transform-origin:left center}.section-content>h2{font-size:1.75rem}.chapter-controls{justify-content:space-between}.focus-summary{display:block}.focus-summary span{display:block;margin-bottom:.25rem}.language-bar [data-plan-focus]{margin-left:0}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.experience-console::after,.section-signal *, .learning-loop-track>i, .learning-loop::before{animation:none!important}.plan-section,.js-motion .plan-section{opacity:1;transform:none;transition:none}.lens-panel{animation:none}}
+</style></head><body><main>
 
-<!-- ══════════════════ MASTHEAD ══════════════════ -->
-<div class="wrap mast">
-  <span class="eyebrow">Pre-seed · Québec City · September 2026</span>
-  <h1 class="mark">Nota</h1>
-  <p class="thesis">A market for urgent notarial acts - and a protocol for hidden capacity.</p>
-  <p class="stand">Québec abolished mandatory notary tariffs in 1991. Thirty-five years later, no
-  price discovery mechanism has ever existed. Nota is that mechanism: a client posts the date they
-  need an act signed and what they will pay, while providers accept, counter-propose or pass without
-  publishing their private agenda. Québec City is the wedge; the hidden-capacity demand market is
-  the platform thesis.</p>
-
-  <div class="figs">
-    <div class="fig"><span class="v tnum">$250K</span><span class="k">CAD pre-seed, 12 months of runway</span></div>
-    <div class="fig hi"><span class="v tnum">~40,000</span><span class="k">lines already written, tested and deployed</span></div>
-    <div class="fig"><span class="v tnum">~3,900</span><span class="k">notaries in Québec, each with unsold calendar gaps</span></div>
-    <div class="fig"><span class="v tnum">~110,000</span><span class="k">financing acts a year in the two launch services</span></div>
-    <div class="fig hi"><span class="v tnum">10%</span><span class="k">of addressable act volume needed by year three</span></div>
-  </div>
-
-  <div class="meta">
-    <span>Anthony Paquet</span>
-    <span>anthonypaquet1508@gmail.com</span>
-    <span>Version 1.5 · 9 September 2026</span>
-  </div>
-
-  <div class="note brass" style="margin-top:1.6rem">
-    <span class="label">What changed in 1.5</span>
-    <p>Added the Courtiers Immobiliers partner channel: a unique referral code and a flat
-      <strong>50 $</strong> reward when a referred customer converts into a retained and settled act.
-      The customer gets the date, the notary keeps the full fee, the broker earns a transparent
-      acquisition reward, and Nota earns its own service line.</p>
-    <span class="label">What changed in 1.4</span>
-    <p>The commercial case now leads with the notary's incremental gross-fee opportunity, the customer's
-      deadline problem, and the zero-obligation subscription: free to join, no full-calendar sharing,
-      and no required action unless a request fits.</p>
-    <span class="label">What changed in 1.3</span>
-    <p>Added a cited market and AI strategy research companion covering Canada province by province,
-      priority civil-law countries, adjacent urgent-service markets, and the evidence required for an
-      investor-grade AI plan: baselines, act-specific evaluations, human accountability, data rights,
-      model economics, and monitoring. See <code>docs/nota-market-research-2026.md</code>.</p>
-    <span class="label">What changed in 1.2</span>
-    <p>This revision makes the product boundary explicit: Québec City first, then Quebec-wide and
-    international notarial expansion, with a reusable hidden-capacity demand market as the broader
-    platform thesis. Providers can accept, counter-propose, request information or pass without
-    sharing a private agenda.</p>
-    <p>Version 1.0 described a <strong>10% commission on the notary's fee</strong> as what the code
-    did, and proposed restructuring it. That commission has since been <strong>removed from the
-    product</strong>, not merely proposed for removal: Nota now charges the client its own published
-    price, per service, and the notary's <em>honoraires</em> reach them whole. Every economic figure
-    here has been recomputed from the shipped pricing grid. <strong>Gross margin per act is materially
-    lower than version 1.0 claimed</strong> — about <strong>73%</strong> since the date ladder and the service lines were repriced on 2026-09-05, not 89–91% — because Nota
-    bears the card-processing fee on the whole amount the client pays, including the notary's fee,
-    which Nota never keeps.</p>
-  </div>
+<div class="language-bar" role="group" aria-label="Language / Langue">
+  <a class="deck-link" href="/pitch-deck.html">Pitch deck</a>
+  <span>Language / Langue</span>
+  <button type="button" data-plan-focus aria-pressed="true">Show full detail</button>
+  <button type="button" data-plan-lang="en" aria-pressed="true">English</button>
+  <button type="button" data-plan-lang="fr" aria-pressed="false">Français</button>
 </div>
 
-<!-- ══════════════════ 01 SUMMARY ══════════════════ -->
-<div class="wrap"><hr class="rule"></div>
-<section class="wrap">
-  <div class="shead">
-    <span class="snum">01</span>
-    <div>
-      <h2>What Nota is, and why now</h2>
-      <p class="sub">A two-sided marketplace where the axis of price is the date, not the document.</p>
+<div class="plan-brand" aria-label="Nota Québec">
+  <svg class="plan-brand-mark" viewBox="0 0 64 64" role="img" aria-label="Nota mark">
+    <rect width="64" height="64" rx="6" fill="#264961" />
+    <g fill="#ffffff">
+      <rect x="16" y="15" width="7.5" height="34" rx="2.5" />
+      <rect x="40.5" y="15" width="7.5" height="34" rx="2.5" />
+      <polygon points="16,15 24,15 48,49 40,49" />
+    </g>
+    <circle cx="48" cy="16" r="8" fill="#407598" stroke="#264961" stroke-width="3" />
+  </svg>
+  <span class="plan-brand-word">OTA</span>
+  <span class="plan-brand-region">QUÉBEC</span>
+</div>
+<div id="plan-en"><h1>Nota Business Plan</h1>
+<p><strong>A market for urgent notarial acts, followed by tools that reduce preparation work.</strong></p>
+<p>info@gonota.ca</p>
+<p><strong>https://plan.gonata.ca/</strong></p>
+<p><strong>Proposed raise: 250 000 $ pre-seed.</strong> Product development and public deployment are evidenced, repeatable paid demand, live settlement and professional launch clearance are not established by the reviewed records. The financing scenario targets 244 completed acts and approximately 80 813 $ of Nota revenue in Year 1. These are targets, not traction.</p>
+<p>This revision reconciles the four-service code catalogue, published fee grid, referral accrual, market arithmetic, payment costs, completion funnel and funding requirements. It replaces the previous claim that approximately 240 000 $ funds the business through Year 3. Under the revised base assumptions, approximately <strong>430 119 $</strong>, including a 25 000 $ planning reserve, is required at the worst annual endpoint, monthly timing beyond Year 1 could require more.</p>
+<p><a href="plan-affaires-sommaire.md">French executive summary</a> · <a href="planning/business-plan-model.json">Financial model and monthly cash</a> · <a href="planning/business-plan-review-2026-09-09.md">Review and outstanding evidence</a></p>
+
+<div class="experience-console" id="decision-console">
+  <div class="console-intro">
+    <span class="eyebrow">The decision surface</span>
+    <h2>One market. Three durable wins.</h2>
+    <p class="lede">Nota turns a deadline into a coordinated outcome: a client gets clarity, a notary gets qualified capacity, and the company earns a transparent fee for making the match work.</p>
+  </div>
+  <div class="lens-switch" role="tablist" aria-label="View the plan through each stakeholder's outcome">
+    <button type="button" role="tab" aria-selected="true" data-lens="investor">Investor</button>
+    <button type="button" role="tab" aria-selected="false" data-lens="notary">Notary</button>
+    <button type="button" role="tab" aria-selected="false" data-lens="client">Customer</button>
+  </div>
+  <button type="button" class="focus-toggle" data-plan-focus aria-pressed="true">Show full detail</button>
+  <div class="lens-panel" data-lens-panel="investor" role="tabpanel">
+    <strong>Investor lens</strong><span>Evidence-led liquidity, contribution after costs, and disciplined gates before expansion.</span>
+  </div>
+  <div class="lens-panel" data-lens-panel="notary" role="tabpanel" hidden>
+    <strong>Notary lens</strong><span>Capacity infrastructure that keeps the notary's judgment and agreed fee in full, turns open time into qualified acts and removes repetitive preparation loops.</span>
+  </div>
+  <div class="lens-panel" data-lens-panel="client" role="tabpanel" hidden>
+    <strong>Customer lens</strong><span>A clear total, a suitable professional, and a visible next step before a deadline becomes a crisis.</span>
+  </div>
+  <div class="console-metrics" aria-label="Plan signals">
+    <div><b>244</b><span>targeted Year 1 completions</span></div>
+    <div><b>80 813 $</b><span>modeled Nota revenue</span></div>
+    <div><b>30</b><span>recruited notaries in the first cohort</span></div>
+    <div><b>3×</b><span>value created by one reliable match</span></div>
+  </div>
+  <div class="learning-loop" aria-label="Learning loop for simple notarial acts">
+    <div class="learning-loop-heading"><span class="eyebrow">Trust loop</span><strong>Simple acts get clearer with every reviewed cycle.</strong></div>
+    <div class="learning-loop-track">
+      <div class="learning-node user"><b>User</b><span>questions and flow</span></div>
+      <i aria-hidden="true">…</i>
+      <div class="learning-node model"><b>Model</b><span>guided preparation</span></div>
+      <i aria-hidden="true">…</i>
+      <div class="learning-node notary"><b>Notary</b><span>accept… correct… reject</span></div>
+      <i aria-hidden="true">…</i>
+      <div class="learning-node version"><b>Next version</b><span>tested… reversible</span></div>
     </div>
-  </div>
-
-  <div class="col">
-    <p>A client posts the date they need an <em>acte notarié</em> signed and the amount they offer.
-    Notaries watch a public calendar - the <em>carnet</em> - and pick up the work that fits their
-    schedule. They do not publish their private agenda: on each qualified demand they can accept,
-    make a counter-proposal, ask for what is missing, or do nothing. Because every offer is attached
-    to a date, a signature needed tomorrow clears at a multiple of one needed in three weeks.</p>
-
-    <p>Nota is deliberately two businesses in sequence. First, it is the Québec City market for
-    basic, repeatable, deadline-driven notarial acts. Then it becomes a notary operating layer that
-    turns a retained demand into a complete, act-specific work packet. The long-term asset is a
-    reusable <strong>hidden-capacity demand market</strong> that can travel to other provinces,
-    civil-law countries and, with sector-specific safeguards, other urgent-service industries.</p>
-
-    <p>Two things make this fundable now rather than in five years.</p>
-  </div>
-
-  <div class="grid2" style="margin:1.8rem 0">
-    <div class="card">
-      <h4>The product already exists</h4>
-      <p class="small">A pure business-rules core, an HTTP and DynamoDB API, a zero-dependency web
-      app, Stripe payments, notary authentication, an admin console, transactional email, a Cucumber
-      BDD suite and Terraform infrastructure live on AWS in <code>ca-central-1</code>. Built solo.
-      <strong>This raise does not fund a build — it funds distribution and liquidity.</strong></p>
-    </div>
-    <div class="card">
-      <h4>The rails for a remote act are law</h4>
-      <p class="small">Bill 34, in force 24 October 2023, made the <em>acte notarié technologique</em>
-      permanent in Québec. Remote signature is legal — but under art. 46 it is <strong>exceptional</strong>,
-      party-requested and circumstance-justified. That constraint is not an obstacle to route around.
-      It is the wedge.</p>
-    </div>
-  </div>
-
-  <div class="col">
-    <p><strong>The ask.</strong> $250,000 for twelve months, to take the live product from zero to
-    proven liquidity in the Québec City market, restructure monetization onto déontologie-safe
-    footing, and build the compliance layer that makes remote signing routine for the cases where
-    the law already allows it.</p>
-  </div>
-
-  <div class="tw" style="max-width:760px">
-    <table>
-      <thead><tr><th>Horizon</th><th class="n">Acts closed</th><th class="n">Charged to clients</th><th class="n">Nota revenue</th><th class="n">Gross profit</th></tr></thead>
-      <tbody>
-        <tr><td>Y1 — Québec City, financing catalogue</td><td class="n">244</td><td class="n">$744,000</td><td class="n">$62,700</td><td class="n">$41,000</td></tr>
-        <tr><td>Y2 — All Québec, remote layer</td><td class="n">2,800</td><td class="n">$8,542,000</td><td class="n">$719,600</td><td class="n">$471,100</td></tr>
-        <tr><td>Y3 — Widening act catalogue</td><td class="n">11,000</td><td class="n">$33,557,000</td><td class="n">$2,827,000</td><td class="n">$1,850,600</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <p class="col small">Read the fourth column, not the third. Nota's revenue is its own published price
-  per act, not a percentage of what changes hands, so the amount flowing through the platform is a
-  scale indicator and nothing more. Year 3 is roughly <strong>10%</strong> of the two-service
-  addressable act volume — a bigger share of a smaller category than version 1.0 claimed, which is the
-  direct consequence of the financing-first catalogue. The plan does not require winning the market.
-  It requires being the place where price is discovered.</p>
-</section>
-
-<!-- ══════════════════ 02 TWO FINDINGS ══════════════════ -->
-<div class="wrap"><hr class="rule"></div>
-<section class="wrap">
-  <div class="shead">
-    <span class="snum">02</span>
-    <div>
-      <h2>Two findings that reshaped this plan</h2>
-      <p class="sub">Written against the statute and the code, not against assumptions. Both came back
-      different from the working hypothesis, and both are load-bearing.</p>
-    </div>
-  </div>
-
-  <div class="col">
-    <h3>Remote signing is already legal — and that is better news than it sounds</h3>
-    <p>The original Phase 2 premise was that clients must appear in person, and that going fully
-    online expands the market a hundredfold. In Québec that premise is half wrong, and the half that
-    is wrong is the half that was going to be expensive.</p>
-    <p>The <em>acte notarié technologique</em> signed by videoconference is permanent law, not a
-    pandemic measure. The infrastructure exists and is sanctioned: a prescribed videoconference
-    channel, the notary's official digital signature, a technological minute. <strong>Nota does not
-    need to lobby a remote act into existence, invent a legal instrument, or wait on a
-    regulator.</strong> That is years and hundreds of thousands of dollars removed from Phase 2.</p>
-    <p>What is true is narrower and more interesting. Under <strong>art. 46</strong> of the
-    <em>Loi sur le notariat</em>, a notary may only <strong>exceptionally</strong> authorize a remote
-    signature. The request must come <strong>from a party</strong>, and the justifying circumstance
-    must be <strong>specific to that party</strong> — distance from an available notary, health or
-    functional limitation, weather, an unforeseen event prejudicing another party. Convenience does
-    not qualify.</p>
-  </div>
-
-  <div class="note brass">
-    <span class="label">The actual barrier</span>
-    <p>It is not the technology, and not the law's silence. <strong>The justification burden and the
-    disciplinary exposure sit entirely on the individual notary</strong>, who therefore defaults to
-    "come in person" — the only option that never generates a complaint.</p>
-  </div>
-
-  <div class="col">
-    <p><strong>That is a product.</strong> Nota captures the party's request in their own words at
-    intake, classifies the qualifying circumstance, collects the supporting evidence, and attaches a
-    timestamped, auditable justification record to the dossier. The notary receives a file that is
-    already defensible. A discretionary judgment call with personal downside becomes a standard,
-    evidenced workflow — and this is worth more to a notary than the marketplace itself.</p>
-  </div>
-
-  <p class="pull">The expansion does not come from making a legal signature possible. It comes from
-  removing geography as a matching constraint.</p>
-
-  <div class="col">
-    <h3>The revenue model was a déontologie risk. It has been removed.</h3>
-    <p>Version 1.0 of this plan reported that the billing layer implemented a <strong>10%
-    commission</strong> on a completed act, collected against the notary's account, and proposed
-    restructuring it. A later variant made the percentage float between 5% and 15% according to an
-    internal score. <strong>Both are gone from the product.</strong> They are stated here only so a
-    reader who finds them in the git history or in a dated audit knows they were retired, and by
-    which decision.</p>
-    <p>As implemented, the notary received 90% of their own professional fee and a
-    non-<em>notaire</em> kept 10% — the textbook shape of prohibited fee-sharing, exposing every
-    notary on the platform to a disciplinary complaint. It was the single largest structural risk in
-    the business, and it was removed before the first live act rather than after.</p>
-  </div>
-
-  <div class="pair">
-    <div class="pane bad">
-      <span class="tag">Retired</span>
-      <h4>A share deducted from the notary's fee</h4>
-      <ul class="flow">
-        <li><span>Client pays</span><span class="amt">2 000 $</span></li>
-        <li><span>Notary receives</span><span class="amt">1 700–1 900 $</span></li>
-        <li><span>Nota keeps, from the honoraires</span><span class="amt">100–300 $</span></li>
-      </ul>
-      <p class="verdict">Fee-sharing. Every notary on the platform is exposed.</p>
-    </div>
-    <div class="pane good">
-      <span class="tag">Shipped</span>
-      <h4>Nota's own price, charged to the client</h4>
-      <ul class="flow">
-        <li><span>Client pays</span><span class="amt">2 000 $ + 249 $ = 2 249 $</span></li>
-        <li><span>Notary receives</span><span class="amt">2 000 $ &middot; 100%</span></li>
-        <li><span>Nota is paid by the client</span><span class="amt">249 $</span></li>
-      </ul>
-      <p class="verdict">No share of any professional fee. Both lines read before committing.</p>
-    </div>
-  </div>
-
-  <div class="col">
-    <p>An offer carries <strong>two lines</strong>, which the client reads separately before
-    committing anything: the <strong>honoraires</strong>, which reach the notary whole, and
-    <strong>the price of Nota</strong> — a grid published in advance, set by the service asked for
-    plus a date-guarantee line, and never by the notary, their record, or the value of the act. The
-    card is authorized for the total on Nota's own Stripe account; at signing Nota captures that
-    total, keeps its own two lines and transfers the <em>honoraires</em> out. <strong>Nota deducts
-    nothing from a professional fee, and the notary abandons nothing.</strong></p>
-
-    <h3>Why this shape and no other</h3>
-    <p>Four texts, read against the code, forbid the retired arrangement and require this one.</p>
-    <ul class="clean">
-      <li><strong>Art. 32.1 2° of the <em>Loi sur le notariat</em></strong> presumes usurpation of a
-      notary's functions by an intermediary who "obtains from a notary the abandonment of part of
-      their fees" — 2,500 to 125,000 $, doubled on repeat.</li>
-      <li><strong>Art. 32 of the <em>Code de déontologie</em></strong> forbids a notary from sharing
-      fees with someone who is not a member of a professional order. The same conclusion taken from
-      the other end: the prohibition binds the notary, the presumption binds Nota, and fixing one
-      without the other fixes nothing.</li>
-      <li><strong>Art. 29.1</strong> forbids any agreement endangering the notary's independence and
-      disinterest — which a fee indexed on a score awarded by a private company is.</li>
-      <li><strong>Art. 32.1 3°</strong> excludes the intermediary who supplies services with no
-      responsibility toward the notary for their fees. Nota authorizes, captures and guarantees the
-      notary's net, deliberately.</li>
-    </ul>
-    <p class="small">No notary was ever billed under the retired model — no act had yet been carried
-    on the platform when it was removed.</p>
-  </div>
-
-  <div class="note brass">
-    <span class="label">What is still open</span>
-    <p>The <em>direction</em> of the money is settled and verifiable on the Stripe wire: the client
-    pays the platform. What remains open is the legal <strong>qualification</strong> of Nota's own
-    price, plus three narrower questions — the display of evaluations (art. 70), the qualification of
-    the internal cote, and price presentation (art. 71–72, including the fact that <strong>taxes and
-    disbursements are in neither line and appear nowhere in the product yet</strong>).</p>
-  </div>
-
-  <div class="note">
-    <span class="label" style="color:var(--muted)">Budgeted</span>
-    <p class="small">$20,000 of this round buys a formal déontologie opinion and structured engagement
-    with the Chambre des notaires before the first live act. Getting an opinion on file is also a
-    competitive asset: it is the kind of work a well-funded entrant from outside Québec will not know
-    it needs to do.</p>
-  </div>
-
-  <div class="note">
-    <span class="label" style="color:var(--muted)">Wording discipline, permanently</span>
-    <p class="small">No surface, document or comment may describe Nota as taking a
-    <em>commission</em>, a <em>share</em> or a <em>split</em> of a notary's fees; may attach a rating,
-    average or <em>cote</em> to a <strong>named</strong> notary on a client surface (art. 70); may
-    claim to be <em>cheaper than a notary</em> (art. 32.1 1°); or may call Nota's price
-    <em>fixed</em> — it is a grid, published per service.</p>
-  </div>
-</section>
-
-<!-- ══════════════════ 03 THE PROBLEM ══════════════════ -->
-<div class="wrap"><hr class="rule"></div>
-<section class="wrap">
-  <div class="shead">
-    <span class="snum">03</span>
-    <div>
-      <h2>Two sides, both stuck</h2>
-      <p class="sub">Neither can find the other, and neither can price the thing that actually varies.</p>
-    </div>
-  </div>
-
-  <div class="grid2">
-    <div class="card">
-      <h4>The client</h4>
-      <ul class="clean small">
-        <li>Price discovery costs a sequence of phone calls during business hours.</li>
-        <li>Published ranges are wide — a mortgage or refinancing act runs roughly 1,500–3,500 $ —
-        and you learn where you land only after you call.</li>
-        <li>Urgency has no price. There is no way to pay to jump a three-week queue, because there is
-        no queue and no market.</li>
-        <li>And the deadline is not yours. A mortgage rate hold expires on a date the lender set;
-        when the notarial calendar cannot meet it, you lose the rate — thousands of dollars over the
-        term, caused by an appointment nobody could price.</li>
-      </ul>
-    </div>
-    <div class="card">
-      <h4>The notary</h4>
-      <ul class="clean small">
-        <li>A hole in the calendar is unrecoverable inventory — it expires like an airline seat.</li>
-        <li>No channel exists to sell short-notice availability. A cancelled Thursday cannot be listed
-        anywhere.</li>
-        <li>Client acquisition is referral and signage.</li>
-        <li>Buying leads is ineffective; sharing fees is prohibited.</li>
-      </ul>
-    </div>
-  </div>
-
-  <p class="pull">A deregulated market with real price dispersion, real supply elasticity and real
-  demand urgency — and no mechanism connecting any of it.</p>
-</section>
-
-<!-- ══════════════════ 04 THE MECHANISM ══════════════════ -->
-<div class="wrap"><hr class="rule"></div>
-<section class="wrap">
-  <div class="shead">
-    <span class="snum">04</span>
-    <div>
-      <h2>The mechanism</h2>
-      <p class="sub">The tier is derived from how many days away the signing date is. It is the axis
-      that makes the calendar mean something.</p>
-    </div>
-  </div>
-
-  <div class="ladder" style="max-width:760px">
-    <div class="rung" style="--t:#7C8EA3;--w:20%;--d:.05s">
-      <span class="tier">standard</span><span class="days">15+ days</span>
-      <span class="track"><span class="bar"></span></span><span class="mult">1.0&times;</span>
-    </div>
-    <div class="rung" style="--t:#6B87A8;--w:44%;--d:.13s">
-      <span class="tier">rapide</span><span class="days">8–14 days</span>
-      <span class="track"><span class="bar"></span></span><span class="mult">≈2&times;</span>
-    </div>
-    <div class="rung" style="--t:#A8791F;--w:66%;--d:.21s">
-      <span class="tier">prioritaire</span><span class="days">2–7 days</span>
-      <span class="track"><span class="bar"></span></span><span class="mult">≈3&times;</span>
-    </div>
-    <div class="rung" style="--t:#B4711C;--w:74%;--d:.29s">
-      <span class="tier">urgence</span><span class="days">1 day</span>
-      <span class="track"><span class="bar"></span></span><span class="mult">≈3.5&times;</span>
-    </div>
-    <div class="rung" style="--t:#8E4034;--w:100%;--d:.37s">
-      <span class="tier">extreme</span><span class="days">same day</span>
-      <span class="track"><span class="bar"></span></span><span class="mult">≈4&times;</span>
-    </div>
-  </div>
-  <p class="small" style="max-width:760px">Bar length is the tier's mid-band premium against the
-  5&times; ceiling. This ladder prices the <strong>notary's</strong> fee — art. 49 4° of the
-  <em>Code de déontologie</em> lets a notary weigh the degree of urgency in setting fees — and it is
-  not a constant: the domain shrinks the observed median premium of retained offers toward the
-  published band, so the ladder learns from the market. Nota's own <strong>date-guarantee</strong>
-  line is separate and published beside it: 0 $ · 149 $ · 299 $ · 449 $ · 549 $ (ADR 0038). Two numbers, two
-  justifications, two lines on the quote — never one number doing both jobs.</p>
-
-  <div class="col">
-    <h3>Guardrails</h3>
-    <p>Offers are floored at a <em>prix de départ</em> per service and hard-capped at five times it,
-    so the market is a real auction rather than a race to the bottom or a panic tax.
-    Both the browser and the server load the <em>same</em> rules module, so the price a client sees
-    and the price the server enforces cannot drift. Anonymity is default-on and enforced server-side,
-    not merely in the interface.</p>
-
-    <h3>Two services, both financing, chosen for a bounded intake</h3>
-    <p>Each launch service has a short document checklist a layperson can complete alone, in one
-    sitting, without a professional pre-consult.</p>
-  </div>
-
-  <div class="tw" style="max-width:900px">
-    <table>
-      <thead><tr><th>Service</th><th class="n">Prix de départ<br><span class="small">(the notary)</span></th><th class="n">Nota's price</th><th>Why it qualifies</th></tr></thead>
-      <tbody>
-        <tr><td>Refinancement hypothécaire</td><td class="n">2 000 $</td><td class="n">249 $</td><td>Loan act, hypothec publication, title review. Highest value on the platform, and the one act with a lender's deadline attached.</td></tr>
-        <tr><td>Financement hypothécaire</td><td class="n">1 800 $</td><td class="n">199 $</td><td>The loan act for a <em>new</em> hypothec — a purchase or a first loan. Same ladder, no old hypothec to discharge.</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <p class="col small">The two price columns are two different purchases and never one number doing
-  both jobs: the <em>prix de départ</em> is the floor of what the <strong>notary</strong> is offered,
-  the right-hand column is what <strong>Nota</strong> charges the client for its own service. Neither
-  is a share of the other.</p>
-
-  <div class="note">
-    <span class="label" style="color:var(--muted)">Retired</span>
-    <p class="small"><strong>Testament and procuration were retired.</strong> They were the wrong first
-    market for a marketplace that sells a date: a will has no external deadline, so urgency is a
-    preference rather than a cost, and at a 650 $ or 295 $ act value Nota's own price would have
-    weighed 30% or more of the transaction. A financing act arrives with a <strong>rate hold that
-    expires</strong> — a deadline the client did not choose and cannot move.</p>
-  </div>
-
-  <p class="col small"><em>Acte de vente</em> stays excluded: it requires coordinated
-  document transfer between broker, surveyor and lender before the notary can begin. That is a
-  workflow product, not a web form. Discipline about what not to launch is why the marketplace can be
-  self-serve on day one. Each service also carries a dynamic base price built from criteria collected
-  during intake — a loan above 600,000 $ adds 350 $ and above 1 M$ adds 600 $, a private lender adds
-  300 $, a declared urgency signed entirely online adds 400 $ — so the client gets an accurate price
-  and the notary gets a pre-qualified file with a complexity weighting already computed. Note which
-  side of the invoice these move: they are criteria on the <strong>notary's</strong> fee, not on
-  Nota's price, which depends only on the service and the date.</p>
-</section>
-
-<!-- ══════════════════ 05 WHAT'S BUILT ══════════════════ -->
-<div class="wrap"><hr class="rule"></div>
-<section class="wrap">
-  <div class="shead">
-    <span class="snum">05</span>
-    <div>
-      <h2>This raise does not fund a build</h2>
-      <p class="sub">The platform is written, tested and deployed. Roughly 40,000 lines, built solo.</p>
-    </div>
-  </div>
-
-  <div class="grid4">
-    <div class="card"><h4>Domain core</h4><p class="small">Prices, tiers, cap, validation, dynamic pricing. Zero dependencies. Asserted by tests.</p></div>
-    <div class="card"><h4>API</h4><p class="small">Lambda and single-table DynamoDB behind hexagonal ports and adapters. The server revalidates every offer.</p></div>
-    <div class="card"><h4>Web app</h4><p class="small">Public carnet, offer flow, dossier intake, Québec map, notary console. Zero runtime dependencies.</p></div>
-    <div class="card"><h4>Payments</h4><p class="small">Stripe — card authorized at post, captured on completion, connected accounts, reconciliation.</p></div>
-    <div class="card"><h4>Notary side</h4><p class="small">Authentication, sign-up gate, lead-delivery preferences, ICS calendar feed, earnings roll-up.</p></div>
-    <div class="card"><h4>Operations</h4><p class="small">Admin console, transactional email with scheduled reminders, analytics with drift healing.</p></div>
-    <div class="card"><h4>Infrastructure</h4><p class="small">Terraform: S3, CloudFront, IAM-authed Lambda, DynamoDB — live in <code>ca-central-1</code>. Idle cost near zero.</p></div>
-    <div class="card"><h4>Quality</h4><p class="small">Unit, contract, DOM, Cucumber BDD and Playwright end-to-end suites. CI on every push, gating the deploy. Thirty-seven architecture decision records.</p></div>
-  </div>
-
-  <div class="note" style="margin-top:1.8rem">
-    <span class="label" style="color:var(--muted)">Why the architecture is a commercial fact</span>
-    <p class="small">The domain core depends on nothing; the API and the web app adapt it to a
-    transport and a user interface. Business rules exist in exactly one place. Adding a fourth
-    service, a new pricing criterion or a new jurisdiction is a data change in the domain package,
-    not a rewrite — <strong>Phase 2 and Phase 3 are cheap because Phase 1 was built correctly.</strong>
-    Law 25 compliance is designed in rather than bolted on: Canadian data residency, anonymity
-    default-on, consent at the point of collection.</p>
-  </div>
-</section>
-
-<!-- ══════════════════ 06 MARKET ══════════════════ -->
-<div class="wrap"><hr class="rule"></div>
-<section class="wrap">
-  <div class="shead">
-    <span class="snum">06</span>
-    <div>
-      <h2>Market, bottom up</h2>
-      <p class="sub">Québec only. Volumes are estimates, offered as scale rather than precision.</p>
-    </div>
-  </div>
-
-  <div class="tw" style="max-width:860px">
-    <table>
-      <thead><tr><th>Service</th><th class="n">Annual volume</th><th class="n">Notarial fees</th><th class="n">Nota revenue<br><span class="small">addressable</span></th></tr></thead>
-      <tbody>
-        <tr><td>Refinancement hypothécaire</td><td class="n">~50,000</td><td class="n">~$100M</td><td class="n">~$12.5M</td></tr>
-        <tr><td>Financement hypothécaire (new hypothec)</td><td class="n">~60,000</td><td class="n">~$115M</td><td class="n">~$12M</td></tr>
-        <tr class="total"><td>Addressable market, two services</td><td class="n">~110,000</td><td class="n">~$215M</td><td class="n">~$28M</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="col">
-    <p><strong>Read the right-hand column.</strong> With a price fixed per act, the number that
-    matters is act <em>volume</em>, not the dollars that change hands. The profession as a whole —
-    roughly 3,900 practising notaries — bills on the order of <strong>$1.1–1.2 billion</strong> a
-    year in professional fees, none of which is Nota's. Refinancing volume is inferred from the
-    Canadian renewal cycle; new-hypothec volume is anchored on the ~90,000 Québec residential
-    transactions a year, most of which carry a mortgage, plus first loans on property already owned.
-    Both are estimates derived from transaction counts, not published act counts.</p>
-
-    <p>The honest consequence of the financing-first pivot: the addressable act count is roughly a
-    third of the retired three-service plan (~110,000 against ~300,000), because wills were the
-    volume and they are gone. What replaced them is a category with a <strong>deadline the client did
-    not set</strong> — the only kind of demand a time-priced market can charge for. Year 3's 11,000
-    acts are about <strong>10%</strong> of that volume, and the plan says so rather than keeping the
-    old denominator.</p>
-
-    <h3>Beyond the two services</h3>
-    <p>The <em>acte de vente</em> rides those same ~90,000 residential transactions, at 1,500–3,500 $
-    each, arriving on the same lender deadline and through the same referral channel. Wills and
-    mandates remain a real ~200,000-a-year category to return to once liquidity exists, on a pricing
-    basis that suits a 650 $ act.</p>
-
-    <div class="note brass">
-      <span class="label">The expansion surface</span>
-      <p><strong>Other provinces.</strong> Reuse the demand protocol for urgent legal, closing,
-      commissioning and professional services, adapting each province's rules. “Notary” is not a
-      portable legal category across Canada; the demand protocol is.</p>
-      <p><strong>Civil-law countries.</strong> Localize the act catalogue, identity rules, signing
-      rails, privacy and professional-body relationships for UINL jurisdictions. The UINL currently
-      comprises 93 member notariats, and the civil-law system is present in almost 120 countries.</p>
-      <p><strong>Other urgent-service industries.</strong> After notarial proof, package the same
-      accept / counter-propose / pass mechanism for emergency home repair, field technicians, legal
-      and translation services, inspections, logistics and other specialized categories.</p>
-      <p class="small">The hundredfold claim lives in turning deadline-driven demand into a new,
-      privacy-preserving market signal - not simply in avoiding a car trip.</p>
-    </div>
-  </div>
-
-  <h3 class="col">The exportable mechanism: a hidden-capacity demand market</h3>
-  <div class="tw" style="max-width:860px">
-    <table>
-      <thead><tr><th>Customer side</th><th>Provider side</th></tr></thead>
-      <tbody>
-        <tr><td>Posts the need, deadline, constraints, location, language and budget / bid.</td><td>Receives only qualified opportunities matching chosen preferences.</td></tr>
-        <tr><td>Compares responses without cold-calling every provider.</td><td>Accepts, counter-proposes, requests information, or passes.</td></tr>
-        <tr><td>Gets a clear next action and a date-bound path.</td><td>Never has to reveal the full calendar or commit to every request.</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <p class="col">The flywheel is simple: urgent demand becomes structured data; structured data
-  reduces provider effort; lower effort increases participation; more participation improves the
-  chance of clearing the next urgent request. Nota should own this protocol as a layer separate from
-  the notarial act modules.</p>
-
-  <h3 class="col">The three-sided value exchange</h3>
-  <div class="tw" style="max-width:920px">
-    <table>
-      <thead><tr><th>Winner</th><th>Value created</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Client</strong></td><td>A qualified notary inside the real deadline, at the normal act price plus a clearly disclosed urgency premium when the date is scarce.</td></tr>
-        <tr><td><strong>Notary</strong></td><td>100% of professional fees, the option to accept a better-paid urgent request, and a way to monetize an opening without publishing the private calendar.</td></tr>
-        <tr><td><strong>Nota</strong></td><td>Its own service line — 199 $ financing, 249 $ refinancing, plus the date guarantee — captured only when the act is completed.</td></tr>
-      </tbody>
-    </table>
-  </div>
-  <p class="col">The estimated ~110,000-act financing SAM represents roughly ~215 M$ in
-  professional-fee value and can support about ~28 M$ of Nota revenue at the current grid,
-  before the catalogue expands. These are planning estimates to validate with live transaction
-  data and a written déontologie opinion. Nota does not deduct anything from professional fees.</p>
-
-  <h3 class="col">Why a notary subscribes</h3>
-  <p class="col">Subscribe once, then do nothing until a request is worth accepting. There is no joining fee,
-    no full-calendar sharing, no lead quota and no obligation to respond. The notary chooses preferences,
-    receives relevant requests, and can accept, counter-propose, ask for information or pass.</p>
-  <div class="tw" style="max-width:920px">
-    <table>
-      <thead><tr><th>Otherwise-unused opening</th><th>Illustrative added professional fees</th></tr></thead>
-      <tbody>
-        <tr><td>1 standard financing / month</td><td><strong>21 600 $ / year</strong></td></tr>
-        <tr><td>1 standard refinancing / month</td><td><strong>24 000 $ / year</strong></td></tr>
-        <tr><td>2 standard openings / month</td><td><strong>43 200–48 000 $ / year</strong></td></tr>
-        <tr><td>1 same-day financing / month at an illustrative ~3.5× multiple</td><td><strong>75 600 $ / year</strong></td></tr>
-      </tbody>
-    </table>
-  </div>
-  <p class="small col">Illustrative gross opportunity before expenses and taxes, assuming otherwise unused capacity;
-    not a guarantee. The commercial promise is simple: more choice, more potential income, zero mandatory activity.</p>
-
-  <h3 class="col">The Courtiers Immobiliers partner channel</h3>
-  <p class="col">Each real-estate broker partner receives a <strong>unique referral code</strong> to give to clients
-    who will need a notarial act. The customer posts the need for free, a notary can retain it, and the
-    broker receives a flat <strong>50 $</strong> reward from Nota's acquisition budget when the act settles under
-    the program rules. The customer gets the date, the notary receives 100% of professional fees, and Nota
-    earns its own service line.</p>
-  <p class="small col">The reward is fixed and separate from professional fees: it is not added to the customer's price
-    and is never deducted from the notary. Disclosure and applicable broker and deontology rules must be cleared before launch.</p>
-
-  <h3 class="col">Why now</h3>
-  <ol class="steps" style="max-width:820px">
-    <li><div><b>Remote acts became law</b><span class="small">Bill 34 made the technological notarial act permanent in October 2023. The rails exist and are sanctioned. Nota is not betting on legislation.</span></div></li>
-    <li><div><b>Thirty-five years of blind pricing</b><span class="small">Fees free since 1991 with no discovery mechanism ever built. The gap does not close on its own — someone has to build the venue.</span></div></li>
-    <li><div><b>The renewal wall</b><span class="small">Roughly 1.2 million Canadian fixed-rate mortgages renewing in 2025 — and every one arrives with a rate hold that expires on a date the client did not choose. That is the demand a time-priced market exists to serve, and it is why the catalogue is financing-first.</span></div></li>
-    <li><div><b>A competitor has validated the structure</b><span class="small">Notairo has been selling its own client-side intake fee in Québec since late 2025 — the same legal shape Nota uses. The structure is no longer novel to explain; what is still unbuilt is publishing the price of the date before the client commits.</span></div></li>
-    <li><div><b>Access-to-justice pressure</b><span class="small">Notary coverage is uneven across the regions — and distance from an available notary is a statutorily recognised ground for signing remotely. The exception categories map onto the under-served.</span></div></li>
-  </ol>
-</section>
-
-<!-- ══════════════════ 07 PHASE 1 ══════════════════ -->
-<div class="wrap"><hr class="rule"></div>
-<section class="wrap">
-  <div class="shead">
-    <span class="snum">07</span>
-    <div>
-      <h2>Phase 1 — the price of time</h2>
-      <p class="sub">Prove that a time-priced notarial marketplace clears, in one city, with real money.</p>
-    </div>
-  </div>
-
-  <div class="col">
-    <p><strong>Québec City.</strong> About 850,000 people and roughly 400 notaries. Chosen over
-    Montréal deliberately: small enough that a solo founder can meet a material share of local supply
-    in person, dense enough to reach liquidity. Start with basic, repeatable, deadline-driven
-    financing acts. Supply joins free, with no card and no agenda sharing - the only thing a notary
-    risks by signing up is nothing.</p>
-
-    <p>A client publishes a need; a notary sees a qualified opportunity and can <strong>retain it,
-    propose a different amount, ask for documents, or pass</strong>. The confirmed act can be added
-    to the notary's own calendar through ICS or a feed.</p>
-  </div>
-
-  <div class="tw" style="max-width:900px">
-    <table>
-      <thead><tr><th>Months</th><th>Focus</th><th>Exit criteria</th></tr></thead>
-      <tbody>
-        <tr><td class="tnum">1–2</td><td><strong>Déontologie.</strong> The client-side price is already shipped; what remains is the written opinion, Chambre engagement, and the taxes-and-disbursements line the product does not yet carry.</td><td>Opinion on file. Taxes and débours priced and displayed.</td></tr>
-        <tr><td class="tnum">1–3</td><td><strong>Supply.</strong> Thirty Québec City notaries recruited in person. Free to join, free to browse.</td><td>25+ notaries with preferences configured.</td></tr>
-        <tr><td class="tnum">3–6</td><td><strong>Demand.</strong> Carnet SEO, <strong>mortgage-broker referral partnerships first</strong> — the broker sits on the rate hold that creates the deadline — urgency-targeted paid search.</td><td>25+ bids/month, fill rate above 45%.</td></tr>
-        <tr><td class="tnum">6–12</td><td><strong>Liquidity.</strong> Tighten time-to-retain, publish the urgency curve, extend to Lévis and Saguenay.</td><td>90+ bids/month, fill rate above 60%.</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="note brass">
-    <span class="label">The one metric that matters</span>
-    <p><strong>Fill rate</strong> — the share of posted bids a notary retains. Below roughly 40% the
-    market is not clearing, and the answer is more supply or better floors. Above roughly 60% the
-    flywheel is real and the constraint moves to demand. Everything else is secondary.</p>
-  </div>
-
-  <p class="pull">The asset Phase 1 produces is not revenue. It is the only dataset of realised price
-  × days-to-date × act type in Québec — and nobody can reconstruct it without running the same
-  marketplace for the same year.</p>
-</section>
-
-<!-- ══════════════════ 08 PHASE 2 ══════════════════ -->
-<div class="wrap"><hr class="rule"></div>
-<section class="wrap">
-  <div class="shead">
-    <span class="snum">08</span>
-    <div>
-      <h2>Phase 2 — the notary operating layer</h2>
-      <p class="sub">Turning a retained demand into a reviewable act packet, then removing geography as a matching constraint.</p>
-    </div>
-  </div>
-
-  <div class="pair">
-    <div class="card">
-      <span class="eyebrow" style="color:var(--muted)">Today</span>
-      <p style="font-family:var(--display);font-size:1.2rem;line-height:1.4;margin:0">A client in Québec
-      City is matched against <strong>~400</strong> notaries.</p>
-    </div>
-    <div class="card" style="border-color:color-mix(in srgb,var(--brass) 40%,transparent)">
-      <span class="eyebrow">With remote matching</span>
-      <p style="font-family:var(--display);font-size:1.2rem;line-height:1.4;margin:0">The same client is
-      matched against <strong>~3,900</strong> — and a notary in Rimouski sells an empty Thursday to a
-      client in Gatineau.</p>
-    </div>
-  </div>
-
-  <div class="col">
-    <p>The market does not get ten times bigger because the client saves a car trip. It gets ten
-    times more liquid because supply and demand stop being partitioned by postal code. In a
-    marketplace, liquidity <em>is</em> the product.</p>
-  </div>
-
-  <ol class="steps" style="max-width:860px">
-    <li><div><b>Act-specific context and AI</b><span class="small">Documents, answers, preferences, deadline and requested outcome become a structured context for a model trained and evaluated for that act. It prepares checklists, missing-document requests, draft inputs, explanations and third-party payloads. The notary validates every output. “99% effort saved” is a North Star to measure, not a launch claim.</span></div></li>
-    <li><div><b>The exception layer - the wedge</b><span class="small">Capture the party's request at intake, classify the qualifying circumstance, collect the evidence, attach a timestamped audit record to the dossier. The notary receives a file that is already defensible. This makes Nota valuable to a notary independent of the marketplace.</span></div></li>
-    <li><div><b>Dossier automation</b><span class="small">Presigned document upload, automated identity and completeness checks, structured hand-off into the notary's existing tooling. The dossier arrives complete or it does not arrive - the difference between selling a lead and selling a file.</span></div></li>
-    <li><div><b>Signing rails</b><span class="small">Integration with the sanctioned videoconference channel and the notary's official digital signature, so the act is executed and the technological minute closed without leaving the workflow.</span></div></li>
-    <li><div><b>Province-wide matching</b><span class="small">Once the above holds, the carnet stops being a Québec City calendar and becomes a Québec calendar.</span></div></li>
-    <li><div><b>Cross-border corridor</b><span class="small">The statute contemplates a signature received by a notary qualified in a UINL member state, within that state's territory - a legal path to serving Québécois abroad, and the first step onto the civil-law world's rails.</span></div></li>
-  </ol>
-
-  <h3 class="col">Phase 3 - Chamber-grade online acts and expansion</h3>
-  <div class="note brass">
-    <p>Prove to the Chambre des notaires that Nota can make the online act safer,
-    more auditable and more accessible without removing the notary's judgment.
-    The controlled pilot includes secure live video, identity and capacity checks,
-    confidentiality checks, informed consent, electronic signature, evidence logs,
-    certified-copy delivery and a complete audit trail.</p>
-    <p>The sequence after the pilot is <strong>Québec-wide -> other Canadian provinces -> UINL countries -> cross-industry protocol</strong>.
-    The market primitive stays the same; each jurisdiction or vertical supplies its own legal,
-    identity, privacy and fulfillment rules.</p>
-  </div>
-
-  <div class="note good">
-    <span class="label">The honest regulatory position</span>
-    <p>Phase 2 is deliberately built to be <strong>fully valuable under the current statute</strong>.
-    The art. 46 exception categories are large, real, and systematically under-served precisely
-    because nobody has removed the notary's justification burden. Bill 34's pullback remains contested
-    inside the profession, and every comparable jurisdiction has moved toward liberalization. If
-    art. 46 loosens, Nota is the only operator already holding the compliance layer, the supply
-    network and the price data. <strong>That is upside, not the plan. The plan works if nothing
-    changes.</strong></p>
-  </div>
-</section>
-
-<!-- ══════════════════ 09 BUSINESS MODEL ══════════════════ -->
-<div class="wrap"><hr class="rule"></div>
-<section class="wrap">
-  <div class="shead">
-    <span class="snum">09</span>
-    <div>
-      <h2>Business model and unit economics</h2>
-      <p class="sub">Nota charges the client its own published price, per service. The notary keeps
-      100% of their <em>honoraires</em>.</p>
-    </div>
-  </div>
-
-  <div class="tw" style="max-width:620px">
-    <table>
-      <thead><tr><th>Nota's price</th><th class="n"><code>financement</code></th><th class="n"><code>refinancement</code></th></tr></thead>
-      <tbody>
-        <tr><td>Service line</td><td class="n">199 $</td><td class="n">249 $</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="tw" style="max-width:760px">
-    <table>
-      <thead><tr><th>Date guarantee, added to Nota's line</th><th class="n">standard</th><th class="n">rapide</th><th class="n">prioritaire</th><th class="n">urgence</th><th class="n">extreme</th></tr></thead>
-      <tbody>
-        <tr><td>&nbsp;</td><td class="n">0 $</td><td class="n">149 $</td><td class="n">299 $</td><td class="n">449 $</td><td class="n">549 $</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="col">
-    <p>So Nota's revenue on one act runs from <strong>199 $</strong> — a financing act on a calm date
-    — to <strong>549 $</strong> for a refinancing signed the same day. The grid is data, editable from
-    the operator console without a deploy, and the two lines are <strong>frozen on the offer</strong>
-    when the client's card is engaged, so a later grid change can never rewrite what an act cost. The
-    card is registered when the offer is posted and the hold placed a few days before the signing, so
-    a posted bid is a real commitment and the notary is never chasing payment.</p>
-
-    <p><strong>Taxes and disbursements — registry publication fees, RDPRM, discharges — are in
-    neither line and appear nowhere in the product yet.</strong> Until they do, no surface may
-    describe the amount as all-inclusive: art. 71 3° of the <em>Code de déontologie</em> requires
-    saying whether they are included, and art. 68 forbids incomplete advertising. Fixing this is a
-    Phase 1 exit criterion, not a nicety.</p>
-
-    <h3>The cost of revenue, computed from the shipped grid</h3>
-    <p>Version 1.0 understated this badly. Nota is the Stripe <strong>platform</strong>: the client's
-    card is charged the <strong>total</strong> of both lines on Nota's own account, and the
-    <em>honoraires</em> are transferred out afterwards. So the card-processing fee is levied on the
-    whole amount — <strong>including the notary's fee, which Nota never keeps</strong> — and Nota
-    bears all of it. At Stripe's published Canadian domestic-card rate (2.9% + 0.30 $; it is not a
-    constant in the code, and the code never books it), one refinancing act on a calm date reads:</p>
-  </div>
-
-  <div class="tw" style="max-width:620px">
-    <table>
-      <tbody>
-        <tr><td>Client pays — 2 000 $ (notary) + 279 $ (Nota)</td><td class="n">2 279,00 $</td></tr>
-        <tr><td>Stripe — 2.9% &times; 2 279 $ + 0,30 $</td><td class="n">(66,39) $</td></tr>
-        <tr class="total"><td>Nota keeps</td><td class="n">212,61 $</td></tr>
-        <tr><td>Notary receives</td><td class="n">2 000,00 $</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="tw">
-    <table>
-      <thead><tr><th>Service &middot; tier</th><th class="n">Notary's fee</th><th class="n">Nota's price</th><th class="n">Client total</th><th class="n">Stripe</th><th class="n">Gross profit</th><th class="n">Margin</th></tr></thead>
-      <tbody>
-        <tr><td><code>financement</code> &middot; standard</td><td class="n">1 800 $</td><td class="n">229 $</td><td class="n">2 029 $</td><td class="n">59,14 $</td><td class="n">169,86 $</td><td class="n">74.2%</td></tr>
-        <tr><td><code>financement</code> &middot; rapide</td><td class="n">3 600 $</td><td class="n">378 $</td><td class="n">3 978 $</td><td class="n">115,66 $</td><td class="n">262,34 $</td><td class="n">69.4%</td></tr>
-        <tr><td><code>financement</code> &middot; prioritaire</td><td class="n">5 400 $</td><td class="n">528 $</td><td class="n">5 928 $</td><td class="n">172,21 $</td><td class="n">355,79 $</td><td class="n">67.4%</td></tr>
-        <tr><td><code>financement</code> &middot; urgence</td><td class="n">6 300 $</td><td class="n">678 $</td><td class="n">6 978 $</td><td class="n">202,66 $</td><td class="n">475,34 $</td><td class="n">70.1%</td></tr>
-        <tr><td><code>financement</code> &middot; extrême</td><td class="n">7 200 $</td><td class="n">778 $</td><td class="n">7 978 $</td><td class="n">231,66 $</td><td class="n">546,34 $</td><td class="n">70.2%</td></tr>
-        <tr><td><code>refinancement</code> &middot; standard</td><td class="n">2 000 $</td><td class="n">279 $</td><td class="n">2 279 $</td><td class="n">66,39 $</td><td class="n">212,61 $</td><td class="n">76.2%</td></tr>
-        <tr><td><code>refinancement</code> &middot; rapide</td><td class="n">4 000 $</td><td class="n">428 $</td><td class="n">4 428 $</td><td class="n">128,71 $</td><td class="n">299,29 $</td><td class="n">69.9%</td></tr>
-        <tr><td><code>refinancement</code> &middot; prioritaire</td><td class="n">6 000 $</td><td class="n">578 $</td><td class="n">6 578 $</td><td class="n">191,06 $</td><td class="n">386,94 $</td><td class="n">66.9%</td></tr>
-        <tr><td><code>refinancement</code> &middot; urgence</td><td class="n">7 000 $</td><td class="n">728 $</td><td class="n">7 728 $</td><td class="n">224,41 $</td><td class="n">503,59 $</td><td class="n">69.2%</td></tr>
-        <tr><td><code>refinancement</code> &middot; extrême</td><td class="n">8 000 $</td><td class="n">828 $</td><td class="n">8 828 $</td><td class="n">256,31 $</td><td class="n">571,69 $</td><td class="n">69.0%</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="note brass">
-    <span class="label">The date ladder was priced below its own cost until 2026-09-05</span>
-    <p>Version 1.1 measured it: moving a refinancing from <code>standard</code> to
-    <code>prioritaire</code> added 100 $ to Nota's line and 118,90 $ to the Stripe fee, so Nota was
-    18,90 $ worse off on the more urgent act, and 9,45 $ worse off at <code>rapide</code>. ADR 0038
-    repriced the ladder to 0 · 149 · 299 · 449 · 549 $ under three rules: each rung covers the fee it
-    induces at its recommended multiple and at the top of its band, gross profit rises with urgency,
-    and the take rate on an urgent act stays below the take rate on a calm one. A domain test holds
-    all three. The structural cost is untouched: Nota still pays the card fee on the notary's fee,
-    money it never keeps. Moving that fee off the platform charge is an owner decision, with the
-    written legal opinion still required.</p>
-  </div>
-
-  <div class="tw" style="max-width:700px">
-    <table>
-      <thead><tr><th>Refinancement, against <code>standard</code></th><th class="n">Date line</th><th class="n">Extra Stripe fee</th><th class="n">Net to Nota</th><th class="n">Before</th></tr></thead>
-      <tbody>
-        <tr><td><code>rapide</code></td><td class="n">+149 $</td><td class="n">+62,32 $</td><td class="n pos">+86,68 $</td><td class="n neg">(9,45) $</td></tr>
-        <tr><td><code>prioritaire</code></td><td class="n">+299 $</td><td class="n">+124,67 $</td><td class="n pos">+174,33 $</td><td class="n neg">(18,90) $</td></tr>
-        <tr><td><code>urgence</code></td><td class="n">+449 $</td><td class="n">+158,02 $</td><td class="n pos">+290,98 $</td><td class="n pos">+49,20 $</td></tr>
-        <tr><td><code>extrême</code></td><td class="n">+549 $</td><td class="n">+189,92 $</td><td class="n pos">+359,08 $</td><td class="n pos">+117,30 $</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="col">
-    <h3>Blended, on a modelled mix</h3>
-    <p class="small">60% <code>refinancement</code> / 40% <code>financement</code>; 70%
-    <code>standard</code>, 18% <code>rapide</code>, 7% <code>prioritaire</code>, 3%
-    <code>urgence</code>, 2% <code>extrême</code>. The mix is a modelling assumption, stated so it can
-    be argued with. The prices are not.</p>
-  </div>
-
-  <div class="tw" style="max-width:700px">
-    <table>
-      <thead><tr><th>Per completed act</th><th class="n">Y1</th><th class="n">Y2</th><th class="n">Y3</th></tr></thead>
-      <tbody>
-        <tr><td>Notary's fee (paid whole to the notary)</td><td class="n">2 794 $</td><td class="n">2 794 $</td><td class="n">2 794 $</td></tr>
-        <tr><td>Nota revenue per act</td><td class="n">331 $</td><td class="n">331 $</td><td class="n">331 $</td></tr>
-        <tr><td>Card processing</td><td class="n">(91) $</td><td class="n">(91) $</td><td class="n">(91) $</td></tr>
-        <tr><td>Gross profit per act</td><td class="n">240 $</td><td class="n">240 $</td><td class="n">240 $</td></tr>
-        <tr><td>Blended client CAC</td><td class="n">164 $</td><td class="n">55 $</td><td class="n">40 $</td></tr>
-        <tr class="total"><td>Contribution per act</td><td class="n pos">76 $</td><td class="n pos">185 $</td><td class="n pos">200 $</td></tr>
-        <tr><td>Gross margin</td><td class="n">73%</td><td class="n">73%</td><td class="n">73%</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="col">
-    <p>Version 1.0 claimed 89–91% gross margin and a (70) $ Year 1 contribution. Both were wrong in
-    the same direction: the margin was overstated because the Stripe fee was applied to Nota's own
-    line instead of the whole charge, and the contribution was understated because revenue per act
-    was pinned to a 10% cut of a 1,056 $ act — a catalogue that no longer exists.</p>
-
-    <p><strong>A structural point worth stating plainly.</strong> Nota's price never scales with the
-    act. On a calm date gross profit per act is 170 $ on a financing and 213 $ on a refinancing,
-    whatever the loan behind it. Buying a date lifts it, up to 572 $ on a same-day refinancing, but
-    the amount changing hands never does. Revenue is therefore a function of <strong>act
-    count</strong>, not of the volume transacted. Every growth argument in this plan has to be an
-    argument about volume.</p>
-
-    <h3>Break-even, from the same numbers</h3>
-  </div>
-
-  <div class="tw" style="max-width:760px">
-    <table>
-      <thead><tr><th></th><th class="n">Operating expense</th><th class="n">Break-even acts</th><th class="n">Per month</th><th class="n">Plan volume</th></tr></thead>
-      <tbody>
-        <tr><td>Y1</td><td class="n">$250,000</td><td class="n">1,041</td><td class="n">87</td><td class="n">244</td></tr>
-        <tr><td>Y2</td><td class="n">$720,000</td><td class="n">2,997</td><td class="n">250</td><td class="n">2,800</td></tr>
-        <tr><td>Y3</td><td class="n">$1,850,000</td><td class="n">7,700</td><td class="n">642</td><td class="n">11,000</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="col">
-    <p>Years 1 and 2 are deliberately below break-even — that is what the raise buys. <strong>Year 3's
-    planned volume clears its own cost base by about 3,300 acts</strong>, which is a cleaner story
-    than version 1.0's, where Year 3 still lost $390,850.</p>
-
-    <p>On the supply side a notary costs about <strong>500 $</strong> to recruit and, at 20 acts a
-    year, returns <strong>4,806 $</strong> of annual gross profit, 14,417 $ over a three-year
-    tenure. <strong>LTV to CAC of about 29&times;</strong>, payback inside <strong>three acts</strong>.
-    Supply, not demand, is where the compounding is.</p>
-
-    <h3>The repeat-purchase problem, stated plainly</h3>
-    <p>A financing act recurs on the renewal cycle — every five years for a typical fixed-rate
-    mortgage, and sooner when rates move. That is better than the retired will-and-mandate catalogue,
-    where a client bought once a decade, but it is still not a subscription and this plan does not
-    pretend otherwise. Three things carry the business instead.</p>
-  </div>
-
-  <div class="grid3">
-    <div class="card"><h4>Supply is the durable asset</h4><p class="small">Notaries are recurring, not one-time. Every notary recruited compounds; the network is the moat. At payback inside three acts, supply spend is the highest-return line in the budget.</p></div>
-    <div class="card"><h4>Organic demand capture</h4><p class="small">The public carnet is a continuously refreshed, hyper-local corpus of real posted prices — structurally the best possible answer to "combien coûte un refinancement chez le notaire à Québec ?". No competitor can index what they do not transact.</p></div>
-    <div class="card"><h4>Zero-CAC referral</h4><p class="small">Mortgage brokers above all: the broker sets the rate hold that creates the deadline Nota prices, and has nowhere structured to send a client who needs a notary inside it. Agents and planners sit one step further out on the same path.</p></div>
-  </div>
-
-  <p class="col small" style="margin-top:1.4rem">Expansion levers, in order of confidence: raise the
-  grid per service and per tier — the most direct lever, and the one the architecture makes free,
-  since the grid is data edited from the console; widen the catalogue, starting with the
-  <em>acte de vente</em>, which rides the same lender deadline; and sell notary practice tooling as a
-  flat subscription for <em>software</em>, never a deduction from an act, which is what makes it safe
-  under art. 32.</p>
-</section>
-
-<!-- ══════════════════ 10 COMPETITION ══════════════════ -->
-<div class="wrap"><hr class="rule"></div>
-<section class="wrap">
-  <div class="shead">
-    <span class="snum">10</span>
-    <div>
-      <h2>Competition</h2>
-      <p class="sub">Every participant prices a document. Nota prices a date.</p>
-    </div>
-  </div>
-
-  <div class="tw">
-    <table>
-      <thead><tr><th>Who</th><th>What they do</th><th>Where Nota differs</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Notairo</strong></td><td>Montréal legal-tech, launched Oct 2025; digital preparation of closings and refinancings, signature in person. Sells its own <strong>295 $</strong> intake fee on a Shopify storefront, with the notary's fees paid directly to the notary at signing.</td><td>Closest analogue, and external validation of the structure: Notairo is already selling exactly this legal shape in Québec. It advertises "from 949 $" while its actual packages list at 1,795–2,225 $, and prices urgency in the fine print. Nota differs on the mechanism — the price of the date is published <em>before</em> the client commits, not added afterwards.</td></tr>
-        <tr><td><strong>Nolos</strong></td><td>Online notarized wills, ~21 service points in Québec.</td><td>A distribution network with set prices — a chain, not a market. No urgency pricing, no notary-side liquidity. Outside the current catalogue.</td></tr>
-        <tr><td><strong>Neolegal / ScriptaLegal</strong></td><td>Online legal services and document generation with notarial add-ons.</td><td>Document-first and price-set. They do not sell notary availability.</td></tr>
-        <tr><td><strong>Traditional practice</strong></td><td>Phone, referral, signage.</td><td>The real competitor. Nota wins by pricing time, which the phone cannot do.</td></tr>
-        <tr><td><strong>US remote-notarization platforms</strong></td><td>High-volume remote online notarization for common-law notaries public.</td><td>Structurally cannot enter. A Québec <em>notaire</em> is a civil-law public officer, and their commission-on-the-professional's-fee model is exactly what art. 32 forbids here.</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="col">
-    <h3>Defensibility, honestly ranked</h3>
-    <ul class="clean">
-      <li><strong>The urgency price curve</strong> — requires running the marketplace to obtain.</li>
-      <li><strong>The notary network</strong> — slow and in-person to build.</li>
-      <li><strong>The déontologie structure</strong> plus a written opinion — Notairo's 295 $ product shows the structure is discoverable, but not the four-article reasoning behind the two-line quote.</li>
-      <li><strong>The exception-layer compliance product</strong> — requires understanding art. 46 well enough to productize it.</li>
-    </ul>
-    <p class="small">None of these are patents. All of them are years.</p>
-  </div>
-</section>
-
-<!-- ══════════════════ 11 FINANCIALS ══════════════════ -->
-<div class="wrap"><hr class="rule"></div>
-<section class="wrap">
-  <div class="shead">
-    <span class="snum">11</span>
-    <div>
-      <h2>Three-year projection</h2>
-      <p class="sub">Year 1 is a proof-of-liquidity year. The model is driver-based and every figure
-      here recalculates from the assumptions sheet.</p>
-    </div>
-  </div>
-
-  <div class="tw" style="max-width:860px">
-    <table>
-      <thead><tr><th></th><th class="n">Y1 2026-27</th><th class="n">Y2 2027-28</th><th class="n">Y3 2028-29</th></tr></thead>
-      <tbody>
-        <tr><td>Notaries on platform</td><td class="n">30</td><td class="n">220</td><td class="n">700</td></tr>
-        <tr><td>Bids posted</td><td class="n">434</td><td class="n">4,912</td><td class="n">17,742</td></tr>
-        <tr><td>Fill rate</td><td class="n">56%</td><td class="n">57%</td><td class="n">62%</td></tr>
-        <tr><td>Acts completed</td><td class="n">244</td><td class="n">2,800</td><td class="n">11,000</td></tr>
-        <tr><td>Notary fees paid through the platform</td><td class="n">$682,000</td><td class="n">$7,822,000</td><td class="n">$30,730,000</td></tr>
-        <tr><td>Total charged to clients</td><td class="n">$762,800</td><td class="n">$8,749,400</td><td class="n">$34,373,200</td></tr>
-        <tr class="total"><td>Nota revenue (331 $ &times; acts)</td><td class="n">$80,800</td><td class="n">$927,400</td><td class="n">$3,643,200</td></tr>
-        <tr><td>Card processing</td><td class="n">($22,200)</td><td class="n">($254,600)</td><td class="n">($1,000,100)</td></tr>
-        <tr class="total"><td>Gross profit</td><td class="n">$58,600</td><td class="n">$672,800</td><td class="n">$2,643,100</td></tr>
-        <tr><td>Gross margin</td><td class="n">73%</td><td class="n">73%</td><td class="n">73%</td></tr>
-        <tr><td>Operating expense</td><td class="n">($250,000)</td><td class="n">($720,000)</td><td class="n">($1,850,000)</td></tr>
-        <tr class="total"><td>Net income</td><td class="n neg">($191,400)</td><td class="n neg">($47,200)</td><td class="n pos">$793,100</td></tr>
-        <tr><td>Headcount (FTE)</td><td class="n">1 + contract</td><td class="n">4</td><td class="n">10</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <p class="col small">Year 3 is about 10% of the two-service addressable act volume. Cumulative
-  capital required through Year 3 is about <strong>$240,000</strong>, down from the $1.05M of version
-  1.0 — Nota's revenue per act is now 331 $ rather than a 10% cut of a 1,056 $ act, and the act values
-  themselves are financing acts. <strong>Series A trigger:</strong> exiting Year 2 at a
-  <strong>$700K</strong> revenue run-rate with province-wide liquidity proven and the exception layer
-  in production, raising against the full act catalogue and the first cross-border corridor.</p>
-
-  <div class="note brass">
-    <span class="label">Three sensitivities to press on</span>
-    <p class="small"><strong>Volume is the only lever</strong> — Nota's price does not scale with the
-    act, so revenue is act count &times; ~331 $. Halve the count and you halve the revenue; double the
-    average act value and nothing changes except the Stripe bill. <strong>The mix moves gross profit
-    far less than it moves the amount transacted</strong> — across the whole urgency ladder, gross
-    profit per act runs from 170 $ on a calm financing to 572 $ on a same-day refinancing, and the
-    act's value never moves it; a pessimistic all-<code>standard</code> mix still yields 196 $. <strong>Card processing is the whole cost of revenue and it grows with the notary's
-    fee</strong> — every 1,000 $ added to a typical act adds 29 $ to Nota's cost and nothing to its
-    revenue.</p>
-  </div>
-
-  <h3 class="col">Use of funds — $250,000 over twelve months</h3>
-  <div class="tw" style="max-width:820px">
-    <table>
-      <thead><tr><th>Line</th><th class="n">Amount</th><th>Note</th></tr></thead>
-      <tbody>
-        <tr><td>Founder salary</td><td class="n">$96,000</td><td>8,000 $/month. Below market, deliberately — this raise buys focus.</td></tr>
-        <tr><td>Client acquisition</td><td class="n">$40,000</td><td>Paid search, content, partnership build-out.</td></tr>
-        <tr><td>Notary advisor</td><td class="n">$25,000</td><td>Part-time practising notary. Credibility with supply, correctness on the exception layer.</td></tr>
-        <tr><td>Design and front-end contract</td><td class="n">$25,000</td><td>About three months part-time — the one place outside help beats doing it solo.</td></tr>
-        <tr><td>Legal</td><td class="n">$20,000</td><td>Déontologie opinion, Chambre engagement, incorporation, terms, Law 25 program.</td></tr>
-        <tr><td>Contingency</td><td class="n">$17,000</td><td>About 7%.</td></tr>
-        <tr><td>Notary acquisition</td><td class="n">$15,000</td><td>Field sales, congrès, travel.</td></tr>
-        <tr><td>Infrastructure and tooling</td><td class="n">$12,000</td><td>Serverless keeps this small — the stack idles at about $0. Card processing is not here: it is a cost of revenue, about $21,700 in Year 1 at plan volume.</td></tr>
-        <tr class="total"><td>Total</td><td class="n">$250,000</td><td>About 20,800 $/month average burn.</td></tr>
-      </tbody>
-    </table>
-  </div>
-
-  <div class="grid2">
-    <div class="card">
-      <h4>Non-dilutive stacking</h4>
-      <p class="small">As a Québec CCPC with a technical founder doing eligible development, refundable
-      SR&amp;ED and Québec R&amp;D wage credits can return a meaningful share of the salary line.
-      Modelled at zero and treated as runway extension of two to three months, not budgeted revenue.</p>
-    </div>
-    <div class="card">
-      <h4>The follow-on is designed in</h4>
-      <p class="small">Investissement Québec's Fonds Impulsion invests $250K–1M at pre-seed and seed
-      but requires a <strong>lead investor and a referral</strong> from a recognised accelerator or
-      Anges Québec. Securing an angel lead in this round and an accelerator relationship is therefore
-      not optional — it is the bridge to the seed.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════════════ 12 WHAT HAS TO BE TRUE ══════════════════ -->
-<div class="wrap"><hr class="rule"></div>
-<section class="wrap">
-  <div class="shead">
-    <span class="snum">12</span>
-    <div>
-      <h2>What has to be true</h2>
-      <p class="sub">Four assumptions carry the model. Each has a named falsification test, and all
-      four resolve inside this round.</p>
-    </div>
-  </div>
-
-  <div class="grid3">
-    <div class="card">
-      <span class="eyebrow">Resolves month 6</span>
-      <h4>Clients pay a premium for a date</h4>
-      <p class="small">Test: the realised premium distribution by tier. If <code>urgence</code> and
-      <code>extreme</code> bids do not clear above <code>standard</code>, the core thesis is wrong —
-      and that is visible for well under $100,000.</p>
-    </div>
-    <div class="card">
-      <span class="eyebrow">Resolves month 5</span>
-      <h4>Notaries sell short-notice availability</h4>
-      <p class="small">Test: fill rate on the <code>prioritaire</code> and <code>urgence</code> tiers
-      specifically, not blended.</p>
-    </div>
-    <div class="card">
-      <span class="eyebrow">Resolves at the first fifty bids</span>
-      <h4>Clients pay Nota's price on top of the notary's fee</h4>
-      <p class="small">Test: the abandonment rate at the quote screen, where both lines are shown
-      together before any card is engaged. A different question from the first, and version 1.0 never
-      asked it — a percentage taken out of the notary's fee was invisible to the client.</p>
-    </div>
-    <div class="card">
-      <span class="eyebrow">Resolves month 2</span>
-      <h4>Nota's own price is déontologically safe as structured</h4>
-      <p class="small">Test: a written legal opinion from Québec counsel, with structured engagement
-      with the Chambre des notaires. The direction of the money is already settled and verifiable on
-      the Stripe wire; the qualification is not.</p>
-    </div>
-  </div>
-
-  <p class="pull">$250,000 is enough to confirm or refute the entire thesis, and not a dollar is spent
-  building something that has not been validated.</p>
-</section>
-
-<!-- ══════════════════ 13 RISKS ══════════════════ -->
-<div class="wrap"><hr class="rule"></div>
-<section class="wrap">
-  <div class="shead">
-    <span class="snum">13</span>
-    <div>
-      <h2>Risk register</h2>
-      <p class="sub">Stated at full strength, because an investor will find each of these anyway.</p>
-    </div>
-  </div>
-
-  <div class="tw">
-    <table>
-      <thead><tr><th>Risk</th><th>Severity</th><th>Mitigation</th></tr></thead>
-      <tbody>
-        <tr><td><strong>Qualification of Nota's own price under art. 32.1 L.N.</strong></td><td><span style="color:var(--oxide);font-weight:650">Critical</span></td><td>The fee <em>share</em> is gone: the notary receives 100% of their honoraires and Nota charges the client its own published price. What remains is qualification, not structure. Written opinion budgeted, month 2; a flat per-act fee billed outside the act is the fallback structure.</td></tr>
-        <tr><td><strong>A retired claim survives in a document</strong></td><td>High</td><td>The 10% commission, the 75/25 split, the 5–15% cote-driven cut and the flat 400 $ price are all retired. They are wrong <em>and</em> they describe an arrangement Québec law forbids Nota from having, so every dated audit that cites them carries a retirement banner.</td></tr>
-        <tr><td><strong>Taxes and disbursements are not in the quote</strong></td><td>High</td><td>Art. 71 3° requires saying whether they are included; art. 68 forbids incomplete advertising. Priced and displayed as a month-1 milestone before any claim of completeness.</td></tr>
-        <tr><td>Art. 46 keeps remote signing exceptional</td><td>High</td><td>Phase 2 is designed to be fully valuable under the current statute. The exception categories are large and under-served. Liberalization is upside, not plan.</td></tr>
-        <tr><td>Cold-start liquidity fails</td><td>High</td><td>Supply is free and frictionless. One dense city first. Fill rate monitored weekly with an explicit floor-adjustment lever.</td></tr>
-        <tr><td>Low client repeat rate</td><td>Medium-high</td><td>Supply-side moat, compounding organic capture, zero-CAC referral channels, recurring refinancing.</td></tr>
-        <tr><td>Chambre opposition</td><td>Medium-high</td><td>Early, written, partnership-framed engagement. Nota never touches the act and takes nothing out of a notary's fees — it is demand generation for the profession.</td></tr>
-        <tr><td>A rung of the date ladder drifts below its own cost</td><td>Low</td><td>Measured on 2026-09-04 (<code>rapide</code> −9,45 $, <code>prioritaire</code> −18,90 $) and repriced on 2026-09-05 (ADR 0038). A domain test now holds every rung above the fee it induces. The grid stays data, edited from the console without a deploy, and is re-checked against realized cost at month 6.</td></tr>
-        <tr><td>No verification against the Tableau de l'Ordre</td><td>Medium-high</td><td>The only check today is the URL format of a CNQ fiche. A real status check and an immediate-removal path are prerequisites to the first live act.</td></tr>
-        <tr><td>A funded competitor copies the mechanism</td><td>Medium</td><td>The price curve requires running the market to obtain; the notary network is slow and in-person; the déontologie structure is non-obvious from outside Québec.</td></tr>
-        <tr><td>Solo-founder key-person risk</td><td>Medium</td><td>Architecture decision records, BDD specs as executable specification, second engineer early in Year 2.</td></tr>
-        <tr><td>Race to the bottom on price</td><td>Low</td><td>Hard floors per service and a 5&times; cap, enforced server-side in the domain core.</td></tr>
-        <tr><td>Law 25 / privacy incident</td><td>Low-medium</td><td>Canadian data residency, anonymity default-on, consent at collection, right-to-erasure on the roadmap.</td></tr>
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<!-- ══════════════════ 14 TEAM + ASK ══════════════════ -->
-<div class="wrap"><hr class="rule"></div>
-<section class="wrap">
-  <div class="shead">
-    <span class="snum">14</span>
-    <div>
-      <h2>Team, and the ask</h2>
-      <p class="sub">$250,000 CAD pre-seed. Twelve months. SAFE or convertible note, with an angel lead.</p>
-    </div>
-  </div>
-
-  <div class="col">
-    <h3>Anthony Paquet, founder</h3>
-    <p>The case is the repository. Working solo: a hexagonally architected monorepo with a
-    dependency-free domain core; an HTTP and DynamoDB API on an IAM-authed Lambda behind CloudFront;
-    a zero-runtime-dependency web app; Stripe payments with connected accounts and reconciliation;
-    notary and admin authentication; transactional email with scheduled reminders; an ICS feed;
-    analytics with drift healing; Terraform infrastructure live in <code>ca-central-1</code>; a
-    Cucumber BDD suite; CI running unit, DOM, BDD and infrastructure validation on every push; Law 25
-    compliance designed in; and thirty-seven architecture decision records explaining the reasoning
-    — including the sequence that dismantled the platform's own revenue model when four articles of
-    Québec notarial law turned out to forbid it.</p>
-
-    <p><strong>Why this de-risks the round.</strong> Most pre-seed capital funds the possibility that
-    a team can build the thing. Here the thing is built, deployed and tested. The capital buys twelve
-    months of undivided attention on the parts that cannot be solved by writing code — meeting
-    notaries, getting the legal structure right, and finding out whether the market clears.</p>
-
-    <p><strong>Hiring.</strong> Year 1: founder, contract design, and a part-time practising notary
-    advisor. Year 2: a notary-relations lead — the bottleneck is in-person supply recruitment, not
-    engineering — a second engineer, and a growth hire.</p>
-  </div>
-
-  <h3 class="col">What the money buys</h3>
-  <div class="grid4">
-    <div class="card"><h4>Legal footing</h4><p class="small">A déontologie-clean structure with a written opinion on file — the largest risk in the business, retired first.</p></div>
-    <div class="card"><h4>A working market</h4><p class="small">Thirty notaries and functioning two-sided liquidity in Québec City.</p></div>
-    <div class="card"><h4>Proprietary data</h4><p class="small">244 completed acts and the first urgency price curve for the Québec notarial market. It does not otherwise exist.</p></div>
-    <div class="card"><h4>Phase 2 in reach</h4><p class="small">The art. 46 compliance layer shipped, making remote signing routine where the law already allows it.</p></div>
-  </div>
-
-  <p class="pull" style="margin-top:2.6rem">Québec deregulated notary fees in 1991 and never built a
-  market. The market is built. This funds finding out whether it clears.</p>
-</section>
-
-<!-- ══════════════════ FOOTER ══════════════════ -->
-<footer class="wrap">
-  <h3>Sources</h3>
-  <div class="srcs">
-    <a href="https://www.cnq.org/en/your-notary/a-digital-professional/signing-a-technology-based-notarial-act-remotely/">Chambre des notaires du Québec — signing a technology-based notarial act remotely</a>
-    <a href="https://www.cnq.org/la-chambre-et-votre-protection/actualites-et-salle-de-presse/acte-a-distance-avec-un-notaire-les-choses-a-savoir/">Chambre des notaires — the remote act under the new law</a>
-    <a href="https://www.cnq.org/wp-content/uploads/2023/10/978677-2023_10_27_refonte_normes_acte_techno_v1final.pdf">Normes concernant l'acte notarié en minute sur un support technologique</a>
-    <a href="https://gascon.ca/une-nouvelle-loi-qui-fait-jaser-la-loi-visant-a-moderniser-le-notariat-et-a-favoriser-lacces-a-la-justice/">Gascon et associés — analysis of Bill 34, Loi visant à moderniser le notariat</a>
-    <a href="https://www.legisquebec.gouv.qc.ca/fr/document/lc/N-3">Légis Québec — Loi sur le notariat, RLRQ c. N-3</a>
-    <a href="https://jurivision.ca/lacte-notarie-electronique-a-distance/">Jurivision — L'acte notarié électronique à distance</a>
-    <a href="https://www.cnq.org/en/the-chambre-and-your-protection/the-chambres-services/search-the-registers/">Chambre des notaires — Registre des dispositions testamentaires</a>
-    <a href="https://uinl.org/mission/about-us/">International Union of Notaries — 93 member notariats and almost 120 countries</a>
-    <a href="https://notairo.com/en/blogs/news/frais-de-notaire-au-quebec-en-2026-a-quoi-s-attendre">Notairo — notary fees in Québec, 2026</a>
-    <a href="https://notairo.com/en/blogs/presse-et-medias/notairo-lance-la-premiere-plateforme-quebecoise-pour-preparer-les-transactions-immobilieres-en-ligne">Notairo — Québec's first digital real-estate closing platform</a>
-    <a href="https://nolos.ca/en">Nolos — online notarized wills</a>
-    <a href="https://apciq.ca/en/quebec-city-and-montreal-real-estate-markets-continue-to-trend-upward/">APCIQ — Québec residential market statistics</a>
-    <a href="https://www.cmhc-schl.gc.ca/professionals/housing-markets-data-and-research/housing-research/research-reports/housing-finance/residential-mortgage-industry-report">CMHC — Residential Mortgage Industry Report</a>
-    <a href="https://conseiller.ca/nouvelles/heritage-la-moitie-des-canadiens-nont-toujours-pas-de-testament/">Conseiller — half of Canadians still have no will</a>
-    <a href="https://www.investquebec.com/fr/salle-de-presse/le-gouvernement-du-quebec-investit-dans-les-entreprises-technologiques-innovantes">Investissement Québec — Fonds Impulsion</a>
-  </div>
-  <p style="margin-top:1.8rem;font-size:.78rem;color:var(--faint)">Market volumes are estimates derived
-  from the sources above, offered as scale rather than precision. Financial projections are
-  model outputs, not forecasts. Pricing figures are computed from the shipped grid in
-  <code>packages/domain</code>; the card-processing rate is Stripe's published Canadian
-  domestic-card rate and is not a constant in the code. Nota, September 2026.</p>
-</footer>
-
-</main>
+    <p class="learning-loop-note">Usage signals tune guidance only. Notary review qualifies model changes. A notary may collaborate under a separate potential equity agreement or choose a monthly subscription without direct feedback.</p>
+  </div>
+  <nav class="chapter-nav" aria-label="Plan chapters">
+    <a href="#section-01" data-nav-section="1">Thesis</a>
+    <a href="#section-02" data-nav-section="2">Market</a>
+    <a href="#section-03" data-nav-section="3">Product</a>
+    <a href="#section-04" data-nav-section="4">Proof</a>
+    <a href="#section-06" data-nav-section="6">Growth</a>
+    <a href="#section-12" data-nav-section="12">Capital</a>
+    <a href="#section-14" data-nav-section="14">Risks</a>
+  </nav>
+  <div class="chapter-controls" role="group" aria-label="Chapter navigation">
+    <button type="button" data-plan-prev disabled>Previous</button>
+    <span data-plan-progress aria-live="polite">Chapter 1 of 15</span>
+    <button type="button" data-plan-next>Next</button>
+  </div>
+</div>
+<section id="section-01" class="plan-section motion-thesis" data-section="1" data-motion="thesis"><div class="section-rail"><span class="section-count">01</span><div class="section-signal signal--thesis" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>1. Executive summary</h2><div class="focus-summary" role="note"><span>Thesis</span><strong>Capacity infrastructure · not a replacement for notaries</strong></div>
+<p>Nota connects a client who needs a notarial act by a particular date with a notary who has suitable capacity. The client supplies the service, date, location, relevant facts and offered professional fee. A notary can accept, counter-propose, request information or pass without publishing a private calendar. Joining and browsing are free for notaries.</p>
+<p><strong>Nota is capacity infrastructure for notaries, not a replacement for notaries.</strong> Our promise is explicit: Nota is not intended to break the profession or remove notary jobs. We are repairing a broken supply-and-demand market where time-sensitive clients struggle to find an available professional, while qualified notaries lose capacity to fragmented discovery, empty calendar slots and repetitive preparation work. Nota organizes qualified demand, makes available capacity easier to use and keeps the practising notary responsible for professional judgment, client advice and the act itself. The reasons for the shortage and the size of the incremental market remain validation questions, so each cohort must be measured rather than assumed.</p>
+<p>The future model-enabled layer follows the same boundary. Its target is to automate up to 80% of validated, repeatable intake, checks and dossier assembly under a notary's review, so a practice can accept more qualified demand, increase its potential earning capacity and help restore supply. It is a tool in the notary's hands, not a substitute for independent legal judgment. The target will be measured by act type, reviewed by notaries and released only with the required legal, security and quality controls.</p>
+<p><strong>Learning loop and notary participation.</strong> For supported simple notarial acts, Nota's models can improve over time from permitted, aggregated user signals and structured notary feedback. The loop measures where users need clarification, where a dossier is abandoned or corrected, and which preparation steps a notary accepts, changes or rejects. Nota then turns those observations into versioned model and workflow improvements, with privacy controls, act-specific evaluation, notary review, auditability and rollback before any production release. No identifiable client file becomes training material by default, and no live model update can change a professional conclusion without a new review gate.</p>
+<p>User-behavior signals can tune question order, clarity and guidance. They cannot label legal facts or make a legal conclusion. Model changes are prepared offline, tested on a held-out set and approved before release.</p>
+<p>The participation model is designed to let the whole network benefit. A practising notary who contributes workflow feedback, reviewed examples, edge cases or evaluation time may receive a potential equity instrument, subject to written terms, securities review, professional independence rules and the absence of any guaranteed value. A notary who prefers not to contribute directly can use the model-enabled layer through a monthly software subscription. The subscription provides access without requiring direct feedback contribution, while the equity path recognizes deeper collaboration. Neither path transfers legal responsibility from the notary to Nota. Users should receive clearer next steps and fewer preparation loops, participating notaries should gain a more useful capacity tool, and Nota should improve its product through evidence rather than assumptions.</p>
+<p>The proposed initial commercial focus remains <strong>financing and refinancing in Québec City and its surrounding service area</strong>. The current repository also supports wills and powers of attorney. Those services need their own demand, pricing and professional validation, their revenue is excluded from the financing scenario rather than assumed to subsidize it. No catalogue change is made by this plan.</p>
+<p>Nota charges its own disclosed service and date fees to the client. The notary receives the agreed professional fee in full under the implemented settlement design. This structure is a product decision, <strong>not a legal opinion</strong>. Launch depends on the outstanding professional, tax, payment and operating conditions in §7.</p>
+<p>The investment thesis has three stages: establish reliable local matching, reduce the notary's preparation time with evidence-backed work packets, expand geographically and by service only after those results are measured. The longer-term opportunity is a reusable market for urgent demand and privately held provider capacity. International and adjacent-industry expansion are options, not funded promises in this round.</p>
+<p>The money collected for notaries is not Nota revenue. The operating result includes illustrative service and loss costs, and the stated operating budget, it is not audited net income. The 250 000 $ raise supports the first-year experiment under the assumptions in §12, with a follow-on financing decision needed before the second-year cost base is committed.</p>
+</div></section>
+<section id="section-02" class="plan-section motion-market" data-section="2" data-motion="market"><div class="section-rail"><span class="section-count">02</span><div class="section-signal signal--market" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>2. Customer problem and value proposition</h2><div class="focus-summary" role="note"><span>Problem</span><strong>Deadline demand · fragmented supply · clearer next step</strong></div>
+<p><strong>Initial customer.</strong> A Québec City homeowner or buyer with an approved financing need, a real lender or transaction deadline, and enough documentation for a notary to assess feasibility. A renewal alone does not necessarily require a new notarial act. Intake must distinguish simple renewal, refinancing, lender transfer, new hypothec and any separately required sale act.</p>
+<p>The working problem hypotheses are that customers struggle to locate suitable near-term capacity, compare the complete price and determine which documents are missing. Notaries may value qualified incremental work that fits existing capacity. The plan does not claim that every notary has unused capacity, that urgency always commands a premium, or that online competitors do not exist.</p>
+<table>
+<thead>
+<tr>
+<th>Participant</th>
+<th>Value to test</th>
+<th>Evidence needed</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Client</td>
+<td>Find an appropriate notary before the deadline, with a comprehensible quote and next steps</td>
+<td>On-time paid completions, abandonment reasons, total-price comprehension</td>
+</tr>
+<tr>
+<td>Notary</td>
+<td>Optional incremental work, full agreed honoraires, fewer preparation loops</td>
+<td>Acceptance, repeat participation, preparation time and net incremental benefit</td>
+</tr>
+<tr>
+<td>Referral partner</td>
+<td>A useful destination for an eligible client, with disclosed reward terms where permissible</td>
+<td>Attributed settled acts, partner activation, complaint and cancellation rates</td>
+</tr>
+<tr>
+<td>Nota</td>
+<td>Earn its own fee while delivering reliable matching and preparation</td>
+<td>Contribution after payment, service, acquisition and loss costs</td>
+</tr>
+</tbody>
+</table>
+<p>One additional standard financing per month at the current starting professional fee represents 21 600 $ in annual <strong>gross professional fees</strong>, refinancing represents 24 000 $. These are arithmetic illustrations before notary expenses and taxes, not predicted income. The product must demonstrate genuinely incremental work rather than simply move existing clients onto a paid channel.</p>
+<p><strong>Validation plan.</strong> Interview at least 10 notaries and 10 eligible clients or recent borrowers, document actual recent workflows and rejected requests, then follow the first 30 real eligible requests to their outcome. These are proposed discovery targets. Separate interview enthusiasm from commitments, accepted requests and paid completion. Review notary interviews and the 30-day validation plan.</p>
+</div></section>
+<section id="section-03" class="plan-section motion-catalogue" data-section="3" data-motion="catalogue"><div class="section-rail"><span class="section-count">03</span><div class="section-signal signal--catalogue" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>3. Product and current catalogue</h2><div class="focus-summary" role="note"><span>Product</span><strong>4 coded services · date signal · notary validation</strong></div>
+<h3>3.1 Prices and the date mechanism</h3>
+<p>The following table is generated from the current domain defaults. Starting fees are product inputs, not evidence of market-clearing prices. Production admin overrides and a customer's frozen quote can differ, the dated September 8 production receipt verified the two financing tariffs, not deployment of all subsequent code changes.</p>
+<div class="table-scroll"><table class="data"><thead><tr>
+<th>Service</th>
+<th>Starting professional fee</th>
+<th>Nota standard service fee</th>
+</tr></thead><tbody>
+<tr><td>Refinancement hypothécaire</td><td>2 000 $</td><td>279 $</td></tr>
+<tr><td>Financement hypothécaire</td><td>1 800 $</td><td>229 $</td></tr>
+<tr><td>Testament notarié</td><td>1 800 $</td><td>229 $</td></tr>
+<tr><td>Procuration notariée</td><td>1 500 $</td><td>209 $</td></tr>
+</tbody></table></div>
+
+<div class="table-scroll"><table class="data"><thead><tr>
+<th>Tier</th>
+<th>Days to signing</th>
+<th>Suggested notary multiplier</th>
+<th>Nota date fee</th>
+</tr></thead><tbody>
+<tr><td>Standard</td><td>15+</td><td>1.0×</td><td>0 $</td></tr>
+<tr><td>Rapide / Fast</td><td>8–14</td><td>1.8–2.2×</td><td>149 $</td></tr>
+<tr><td>Prioritaire / Priority</td><td>2–7</td><td>2.7–3.3×</td><td>299 $</td></tr>
+<tr><td>Urgence / Urgent</td><td>1</td><td>3.3–3.7×</td><td>449 $</td></tr>
+<tr><td>Extrême / Extreme</td><td>0</td><td>3.7–4.3×</td><td>549 $</td></tr>
+</tbody></table></div>
+
+<p>The date addition belongs to Nota. The suggested urgency multiplier affects the offered notary fee. They must remain distinct. The notary assesses the facts, fee and feasibility independently, an urgency band is not a finding that an act can safely close in that time. The domain enforces a starting floor and a five-times premium cap. Criteria can increase the base, so that cap does not bound collection losses adequately by itself.</p>
+<p>A client-facing quote must identify the suppliers, services, Nota fee, any date fee, taxes and disbursements or their explicit exclusions. A requested date and a notary's acceptance are different states. The scope and remedy of any “date guarantee” require approved terms and measured capacity before it is marketed as guaranteed performance.</p>
+<h3>3.2 Workflow and boundaries</h3>
+<p>The intended journey is qualification → itemized quote → request posted → notary assessment and acceptance → complete dossier → professional act → payment capture, transfer and reconciliation. Counter-proposals, missing documents, failed authorizations, cancellation and unfilled deadlines require explicit recovery paths.</p>
+<p>The domain and API enforce shared prices and offer validation. The bilingual public UI and private admin console have zero runtime dependencies. These architectural choices support maintainability, they do not make a new jurisdiction, regulated act or external integration merely a data change. Each requires its own rules, contracts, operating process and verification.</p>
+<p>An acte de vente is not a current catalogue service. A financing request attached to a purchase must clearly identify whether another notary or workflow handles the sale, publication and funds. Wills and powers of attorney have separate capacity, consent, scope and possible protection-mandate questions. Do not treat their preparation as a financing template with a new label.</p>
+</div></section>
+<section id="section-04" class="plan-section motion-evidence" data-section="4" data-motion="evidence"><div class="section-rail"><span class="section-count">04</span><div class="section-signal signal--evidence" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>4. Evidence of readiness and traction</h2><div class="focus-summary" role="note"><span>Proof</span><strong>Readiness evidence stays separate from commercial traction</strong></div>
+<p>This plan reviews repository files and dated release reports. It does not certify the current live environment or inspect the company's bank account, customer ledger or signed contracts.</p>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Evidence reviewed</th>
+<th>What remains unproven</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Public product</td>
+<td>September 8 release, production checks and search submissions</td>
+<td>Paid demand, actual indexing/ranking and customer outcomes</td>
+</tr>
+<tr>
+<td>Payments</td>
+<td>Real Stripe sandbox checkout, capture, transfer, reversal and refund, live secrets staged</td>
+<td>Live activation, bank payout, recovery cases and correct merchant branding</td>
+</tr>
+<tr>
+<td>Tax</td>
+<td>Operator registration evidence recorded September 8, product discloses exclusions</td>
+<td>Tax calculation/collection and responsibility for notaries' separate supplies</td>
+</tr>
+<tr>
+<td>Four-service catalogue</td>
+<td>Current domain definitions and service-specific preparation tests</td>
+<td>Deployment parity and professional validation for every service</td>
+</tr>
+<tr>
+<td>Signing room</td>
+<td>September 9 working rehearsal, with synthetic ceremony and evidence receipt</td>
+<td>Legally operative notarial signing, provider authorization and archival compliance</td>
+</tr>
+<tr>
+<td>AI preparation</td>
+<td>Structured, source-cited preparation and synthetic tests</td>
+<td>Passing live extraction evaluation and measured professional time savings</td>
+</tr>
+<tr>
+<td>Acquisition</td>
+<td>Search Console/Bing setup and submitted public pages</td>
+<td>Organic traffic, CAC, partner conversions and repeat notary activity</td>
+</tr>
+</tbody>
+</table>
+<p>Sources: launch evidence, payment readiness, working rehearsal, Bedrock verification, four-service evaluation.</p>
+<p><strong>Traction reporting rule.</strong> No verified commercial count is supplied here. Keep signups, verified providers, active providers, requests, acceptances, completed acts and settled revenue separate. Demo fixtures, test payments, rehearsal signatures and search submissions never count as customer traction.</p>
+</div></section>
+<section id="section-05" class="plan-section motion-competition" data-section="5" data-motion="competition"><div class="section-rail"><span class="section-count">05</span><div class="section-signal signal--competition" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>5. Market and competition</h2><div class="focus-summary" role="note"><span>Market</span><strong>Québec first · 110 000 financing acts remains a planning hypothesis</strong></div>
+<h3>5.1 Addressable market and attainable volume</h3>
+<p>The legacy estimate of 60 000 new-financing acts plus 50 000 refinancings per year is retained <strong>only as a planning hypothesis</strong>. It is not a published Québec act count. Mortgage renewals, lender switches, residential transactions and notarial acts cannot be equated one-for-one. Validate the shares requiring each act, eliminate overlap and segment by geography and service before presenting an investor-grade SAM.</p>
+<p>At current starting values, that hypothetical 110 000-act financing market implies:</p>
+<div class="table-scroll"><table class="data"><thead><tr>
+<th>Planning case</th>
+<th>Acts</th>
+<th>Value</th>
+</tr></thead><tbody>
+<tr><td>Financing</td><td>60,000</td><td>13 740 000 $</td></tr>
+<tr><td>Refinancing</td><td>50,000</td><td>13 950 000 $</td></tr>
+<tr><td>Starting-fee professional volume</td><td>110,000</td><td>208 000 000 $</td></tr>
+<tr><td>Nota fee ceiling at standard fees</td><td>110,000</td><td>27 690 000 $</td></tr>
+<tr><td>Nota fee ceiling with assumed date mix</td><td>110,000</td><td>35 632 000 $</td></tr>
+</tbody></table></div>
+
+<p>The fee opportunity assumes all eligible acts use Nota, it is a theoretical ceiling before competition, willingness to pay and execution constraints. The urgency extension assumes the same date mix as the financial model. It is not observed demand. These figures exclude wills, powers of attorney, sale acts and software subscriptions.</p>
+<p>The proposed Year 3 volume of 11 000 financing acts would require <strong>10% of this assumed provincial volume</strong>, a substantial execution challenge. The plan needs to earn that expansion through local liquidity. At the 30-notary Year 1 target, 244 completions imply 8.1 acts per notary annually before adjusting for recruitment dates and inactive providers. At 700 notaries in Year 3, 11 000 acts imply 15.7 each. Aggregate provider counts alone cannot prove availability for a particular service, region or deadline.</p>
+<p><strong>Local bottom-up test.</strong> Count verified participating notaries by service and service area, obtain a weekly estimate of eligible incremental cases they can actually accept, compare that capacity with qualified incoming requests. The model is <code>active notaries × available suitable cases × realization rate</code>, checked against demand-side conversion. Do not substitute the entire provincial profession for available launch supply.</p>
+<p>CMHC's May 2026 report says renewal activity peaked in 2025 and is expected to ease during 2026. Deadline-driven needs remain relevant, but the previous plan's 2025 renewal-wave claim is not evidence of accelerating demand today. <a href="https://www.cmhc-schl.gc.ca/media-newsroom/news-releases/2026/renewal-wave-peaks-still-dominates-mortgage-market">CMHC, May 12, 2026</a>.</p>
+<h3>5.2 Competitive position</h3>
+<p>Notairo currently advertises online preparation, availability checking and in-person signing for property transactions. Its public starting price for refinancing is 949 $, excluding taxes and disbursements, with possible additional charges for urgency or complexity. That package is not directly comparable with Nota's platform fee alone. The previous 295 $ intake-fee comparison is removed because it was not substantiated by the current homepage. <a href="https://notairo.com/">Notairo, checked September 9</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Alternative</th>
+<th>Competitive implication</th>
+<th>Nota's proposed response</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Traditional practice and an existing referral relationship</td>
+<td>Trust, continuity and direct access may outweigh switching</td>
+<td>Demonstrate incremental availability and simpler qualification</td>
+</tr>
+<tr>
+<td>Online closing/intake platforms such as Notairo</td>
+<td>Digital intake and advertised prices already exist</td>
+<td>Prove the value of a date-specific request and provider response mechanism</td>
+</tr>
+<tr>
+<td>Practice software and signing providers</td>
+<td>Notaries already depend on established tools</td>
+<td>Integrate reviewed work packets rather than require wholesale replacement</td>
+</tr>
+<tr>
+<td>General legal-document tools</td>
+<td>Some customers primarily want a document, not urgent professional capacity</td>
+<td>Qualify the need and avoid acquiring unsuitable demand</td>
+</tr>
+</tbody>
+</table>
+<p>Nota's proposed differentiation is explicit deadline-based demand, optional provider response and a transparent Nota fee. Claims of being the only marketplace, having no price-discovery competitors, or being impossible to copy are removed. A competitor's operating model does not establish legal approval of Nota's.</p>
+<p>Defensibility must be earned through provider retention, repeat partner distribution, reliable operations and lawful aggregated outcome data. A proposed urgency curve is not an existing proprietary asset. Publish it only with adequate sample sizes, privacy protection and controls for service complexity and selection bias.</p>
+</div></section>
+<section id="section-06" class="plan-section motion-growth" data-section="6" data-motion="growth"><div class="section-rail"><span class="section-count">06</span><div class="section-signal signal--growth" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>6. Go-to-market and measurable liquidity</h2><div class="focus-summary" role="note"><span>Liquidity</span><strong>Supply first · qualified demand · measured cohorts</strong></div>
+<p><strong>Supply first.</strong> Concentrate on Québec City financing/refinancing, with named service coverage and a fallback for a declined or unfilled request. Target 30 recruited providers, at least 25 verified and configured, then measure how many respond and complete work. Wills and powers of attorney receive separate validation cohorts and no assumed contribution to the financing targets.</p>
+<p><strong>Demand channels.</strong> Mortgage brokers and real-estate brokers can introduce clients at a real transaction milestone. Organic service pages can build demand over time. Paid search should target demonstrably eligible intent after fulfillment and contribution are understood. Organic content and partnerships consume staff time, neither is zero-cost acquisition.</p>
+<h3>6.1 Referral economics and operating terms</h3>
+<p>The domain specifies 50 $ for a referred client and 250 $ for an activated referred notary. These rewards come from Nota's acquisition resources, not a deduction from professional fees. However, the current <code>referralLedger</code> accrues the client reward when status is retained, and the notary reward when <code>premierActe</code> is present. <strong>The code does not demonstrate a settlement-only reward gate.</strong></p>
+<p>Before launch, reconcile eligibility, earning event, payout event, cancellations, refunds, duplicate/self-referrals, disclosure and professional permissions in both terms and implementation. Preserve obligations already incurred. The financial model includes rewards inside acquisition budgets, not as a second expense below those budgets.</p>
+<p>With the Year 1 target of 307 retained requests, rewarding every one would consume 15 350 $ of the 40 000 $ client-acquisition envelope even though only 244 complete. Rewarding all 30 recruited notaries would consume 7 500 $ of the 15 000 $ supply-acquisition envelope. These are upper-bound budget illustrations, not expected referral shares. An unimplemented settlement-only policy cannot be assumed to save those costs.</p>
+<h3>6.2 Funnel and measurement definitions</h3>
+<table>
+<thead>
+<tr>
+<th>Metric</th>
+<th>Definition and purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Eligible visitor → qualified request</td>
+<td>Use a stable cohort and remove test, duplicate and ineligible traffic</td>
+</tr>
+<tr>
+<td>Acceptance rate</td>
+<td>Requests receiving a confirmed notary acceptance ÷ eligible posted requests</td>
+</tr>
+<tr>
+<td>Completion after acceptance</td>
+<td>Completed professional acts ÷ accepted requests, after the observation window matures</td>
+</tr>
+<tr>
+<td>Paid completion rate</td>
+<td>Completed, successfully collected acts ÷ eligible posted requests</td>
+</tr>
+<tr>
+<td>Time to first qualified response / acceptance</td>
+<td>Median and 90th percentile, separated by service and urgency</td>
+</tr>
+<tr>
+<td>On-time fulfillment</td>
+<td>Completed by the agreed deadline ÷ matured accepted cases with a deadline</td>
+</tr>
+<tr>
+<td>Net contribution per eligible visitor</td>
+<td>Revenue less payment, service, acquisition and realized loss costs, divided by eligible visitors</td>
+</tr>
+<tr>
+<td>Active supply</td>
+<td>Verified notaries with a recent substantive response, completions reported separately</td>
+</tr>
+<tr>
+<td>CAC</td>
+<td>All attributable acquisition spend, rewards and labor ÷ new paid customers, allocate costs once</td>
+</tr>
+</tbody>
+</table>
+<p>The finance model now distinguishes 534 posted, 307 retained and 244 completed requests in Year 1: approximately 57.5% acceptance and 79.5% completion after acceptance. Retention is not the same as revenue. Follow cohorts to maturity and show failures, pending files and refunds explicitly.</p>
+<p><strong>Proposed release of acquisition spend.</strong> Start with a 5 000 $ discovery/controlled-acquisition tranche inside the existing 40 000 $ envelope. Release more only after launch gates clear and the first 30 matured eligible requests show a viable acceptance-to-paid-completion path with positive expected contribution. Treat that sample as diagnostic, not proof of PMF or statistical certainty. Review weekly, pause the affected campaign or segment if contribution is negative or deadlines repeatedly fail.</p>
+</div></section>
+<section id="section-07" class="plan-section motion-economics" data-section="7" data-motion="economics"><div class="section-rail"><span class="section-count">07</span><div class="section-signal signal--economics" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>7. Professional, tax and payment launch gates</h2><div class="focus-summary" role="note"><span>Launch gates</span><strong>Professional review · tax map · payment controls</strong></div>
+<p>The separate Nota fee replaces the retired professional-fee share in the current code and later decisions. The repository's AGENTS.md still describes an older commission model. That contradiction needs a separately reviewed governance update, this document does not silently change repository instructions or revive the old arrangement.</p>
+<p>Québec's Loi sur le notariat, art. 32.1, regulates specified intermediary arrangements. Keeping a notary's fees whole does not by itself resolve every question under that provision. Art. 46 allows a notary to authorize remote signature exceptionally on a party's request when the circumstances and parties' interests permit. An interface cannot grant that authorization. <a href="https://www.legisquebec.gouv.qc.ca/fr/document/lc/N-3">Loi sur le notariat</a>.</p>
+<p>Professional independence, fee sharing, third-party benefits/disclosure, advertising and fee reasonableness require review under the Code de déontologie, including arts. 29.1, 32–34, 49 and 70–72. A published software subscription, separate fee or referral reward is not automatically compliant because of its label. <a href="https://www.legisquebec.gouv.qc.ca/fr/document/rc/N-3,%20r.%202">Code de déontologie des notaires</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Gate</th>
+<th>Accountable role</th>
+<th>Required evidence before the dependent launch</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Commercial model and referral program</td>
+<td>Founder + retained Québec counsel</td>
+<td>Written opinion covering actual contracts, fee flow, rewards, advertising and date promise</td>
+</tr>
+<tr>
+<td>Tax and invoicing</td>
+<td>Founder + accountant</td>
+<td>Correct supplier identities, tax treatment, invoice responsibility, tested quote/capture/refund accounting</td>
+</tr>
+<tr>
+<td>Provider eligibility</td>
+<td>Notary advisor + operations</td>
+<td>Identity and current professional status verified, suspension/removal procedure</td>
+</tr>
+<tr>
+<td>Live payments</td>
+<td>Founder + payment operations</td>
+<td>Correct merchant brand, active configuration, eligible connected account, controlled capture/transfer/payout and recovery evidence</td>
+</tr>
+<tr>
+<td>Loss-making offers</td>
+<td>Founder + engineering</td>
+<td>Supported collection/eligibility policy before commitment, measured costs and explicit exception handling</td>
+</tr>
+<tr>
+<td>Signing</td>
+<td>Notary advisor + authorized providers</td>
+<td>Applicable professional requirements, approved provider arrangements, retention and legally operative ceremony verification</td>
+</tr>
+<tr>
+<td>Privacy and security</td>
+<td>Named privacy lead + counsel</td>
+<td>Data map, rights/access/retention procedures, vendor terms, cross-border assessment, incident and restore exercises</td>
+</tr>
+</tbody>
+</table>
+<p>The payment receipt records operator tax registrations but still identifies collection implementation and the notary-supply model as unresolved. Describing taxes as excluded is disclosure, it is not implemented tax collection. September 8 readiness.</p>
+<p>The signing room is an internal rehearsal and does not complete an act, charge the client or establish CNQ approval. Hosting in Canada and passing tests do not establish complete Law 25 compliance or SOC 2 certification. Rehearsal boundaries, privacy and legal materials, SOC 2 gap analysis.</p>
+</div></section>
+<section id="section-08" class="plan-section motion-operations" data-section="8" data-motion="operations"><div class="section-rail"><span class="section-count">08</span><div class="section-signal signal--operations" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>8. Business model and unit economics</h2><div class="focus-summary" role="note"><span>Model</span><strong>Agreed honoraires stay with the notary · Nota fee stays separate</strong></div>
+<h3>8.1 Revenue and collection costs</h3>
+<p>Nota's revenue is its own earned fee. Professional fees passed to notaries, collected tax and other third-party amounts must be tracked separately. The simplified planning model recognizes Nota fees on completed paid acts, an accountant must confirm gross/net presentation, recognition, refunds and any contingent liabilities under the final contracts.</p>
+<p><strong>Future model-enabled monetization.</strong> Once the proprietary models pass a notary-reviewed, held-out validation by act type and the commercial and professional gates are closed, Nota can introduce a separate software subscription or usage fee for the model-enabled preparation layer. The subscription path is intended for notaries who want the product without a direct feedback commitment. A deeper collaboration path may use a potential equity instrument for notaries who contribute structured feedback and evaluation, subject to counsel, professional review and written terms. This future revenue stream and any equity arrangement are intentionally excluded from the base scenario until pricing, support cost, data rights, security, valuation and professional compliance are evidenced. The purpose is to put more capacity in a notary's hands, not to remove the notary: the target is to automate up to 80% of repeatable intake, checks and dossier assembly while the practising notary keeps independent legal judgment. A notary who can safely handle more qualified demand can create more earning capacity and help repair the current supply shortage. Actual income still depends on demand, accepted work, professional fees, operating costs and the final contracts.</p>
+<p>The settlement design collects the client's combined amount on the platform and transfers the notary's fee. Published Canadian domestic-card pricing is 2.9% plus 0.30 $ per successful charge. <a href="https://stripe.com/en-ca/pricing">Stripe Payments</a>. The modeled Connect arrangement adds 2 $ per payout-active account-month and 0.25% plus 0.25 $ per bank payout. <a href="https://stripe.com/en-ca/connect/pricing">Stripe Connect</a>.</p>
+<p>These are public-price assumptions, not verified Nota invoices. One act per payout is assumed. Account fees use the monthly Year 1 ramp and all target notaries active each month in Years 2–3. The prior assumption of ten acts per active notary per month was inconsistent with the plan's much lower provider utilization.</p>
+<p>Stripe's comparison also lists a funds-routing feature at 0.25% of payout volume. Confirm whether an additional fee applies under Nota's contract, it is not silently counted twice in the baseline. If incremental, it would cost approximately 6.98 $ per modeled act. Reconcile optional products, international cards, currency conversion, refunds and actual balance transactions before treating this estimate as a forecast.</p>
+<p>The calculation is: <strong>Nota fee − processing on the entire charge − payout/account costs − service costs − losses</strong>. Acquisition is subtracted once, within operating budgets in the annual model.</p>
+<div class="table-scroll"><table class="data"><thead><tr>
+<th>Blended completed act</th>
+<th>CAD</th>
+</tr></thead><tbody>
+<tr><td>Notary professional fee passed through</td><td>2 794 $</td></tr>
+<tr><td>Nota revenue</td><td>331 $</td></tr>
+<tr><td>Card processing</td><td>−91 $</td></tr>
+<tr><td>Connect payout/account allocation</td><td>−9 $</td></tr>
+<tr><td>Payment contribution before service/loss</td><td>231 $</td></tr>
+</tbody></table></div>
+
+<p>The mix is 40% financing/60% refinancing and 70% standard/18% fast/7% priority/3% urgent/2% same day, at starting bases and recommended multipliers. It is unobserved. The 30 $ service cost and 0.5% of charge loss allowance are planning assumptions covering incremental preparation/support/tooling and net refunds, disputes, cancellation costs or unrecovered funds. Record components separately as data arrives, do not count refunded revenue and the same loss twice.</p>
+<p>The model treats the service cost as incremental to budgeted founder/advisor/contractor capacity. If their paid time performs the same work, reclassify it rather than double-count it. Conversely, measure abandoned-file work and any professional validation costs not covered by that allowance.</p>
+<h3>8.2 Loss segments and optimization order</h3>
+<p>The margin audit shows that permitted high-honoraires offers can be unprofitable even on domestic cards. The standard financing fee does not rise when the offered honoraires rise, processing does. A five-times offer cap is not a profit guarantee. The newly included will/procuration services need the same whole-envelope analysis before commercial promotion.</p>
+<p>Prioritize actual cost instrumentation and a billing eligibility safeguard, then collection alternatives and pricing experiments. Canadian bank debit may reduce costs for suitably early bookings, but settlement delay, disputes and authorization differences must be reflected in the customer journey and reserves. This plan neither enables a new payment method nor changes prices.</p>
+<p>Test 249/289 against 229/279 only after sufficient qualified volume exists, preserving frozen quotes and measuring contribution per eligible visitor. These are candidate fees from the earlier audit, not optimal prices. Include customer conversion, notary acceptance, completion, support and losses. Set sample size and stopping rules from observed baseline data before declaring a winner.</p>
+<h3>8.3 Acquisition and retention</h3>
+<p>The Year 1 client-acquisition envelope implies approximately 164 $ per completed client. After modeled payment, service and loss costs, roughly <strong>22 $ per act remains after that acquisition allocation and before the rest of overhead</strong>. This is much narrower than the previous 76 $ claim.</p>
+<p>The supply budget implies 500 $ per recruited notary if all 30 are recruited. Cost per verified, active or retained notary will differ. The prior 29× LTV/CAC claim is withdrawn: three-year provider retention, demand cost and contribution were not demonstrated. Report supply cohorts and repeat participation, do not assign the entire margin stream to both client and provider LTV.</p>
+</div></section>
+<section id="section-09" class="plan-section motion-roadmap" data-section="9" data-motion="roadmap"><div class="section-rail"><span class="section-count">09</span><div class="section-signal signal--roadmap" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>9. Operations, service quality and resilience</h2><div class="focus-summary" role="note"><span>Operations</span><strong>Reliable fulfilment · recovery paths · service quality</strong></div>
+<p>The founder owns the initial operating queue. The proposed practising notary advisor owns professional workflow review, not every participating notary's independent decision. Define named cover before taking time-sensitive cases, a solo founder cannot promise continuous service without staffing it.</p>
+<table>
+<thead>
+<tr>
+<th>Operating area</th>
+<th>Required routine</th>
+<th>Trigger for intervention</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Intake and matching</td>
+<td>Check eligibility, documents, deadline feasibility and available providers</td>
+<td>Missing critical facts, no suitable response, incompatible sale/loan workflow</td>
+</tr>
+<tr>
+<td>Client communication</td>
+<td>Explain status, next action, quote changes and charge timing in FR/EN</td>
+<td>A pending request approaches its deadline or authorization fails</td>
+</tr>
+<tr>
+<td>Completion and payment</td>
+<td>Reconcile act evidence, capture, transfers, payout status and bank records</td>
+<td>Mismatch, duplicate event, failed transfer or unrecovered refund</td>
+</tr>
+<tr>
+<td>Complaints and cancellation</td>
+<td>Record cause, fee entitlement, remedy and professional escalation</td>
+<td>Disputed representation, missed deadline or vulnerable-client concern</td>
+</tr>
+<tr>
+<td>Security and continuity</td>
+<td>Least privilege, vendor inventory, backups, restore exercise and incident owner</td>
+<td>Access anomaly, data incident, unavailable critical provider</td>
+</tr>
+<tr>
+<td>Notary supply</td>
+<td>Recheck status and watch response/fulfillment concentration</td>
+<td>Suspension, repeated failed deadlines or dependence on one practice</td>
+</tr>
+</tbody>
+</table>
+<p>Set response targets by supported business hours and urgency during the pilot, publish only targets the team can staff. Keep a daily financial exception queue, a weekly customer-outcome review and a monthly close. Money due to notaries or tax authorities is excluded from unrestricted runway. Confirm insurance coverage and limits for the actual platform activities, the budget is not proof of coverage.</p>
+</div></section>
+<section id="section-10" class="plan-section motion-governance" data-section="10" data-motion="governance"><div class="section-rail"><span class="section-count">10</span><div class="section-signal signal--governance" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>10. AI, signing and expansion roadmap</h2><div class="focus-summary" role="note"><span>Roadmap</span><strong>Up to 80% repeatable preparation target · notary review · signing gate</strong></div>
+<p><strong>Immediate objective:</strong> reduce whole-file preparation time while preserving professional control and evidence quality. Documents, answers and third-party instructions can produce a source-cited checklist and preparation inputs. Capacity, consent, legal conclusions and signing readiness remain decisions of the responsible notary.</p>
+<p>The current live financing extraction benchmark is blocked by provider access/payment prerequisites and has no accepted extraction output in the recorded runs. The four-service evaluation uses synthetic cases not reviewed by a notary. Neither demonstrates professional accuracy or time saved. Bedrock verification, evaluation.</p>
+<p>Before promotion, obtain lawful data-use permissions and vendor/region approval, establish a notary-reviewed held-out set per act, measure omissions, unsupported facts, conflicts, abstentions, failures and review time. Measure <strong>cost per accepted, reviewed file</strong> including OCR, inference, retries and human correction. A 90% or 99% time-saving ambition is a hypothesis, not a forecast assumption. Cross-region model profiles can process outside Canada even through a Canadian endpoint.</p>
+<p>The gate sequence is qualified intake → evidence-backed preparation → notary review → authorized signing provider → publication/funds workflow → reconciliation and retention. Refer to service coverage, cost/performance plan and learning strategy.</p>
+<h3>10.1 Controlled learning loop and notary participation</h3>
+<p>Nota's model layer improves through a controlled learning loop. Aggregated user behavior shows where a client abandons intake, misunderstands a question or needs a clearer next step. Notary feedback supplies the high-confidence signal. A notary can accept, correct or reject a proposed field or preparation step and record the reason. Those signals improve the next qualified model version for simple financing, refinancing and other supported acts.</p>
+<p>Dynamic improvement means daily signal collection and monitoring, held-out evaluation, notary review, a small canary release and a reversible rollback. It does not mean that live client behavior silently rewrites a legal field or changes model weights overnight. User behavior can improve question order, explanations and workflow routing. Only authorized, de-identified or synthetic data and separately approved notary feedback can enter an offline training set. Every generated output remains a draft until the responsible notary reviews it.</p>
+<p>Notaries choose how they participate:</p>
+<ul>
+<li><strong>Feedback partner:</strong> an opt-in notary contributes structured reviews, corrections and edge cases under a separate agreement and may receive potential equity or equity options. This is not guaranteed value, is not a referral reward and is subject to corporate, securities, tax, privacy and professional review. It cannot affect ranking, pricing, referrals or the notary's independent judgment.</li>
+<li><strong>Paid software user:</strong> a notary may use the AI layer through a monthly subscription or usage plan and decline the model-improvement contribution program. Paid access provides the tool, it does not purchase influence over the marketplace or reduce the notary's professional responsibilities.</li>
+</ul>
+<p>The intended win-win is practical. Clients receive clearer intake and faster next steps. Notaries receive a tool that can absorb repeatable preparation and help them serve more qualified requests. Nota receives evidence to improve the product. Contribution remains voluntary, and the model never replaces the responsible notary's advice, decision or signature.</p>
+<p>The operating scorecard should track model acceptance and correction rates, abstentions, unsupported-field errors, time per accepted dossier, client friction, feedback contribution, subscription conversion, churn, support burden and gross margin. No model update reaches production without a documented version, a notary-reviewed evaluation result, an approval owner and a rollback path.</p>
+<p>The commercial thesis for this layer is capacity expansion. Nota gives participating notaries a tool that absorbs repeatable preparation, so they can respond to more qualified requests, complete more acts and increase their potential professional income while preserving the notary's independent role. This is how the product repairs a market with too little supply for its demand. It is a future monetization path, not a promise of a fixed income uplift or a plan to eliminate notaries.</p>
+<p>The learning loop is a managed product process, not automatic clinical or legal decision making. Keep a frozen evaluation set for each supported act, record the model version in the dossier, require a notary review before a model change reaches production, and publish outcome metrics separately for users, participating notaries and subscribed notaries. The contribution choice must remain voluntary, transparent and independent from the notary's professional judgment.</p>
+<p>Province-wide matching follows measured local fulfillment and professional readiness. Other provinces and civil-law jurisdictions require local service definitions, qualified professionals, contracts, identity/signing rails and data assessments. Adjacent urgent-service industries reuse parts of the demand mechanism but need their own economics. No revenue from these expansions, model-enabled subscriptions or data products is included in the base financial scenario.</p>
+</div></section>
+<section id="section-11" class="plan-section motion-milestones" data-section="11" data-motion="milestones"><div class="section-rail"><span class="section-count">11</span><div class="section-signal signal--milestones" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>11. Milestones and decision rules</h2><div class="focus-summary" role="note"><span>Milestones</span><strong>30 recruited · 25 verified · 244 Year 1 completions targeted</strong></div>
+<p>Month 1 begins when the operating plan is funded and starts, it is not a claim that September's deployment began a paid trading history. Dates are targets conditional on evidence, not automatic launch permissions.</p>
+<table>
+<thead>
+<tr>
+<th>Window</th>
+<th>Deliverable</th>
+<th>Exit evidence / decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Months 1–2</td>
+<td>Legal, tax, provider and payment gates, discovery interviews</td>
+<td>Written decisions and verified collection workflow before paid operation</td>
+</tr>
+<tr>
+<td>Months 1–3</td>
+<td>30 recruited / 25 verified and configured notaries</td>
+<td>Service-area coverage, response exercise and named operating cover</td>
+</tr>
+<tr>
+<td>Months 4–6</td>
+<td>First controlled financing cohort, 20 cumulative paid completions in the ramp</td>
+<td>Mature funnel outcomes and cost ledger, diagnose before scaling</td>
+</tr>
+<tr>
+<td>Months 7–9</td>
+<td>Repeatable local fulfillment, 87 cumulative completions</td>
+<td>Positive segment contribution, on-time outcomes and repeat supply</td>
+</tr>
+<tr>
+<td>Months 7–12</td>
+<td>Invite a notary feedback cohort and test the equity or paid software paths</td>
+<td>Written contribution terms, professional review, model-quality evidence and measured software margin</td>
+</tr>
+<tr>
+<td>Months 10–12</td>
+<td>Reach 244 cumulative completions in the base scenario</td>
+<td>80 813 $ modeled revenue, reconciled costs and evidence for follow-on funding</td>
+</tr>
+<tr>
+<td>Before expansion</td>
+<td>New region/service readiness</td>
+<td>Local supply, legal/integration requirements, measured acquisition and capacity</td>
+</tr>
+</tbody>
+</table>
+<p>Target more than 60% acceptance and at least 80% completion after acceptance in mature cohorts before broad acquisition expansion. These are proposed management gates, not observed rates. Also require positive contribution and adequate on-time delivery, acceptance alone cannot justify growth. Set an on-time target from the promised service and pilot evidence before marketing a guarantee.</p>
+<p>Review the plan monthly. Stop or narrow an unprofitable segment, delay new geography if supply is thin, preserve cash when the launch date slips. Start fundraising or cost reduction when the forecast shows fewer than six months of unrestricted operating cash. A revenue run-rate alone is not a Series A trigger, especially when the prior 700 000 $ threshold was below the plan's annual Year 2 revenue.</p>
+</div></section>
+<section id="section-12" class="plan-section motion-cash" data-section="12" data-motion="cash"><div class="section-rail"><span class="section-count">12</span><div class="section-signal signal--cash" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>12. Financial plan and cash requirements</h2><div class="focus-summary" role="note"><span>Capital</span><strong>250 000 $ proposed envelope · modelled scenarios</strong></div>
+<h3>12.1 Use of the proposed 250 000 $ raise</h3>
+<table>
+<thead>
+<tr>
+<th>Budget</th>
+<th style="text-align: right,">CAD</th>
+<th>Scope / unresolved assumption</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Founder compensation envelope</td>
+<td style="text-align: right,">96 000 $</td>
+<td>8 000 $/month total budget, confirm salary vs employer burden</td>
+</tr>
+<tr>
+<td>Legal, contracts and privacy</td>
+<td style="text-align: right,">20 000 $</td>
+<td>Obtain scope and quote, do not assume it covers every expansion</td>
+</tr>
+<tr>
+<td>Practising notary advisor</td>
+<td style="text-align: right,">25 000 $</td>
+<td>Defined deliverables and professional workflow review</td>
+</tr>
+<tr>
+<td>Design/front-end contractor</td>
+<td style="text-align: right,">25 000 $</td>
+<td>Prioritize observed conversion and accessibility problems</td>
+</tr>
+<tr>
+<td>Client acquisition</td>
+<td style="text-align: right,">40 000 $</td>
+<td>Includes content, partner rewards, acquisition labor and paid tests</td>
+</tr>
+<tr>
+<td>Notary acquisition</td>
+<td style="text-align: right,">15 000 $</td>
+<td>Includes recruitment rewards, outreach and travel</td>
+</tr>
+<tr>
+<td>Infrastructure, insurance and tools</td>
+<td style="text-align: right,">12 000 $</td>
+<td>Validate invoices and coverage, serverless is not zero operating cost</td>
+</tr>
+<tr>
+<td>Contingency</td>
+<td style="text-align: right,">17 000 $</td>
+<td>Explicit draw decisions and monthly tracking</td>
+</tr>
+<tr>
+<td><strong>Total operating envelope</strong></td>
+<td style="text-align: right,"><strong>250 000 $</strong></td>
+<td>Payment, incremental service and loss costs modeled separately</td>
+</tr>
+</tbody>
+</table>
+<p>Keep compensation costs within the envelope or increase the funding requirement. Founder living needs, existing cash, liabilities, sales tax remittances, employer charges, financing fees and accounts payable have not been verified. Credits, grants, debt and investor commitments are zero in the cash model until documented. Potential SR&amp,ED/Québec credits, IRAP or Investissement Québec programs require current eligibility and timing checks, they are not assumed runway.</p>
+<h3>12.2 Base operating scenario</h3>
+<div class="table-scroll"><table class="data"><thead><tr>
+<th>Year</th>
+<th>Completed acts</th>
+<th>Nota revenue</th>
+<th>Payment costs</th>
+<th>Service + losses</th>
+<th>Contribution</th>
+<th>Operating budget</th>
+<th>Operating result</th>
+</tr></thead><tbody>
+<tr><td>Y1</td><td>244</td><td>80 813 $</td><td>−24 303 $</td><td>−11 132 $</td><td>45 377 $</td><td>−250 000 $</td><td>-204 623 $</td></tr>
+<tr><td>Y2</td><td>2,800</td><td>927 360 $</td><td>−280 109 $</td><td>−127 747 $</td><td>519 504 $</td><td>−720 000 $</td><td>-200 496 $</td></tr>
+<tr><td>Y3</td><td>11,000</td><td>3 643 200 $</td><td>−1 096 485 $</td><td>−501 864 $</td><td>2 044 851 $</td><td>−1 850 000 $</td><td>194 851 $</td></tr>
+</tbody></table></div>
+
+<p>All three years use the same financing mix and tariffs, Year 3 does <strong>not</strong> silently assume sale-act economics. The annual operating envelopes remain 250 000 / 720 000 / 1 850 000 $, with client acquisition of 40 000 / 154 000 / 440 000 $ included. The Year 2 and Year 3 cost envelopes are not yet a bottom-up hiring budget. Target staffing remains founder plus contractors in Year 1, four FTE in Year 2 and ten in Year 3, conditional on financing, capacity needs and compensation quotes.</p>
+<p>Service and loss assumptions are additional, CAC is not subtracted again. All amounts exclude income tax, financing costs, tax/disbursement cash timing and capital expenditures. Taxes collected are not revenue, collecting them would add payment costs that the current model does not quantify. Therefore the operating result is a planning measure, not net income or a funding guarantee.</p>
+<h3>12.3 Monthly cash and reserve</h3>
+<p>The following base ramp includes no completed revenue in the first three months. It assumes collections, transfers and incremental costs settle in the completion month, and operating cash follows the stated budget. It excludes opening obligations and further financing. Maintain <strong>25 000 $ as a proposed minimum cash reserve</strong>, not an estimate of the processor's required reserve or a complete measure of exposure.</p>
+<div class="table-scroll"><table class="data"><thead><tr>
+<th>Month</th>
+<th>Completed acts</th>
+<th>Opening cash</th>
+<th>Contribution</th>
+<th>Operating budget</th>
+<th>Closing cash</th>
+</tr></thead><tbody>
+<tr><td>1</td><td>0</td><td>250 000 $</td><td>0 $</td><td>−20 000 $</td><td>230 000 $</td></tr>
+<tr><td>2</td><td>0</td><td>230 000 $</td><td>0 $</td><td>−28 000 $</td><td>202 000 $</td></tr>
+<tr><td>3</td><td>0</td><td>202 000 $</td><td>0 $</td><td>−24 000 $</td><td>178 000 $</td></tr>
+<tr><td>4</td><td>4</td><td>178 000 $</td><td>742 $</td><td>−22 000 $</td><td>156 742 $</td></tr>
+<tr><td>5</td><td>6</td><td>156 742 $</td><td>1 113 $</td><td>−20 000 $</td><td>137 854 $</td></tr>
+<tr><td>6</td><td>10</td><td>137 854 $</td><td>1 854 $</td><td>−20 000 $</td><td>119 708 $</td></tr>
+<tr><td>7</td><td>15</td><td>119 708 $</td><td>2 781 $</td><td>−20 000 $</td><td>102 490 $</td></tr>
+<tr><td>8</td><td>22</td><td>102 490 $</td><td>4 079 $</td><td>−20 000 $</td><td>86 569 $</td></tr>
+<tr><td>9</td><td>30</td><td>86 569 $</td><td>5 563 $</td><td>−19 000 $</td><td>73 132 $</td></tr>
+<tr><td>10</td><td>40</td><td>73 132 $</td><td>7 437 $</td><td>−19 000 $</td><td>61 569 $</td></tr>
+<tr><td>11</td><td>52</td><td>61 569 $</td><td>9 686 $</td><td>−19 000 $</td><td>52 255 $</td></tr>
+<tr><td>12</td><td>65</td><td>52 255 $</td><td>12 122 $</td><td>−19 000 $</td><td>45 377 $</td></tr>
+</tbody></table></div>
+
+<p>With zero revenue and the full operating budget spent, the raise is exhausted at Month 12 and breaches the proposed reserve in Month 11. The base case ends Year 1 with approximately 45 377 $ total cash, only 20 377 $ above that reserve. Year 2's planned gross operating spend is 60 000 $ per month. Follow-on funding or a slower cost ramp is therefore essential before committing the Year 2 team.</p>
+<h3>12.4 Sensitivities and capital</h3>
+<div class="table-scroll"><table class="data"><thead><tr>
+<th>Scenario</th>
+<th>Capital incl. reserve</th>
+<th>Beyond proposed raise</th>
+</tr></thead><tbody>
+<tr><td>Downside</td><td>1 863 333 $</td><td>1 613 333 $</td></tr>
+<tr><td>Base</td><td>430 119 $</td><td>180 119 $</td></tr>
+<tr><td>Upside</td><td>200 604 $</td><td>0 $</td></tr>
+</tbody></table></div>
+
+<p>Downside halves completions, doubles service cost to 60 $ and raises loss allowance to 1% of collected charges. Upside increases completions by 50%, lowers service cost to 20 $ and losses to 0.25%. All retain the same price/mix and operating envelopes so the assumptions are comparable. These are mechanical stress cases, not probabilities. Downside hiring/spend should be reduced in practice, upside capacity may require more expense.</p>
+<p>Capital figures use the worst cumulative <strong>year-end</strong> operating deficit plus the proposed 25 000 $ reserve. They omit within-year troughs after Year 1, settlement delays, restricted balances and unmodeled obligations. The base therefore indicates <strong>at least approximately 180 119 $ beyond the proposed raise</strong>, before those items, it does not establish that 430 119 $ is sufficient in all circumstances.</p>
+<p>Other required sensitivities: an all-standard date mix, higher-complexity honoraires, actual tax collection, additional Connect fees, foreign cards, slower acceptance/completion, and failed/refunded cases. Calculate them using observed cohorts before expanding. Preserve a weekly 13-week cash forecast and a rolling 24-month funding model once actual opening balances and hiring terms are known.</p>
+</div></section>
+<section id="section-13" class="plan-section motion-capital" data-section="13" data-motion="capital"><div class="section-rail"><span class="section-count">13</span><div class="section-signal signal--capital" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>13. Team, governance and financing readiness</h2><div class="focus-summary" role="note"><span>Team</span><strong>Notary advisor · Québec counsel · documented operating cover</strong></div>
+<p>Anthony Paquet is the founder and principal builder represented in the repository. Delivery history supports execution capability, this review does not verify a résumé, ownership structure or employment status. The initial team needs a retained practising notary advisor, Québec counsel, an accountant and documented operating cover. Future engineering, provider-relations and growth hires follow measured workload and available funding.</p>
+<p>Before circulating as a financing package, assemble incorporation and trade-name records, current cap table and beneficial ownership, IP assignments, contractor agreements, tax registrations, bank balances, liabilities, insurance quotes/policies, customer/provider contract versions and the regulatory opinion. The September 8 record identifies the tax registrant as GESTION A. PAQUET INC., confirm the relationship between that entity, Nota's trade name, payment descriptor and the entity raising funds.</p>
+<p>The learning-loop proposal also needs counsel and a practising notary advisor to approve the feedback agreement, data permissions, equity or option mechanics, tax treatment, privacy boundaries and professional-independence safeguards before any invitation is made.</p>
+<p>The proposed instrument remains a SAFE or convertible note, subject to counsel and negotiation. Valuation/cap, discount, conversion terms, governance rights and dilution are not specified and no investor commitment is claimed. Report funds secured separately from the fundraising target. The investment case should rest on a credible local experiment and its evidence, not unsupported precision about later rounds.</p>
+</div></section>
+<section id="section-14" class="plan-section motion-risk" data-section="14" data-motion="risk"><div class="section-rail"><span class="section-count">14</span><div class="section-signal signal--risk" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>14. Risk register and owner decisions</h2><div class="focus-summary" role="note"><span>Risks</span><strong>Legal · cash · quality · owner decisions</strong></div>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Priority</th>
+<th>Response and accountable role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Commercial or referral model not professionally cleared</td>
+<td>Critical</td>
+<td>Founder/counsel close §7 before the dependent launch, do not assume a fallback is automatically legal</td>
+</tr>
+<tr>
+<td>Tax or supplier identity wrong</td>
+<td>Critical</td>
+<td>Accountant maps each supply and verifies quote-to-remittance accounting</td>
+</tr>
+<tr>
+<td>Principal loss after paying a notary</td>
+<td>High</td>
+<td>Payment operations control exposure, recovery, reconciliation and reserves</td>
+</tr>
+<tr>
+<td>Allowed offers have negative contribution</td>
+<td>High</td>
+<td>Engineering implements approved eligibility/collection handling, finance monitors by segment</td>
+</tr>
+<tr>
+<td>Demand or provider liquidity insufficient</td>
+<td>High</td>
+<td>Founder narrows service/geography and releases acquisition budget in tranches</td>
+</tr>
+<tr>
+<td>Complete price deters customers</td>
+<td>High</td>
+<td>Measure quote abandonment and alternatives, test eligible pricing with valid cohorts</td>
+</tr>
+<tr>
+<td>Signing/AI capability overstated</td>
+<td>High</td>
+<td>Notary advisor enforces rehearsal and review boundaries, use measured evidence</td>
+</tr>
+<tr>
+<td>Equity for professional feedback or use of client data not cleared</td>
+<td>Critical</td>
+<td>Counsel and notary advisor approve contribution terms, consent, securities, tax, privacy and deontology, default to the paid path</td>
+</tr>
+<tr>
+<td>Privacy breach or provider outage</td>
+<td>High</td>
+<td>Privacy/technical owners validate vendors, incident response, backups and recovery</td>
+</tr>
+<tr>
+<td>Cash shortfall or launch delay</td>
+<td>High</td>
+<td>Founder maintains weekly cash forecast, defer hiring and start funding early</td>
+</tr>
+<tr>
+<td>Dependence on one founder or few notaries</td>
+<td>High</td>
+<td>Operating cover, documentation and diversified verified supply</td>
+</tr>
+<tr>
+<td>Competitors match the mechanism</td>
+<td>Medium</td>
+<td>Win through fulfillment and distribution, measure retention rather than assert a moat</td>
+</tr>
+<tr>
+<td>Plan drifts from code or deployment</td>
+<td>Medium</td>
+<td>Regenerate tables, compare live tariff evidence and label current-code versus production status</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Owner decisions still needed:</strong> confirm the fundraising entity and actual cash/liabilities, approve the fully costed compensation and operating envelopes, retain accountable professional/tax reviewers, resolve reward eligibility and payout terms, choose a supported policy for loss-making collections, and set acceptable fulfillment targets before a date guarantee is promoted. None of these decisions is fabricated by this revision.</p>
+</div></section>
+<section id="section-15" class="plan-section motion-sources" data-section="15" data-motion="sources"><div class="section-rail"><span class="section-count">15</span><div class="section-signal signal--sources" aria-hidden="true"><i></i><i></i><i></i></div></div><div class="section-content"><h2>15. Document control and supporting material</h2><div class="focus-summary" role="note"><span>Sources</span><strong>Assumptions, evidence and document control</strong></div>
+<p>The Markdown plan is the content source for the formatted HTML. Financial tables in both language documents are generated from the same current-domain model. Rebuild with:</p>
+<pre><code class="language-sh">node docs/planning/business-plan-model.cjs
+python3 docs/planning/render-business-plan.py
+</code></pre>
+<p>The renderer requires Python Markdown. It preserves the existing Nota brand stylesheet and mark in the formatted version. Model changes are planning changes only, prices and customer terms remain governed by the application and approved contracts.</p>
+<p>Supporting research and operating evidence:</p>
+<ul>
+<li>Market and AI research companion broader expansion research, validate dated claims before reuse.</li>
+<li>Margin audit collection costs, high-value losses and candidate experiments.</li>
+<li>Launch activation dated deployment/search evidence.</li>
+<li>Payment readiness staged versus activated payment infrastructure.</li>
+<li>Professional/legal dossier and claims audit.</li>
+<li>Signing requirements and working rehearsal boundaries.</li>
+<li>Current four-service coverage, evaluation and cost/performance.</li>
+<li><a href="planning/business-plan-review-2026-09-09.md">Review record</a> changes, verification and unresolved evidence.</li>
+</ul></div></section></div><div id="plan-fr" hidden><div class="french-summary"><h1>Nota Sommaire exécutif du plan d’affaires</h1>
+<p>Contact : <strong>info@gonota.ca</strong></p>
+<p>Le plan complet en anglais est dans <code>docs/business-plan.md</code>. Le modèle financier reproductible est dans <a href="planning/business-plan-model.json"><code>docs/planning/business-plan-model.json</code></a> et la revue des corrections dans <a href="planning/business-plan-review-2026-09-09.md"><code>docs/planning/business-plan-review-2026-09-09.md</code></a>.</p>
+<h2>Proposition</h2>
+<p>Nota met en relation un client qui doit signer un acte notarié à une date donnée avec un notaire qui dispose d’une capacité adaptée. Le client décrit le service, la date, les faits utiles et les honoraires professionnels proposés. Le notaire peut retenir la demande, contre-proposer, demander des renseignements ou passer sans publier son agenda privé.</p>
+<p><strong>Nota est une infrastructure de capacité pour les notaires, pas un remplacement des notaires.</strong> Notre promesse est explicite : Nota ne cherche pas à briser la profession ni à supprimer des emplois de notaire. Nous réparons un marché déséquilibré où des clients avec une échéance trouvent difficilement un professionnel disponible, pendant que des notaires perdent de la capacité dans la découverte fragmentée, les plages vides et la préparation répétitive. Nota structure la demande qualifiée, rend la capacité disponible plus utile et laisse au notaire le jugement professionnel, le conseil au client et l’acte. Les causes précises du manque d’offre et la taille de la demande additionnelle restent des questions de validation, mesurées cohorte par cohorte.</p>
+<p>La future couche dotée de modèles propriétaires suit la même limite. Sa cible est d’automatiser jusqu’à 80 % de l’accueil, des vérifications et de l’assemblage répétitifs validés, sous la revue du notaire, afin qu’une étude puisse accepter davantage de demandes qualifiées, augmenter son potentiel de revenu et contribuer à rétablir l’offre. Il s’agit d’un outil entre les mains du notaire, jamais d’un substitut à son jugement juridique indépendant. La cible sera mesurée par type d’acte, revue par des notaires et déployée seulement avec les contrôles juridiques, de sécurité et de qualité requis.</p>
+<p><strong>Boucle d’amélioration et participation notariale.</strong> Pour les actes notariaux simples pris en charge, les modèles de Nota peuvent s’améliorer dynamiquement à partir de signaux d’utilisation permis et agrégés, ainsi que des commentaires structurés des notaires. Les questions des utilisateurs, les corrections, les abandons et les étapes acceptées ou rejetées alimentent des versions évaluées par type d’acte. Il ne s’agit pas d’un apprentissage en direct qui modifierait silencieusement un dossier ou un modèle pendant son utilisation. Chaque évolution doit franchir des contrôles de confidentialité, de sécurité, de qualité, de revue notariale et de retour arrière. Aucun dossier client identifiable ne devient par défaut une donnée d’entraînement et aucun modèle ne remplace le jugement professionnel.</p>
+<p>Les signaux de comportement servent à améliorer l’ordre des questions, la clarté et le guidage. Ils ne servent pas à tirer une conclusion juridique ni à étiqueter un fait légal. Les changements de modèle sont préparés hors ligne, testés sur des cas réservés et approuvés avant toute mise en production.</p>
+<p>Un notaire qui contribue des commentaires, des cas limites ou du temps d’évaluation peut recevoir un <strong>instrument potentiel d’equity</strong>, selon des modalités écrites et sous réserve des avis juridiques, professionnels et financiers requis. Un notaire qui préfère ne pas contribuer directement peut utiliser la couche de modèles avec un <strong>abonnement logiciel mensuel</strong>. L’objectif est partagé : le client obtient des prochaines étapes plus claires, le notaire dispose d’un outil qui augmente sa capacité potentielle et Nota améliore le produit avec des preuves réelles. La participation demeure volontaire et ne transfère jamais la responsabilité juridique du notaire à Nota.</p>
+<p>Le lancement commercial proposé demeure concentré sur le <strong>financement et le refinancement hypothécaires dans la région de Québec</strong>. Le code actuel comprend aussi le testament et la procuration, leur demande, leur tarification et leur validation professionnelle sont traitées séparément et ne financent pas le scénario de lancement.</p>
+<p>Nota facture au client ses propres frais de service et de date, affichés séparément des honoraires professionnels. Le notaire doit recevoir les honoraires convenus en entier selon la structure de règlement actuelle. Cette structure n’est pas un avis juridique : l’avis professionnel, les taxes, les contrats, les paiements en production et les contrôles d’exploitation restent des conditions de lancement.</p>
+<p><strong>Monétisation future des modèles propriétaires.</strong> Après une validation par des notaires sur des cas réservés par type d’acte et la fermeture des conditions commerciales et professionnelles, Nota pourra offrir une version dotée de ses modèles propriétaires contre un abonnement logiciel ou des frais d’utilisation distincts. Un notaire collaborateur pourra aussi être admissible à un instrument potentiel d’equity en échange d’une contribution structurée, sans garantie de valeur et sous réserve des modalités écrites et des avis requis. Cette couche ne vise pas à enlever les notaires. La cible est d’automatiser jusqu’à 80 % de l’accueil répétitif, des vérifications et de l’assemblage du dossier, tout en laissant au notaire son jugement juridique indépendant. Un notaire pourra ainsi traiter davantage de demandes qualifiées, augmenter sa capacité de revenu potentiel et contribuer à réparer le manque d’offre actuel. Le revenu réel dépendra toutefois de la demande, des actes acceptés et complétés, des coûts et des contrats finaux.</p>
+<div class="learning-loop" aria-label="Boucle d’apprentissage pour les actes notariaux simples">
+  <div class="learning-loop-heading"><span class="eyebrow">Boucle de confiance</span><strong>Les actes simples deviennent plus clairs à chaque cycle revu.</strong></div>
+  <div class="learning-loop-track">
+    <div class="learning-node user"><b>Utilisateur</b><span>questions… parcours</span></div>
+    <i aria-hidden="true">…</i>
+    <div class="learning-node model"><b>Modèle</b><span>préparation guidée</span></div>
+    <i aria-hidden="true">…</i>
+    <div class="learning-node notary"><b>Notaire</b><span>accepter… corriger… refuser</span></div>
+    <i aria-hidden="true">…</i>
+    <div class="learning-node version"><b>Prochaine version</b><span>testée… réversible</span></div>
+  </div>
+  <p class="learning-loop-note">Les signaux d’usage ajustent seulement le guidage. La revue notariale qualifie les changements de modèle. Le notaire peut collaborer selon une entente distincte d’equity potentielle ou choisir un abonnement mensuel sans feedback direct.</p>
+</div>
+<h2>Ce que les preuves permettent de dire</h2>
+<ul>
+<li>Le produit public, l’API, les tests, l’administration, les flux Stripe de test et une répétition de salle de signature sont documentés.</li>
+<li>Les paiements réels en production ne sont pas encore établis : les secrets sont préparés, mais l’activation, les versements bancaires, les reprises d’erreur et la marque du marchand restent à vérifier.</li>
+<li>Les inscriptions fiscales de l’opérateur sont documentées, mais le calcul et la perception ne sont pas encore implémentés et la responsabilité fiscale des honoraires du notaire doit être tranchée.</li>
+<li>L’évaluation IA en direct est bloquée par l’accès et la facturation du fournisseur, les cas des quatre services sont synthétiques et non révisés par un notaire.</li>
+<li>Les demandes de recherche et de sitemap ne sont pas de la traction commerciale. Le plan ne présente aucun acte client vérifié comme traction.</li>
+</ul>
+<h2>Économie et financement</h2>
+<p>Les valeurs par défaut actuelles du domaine sont : 229 $ pour le service de financement, 279 $ pour le refinancement, puis 0 / 149 / 299 / 449 / 549 $ pour le service de date selon le palier. Les frais de carte et de Connect sont calculés sur la somme encaissée, y compris les honoraires transférés au notaire. Le modèle ajoute 30 $ de coût de service et une provision de pertes de 0,5 % comme hypothèses à mesurer, elles ne sont pas des résultats observés.</p>
+<p>Le scénario de base vise 534 demandes publiées, 307 retenues et 244 actes complétés en année 1, pour environ <strong>80 813 $</strong> de revenu Nota. Après paiements, coûts de service, pertes et budget d’exploitation de 250 000 $, le résultat opérationnel modélisé est d’environ <strong>−204 623 $</strong>. Le modèle annuel suggère environ <strong>430 119 $</strong> de capital incluant une réserve de 25 000 $, le financement proposé de 250 000 $ ne couvre donc pas automatiquement l’horizon des trois ans.</p>
+<p>Les récompenses de référence du domaine sont de 50 $ pour un client et de 250 $ pour un notaire activé. Le registre actuel comptabilise la récompense client à la retenue et la récompense notaire lorsque <code>premierActe</code> est présent. Les conditions de règlement, d’annulation, de divulgation et de remboursement doivent être alignées avant le programme partenaire.</p>
+<p>Le scénario financier de base n’inclut aucun revenu d’abonnement ou d’utilisation des modèles propriétaires. Ce revenu sera ajouté seulement après la validation de la performance, du coût par dossier, des droits sur les données, de la sécurité et de la conformité professionnelle.</p>
+<h2>Séquence de décision</h2>
+<ol>
+<li>Fermer l’avis professionnel, la cartographie fiscale, l’identité des fournisseurs, la vérification du statut des notaires et l’assurance.</li>
+<li>Vérifier la capture, le transfert, le versement bancaire, le remboursement, le litige et la réconciliation en production contrôlée.</li>
+<li>Instrumenter le parcours : visite admissible → demande → retenue → dossier complet → acte payé, avec coûts et échecs par segment.</li>
+<li>Libérer l’acquisition par tranches après une cohorte locale mûre et un résultat positif par visite admissible.</li>
+<li>N’élargir le catalogue, la géographie, la signature à distance ou l’IA qu’avec les preuves et les contrats propres à chaque service.</li>
+</ol>
+<p>Les cibles ne sont pas des résultats acquis. Le plan complet expose les hypothèses, les scénarios défavorables et favorables, les responsabilités et les décisions qui restent à prendre.</p></div></div>
+<script>
+(() => {
+  document.documentElement.classList.add('js-motion');
+  const languageButtons = [...document.querySelectorAll('[data-plan-lang]')];
+  const focusButtons = [...document.querySelectorAll('[data-plan-focus]')];
+  const englishPlan = document.querySelector('#plan-en');
+  const frenchPlan = document.querySelector('#plan-fr');
+  const setLanguage = (language) => {
+    const lang = language === 'fr' ? 'fr' : 'en';
+    document.documentElement.lang = lang === 'fr' ? 'fr-CA' : 'en-CA';
+    if (englishPlan) englishPlan.hidden = lang !== 'en';
+    if (frenchPlan) frenchPlan.hidden = lang !== 'fr';
+    languageButtons.forEach((button) => button.setAttribute('aria-pressed', button.dataset.planLang === lang ? 'true' : 'false'));
+    focusButtons.forEach((button) => { button.textContent = lang === 'fr' ? 'Voir le détail complet' : 'Show full detail'; });
+    try { localStorage.setItem('nota.plan.lang', lang); } catch (error) { /* storage can be unavailable in privacy mode */ }
+  };
+  languageButtons.forEach((button) => button.addEventListener('click', () => setLanguage(button.dataset.planLang)));
+  let savedLanguage = 'en';
+  try { savedLanguage = localStorage.getItem('nota.plan.lang') || 'en'; } catch (error) { /* use English when storage is unavailable */ }
+  const queryLanguage = new URLSearchParams(window.location.search).get('lang');
+  setLanguage(queryLanguage || savedLanguage);
+
+  const setFocus = (enabled, persist = true) => {
+    document.body.classList.toggle('focus-view', enabled);
+    focusButtons.forEach((button) => {
+      button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+      button.textContent = enabled
+        ? (document.documentElement.lang === 'fr-CA' ? 'Voir le détail complet' : 'Show full detail')
+        : (document.documentElement.lang === 'fr-CA' ? 'Vue essentielle' : 'Essential view');
+    });
+    if (persist) { try { localStorage.setItem('nota.plan.focus', enabled ? '1' : '0'); } catch (error) { /* storage can be unavailable */ } }
+  };
+  focusButtons.forEach((button) => button.addEventListener('click', () => setFocus(document.body.classList.contains('focus-view') === false)));
+  let savedFocus = '1';
+  try { savedFocus = localStorage.getItem('nota.plan.focus') || '1'; } catch (error) { /* keep the essential view */ }
+  setFocus(savedFocus !== '0', false);
+
+  const buttons = [...document.querySelectorAll('[data-lens]')];
+  const panels = [...document.querySelectorAll('[data-lens-panel]')];
+  const setLens = (lens) => {
+    buttons.forEach((button) => {
+      const selected = button.dataset.lens === lens;
+      button.setAttribute('aria-selected', selected ? 'true' : 'false');
+    });
+    panels.forEach((panel) => { panel.hidden = panel.dataset.lensPanel !== lens; });
+  };
+  buttons.forEach((button) => button.addEventListener('click', () => setLens(button.dataset.lens)));
+
+  const chapters = [...document.querySelectorAll('.plan-section')];
+  const navLinks = [...document.querySelectorAll('[data-nav-section]')];
+  const previousButton = document.querySelector('[data-plan-prev]');
+  const nextButton = document.querySelector('[data-plan-next]');
+  const progress = document.querySelector('[data-plan-progress]');
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let currentChapter = 1;
+  const updateChapterControls = (number) => {
+    currentChapter = Math.max(1, Math.min(chapters.length || 1, number));
+    if (progress) progress.textContent = `Chapter ${currentChapter} of ${chapters.length}`;
+    if (previousButton) previousButton.disabled = currentChapter <= 1;
+    if (nextButton) nextButton.disabled = currentChapter >= chapters.length;
+  };
+  const goToChapter = (number, push = true) => {
+    const chapter = chapters[number - 1];
+    if (!chapter) return;
+    updateChapterControls(number);
+    if (push) history.pushState(null, '', `#${chapter.id}`);
+    chapter.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'start' });
+  };
+  if (previousButton) previousButton.addEventListener('click', () => goToChapter(currentChapter - 1));
+  if (nextButton) nextButton.addEventListener('click', () => goToChapter(currentChapter + 1));
+  const chapterFromHash = () => {
+    const match = window.location.hash.match(/^#section-([0-9]{2})$/);
+    return match ? Number(match[1]) : null;
+  };
+  const syncChapterFromHash = () => {
+    const number = chapterFromHash();
+    updateChapterControls(number || 1);
+  };
+  window.addEventListener('hashchange', syncChapterFromHash);
+  window.addEventListener('popstate', syncChapterFromHash);
+  syncChapterFromHash();
+  const reveal = (entry) => { if (entry.isIntersecting) entry.target.classList.add('is-visible'); };
+  if ('IntersectionObserver' in window) {
+    const observer = new IntersectionObserver((entries) => entries.forEach(reveal), { threshold: .12, rootMargin: '0px 0px -8% 0px' });
+    chapters.forEach((chapter) => observer.observe(chapter));
+    const spy = new IntersectionObserver((entries) => entries.forEach((entry) => {
+      if (!entry.isIntersecting) return;
+      updateChapterControls(Number(entry.target.dataset.section));
+      navLinks.forEach((link) => link.toggleAttribute('aria-current', link.dataset.navSection === entry.target.dataset.section));
+    }), { rootMargin: '-18% 0px -70% 0px', threshold: 0 });
+    chapters.forEach((chapter) => spy.observe(chapter));
+  } else chapters.forEach((chapter) => chapter.classList.add('is-visible'));
+})();
+</script>
+
+</main></body></html>

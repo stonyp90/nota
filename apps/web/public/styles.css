@@ -1,6 +1,6 @@
 /* ==========================================================================
    Nota — design tokens and styles.
-   Brand system: institutional cobalt, midnight ink, and restrained brass.
+   Brand system: Nota blue-teal, midnight ink, and the Québec signal.
    Deviation from Tablix on purpose: squared corners (Tablix uses rounded-xl).
    All colors are tokens — no literal color values below the :root blocks.
    ========================================================================== */
@@ -9,22 +9,27 @@
   /* Nota blue ramp: institutional cobalt for trust and rigor, with a
      restrained light blue for digital interactions. */
   --nota-blue-50: #f1f7fb;
-  --nota-blue-100: #e1eef5;
-  --nota-blue-200: #c3ddeb;
-  --nota-blue-300: #95c4d9;
-  --nota-blue-400: #69b7d5;
-  --nota-blue-500: #2a769b;
-  --nota-blue-600: #216680;
-  --nota-blue-700: #174a63;
-  --nota-blue-800: #113a51;
-  --nota-blue-900: #0b2939;
-  --nota-blue-950: #061c2a;
+  --nota-blue-100: #e5eef3;
+  --nota-blue-200: #c8dbe3;
+  --nota-blue-300: #a7c1cd;
+  --nota-blue-400: #78a9bf;
+  --nota-blue-500: #407598;
+  --nota-blue-600: #386888;
+  --nota-blue-700: #386888;
+  --nota-blue-800: #274a62;
+  --nota-blue-900: #264961;
+  --nota-blue-950: #101b26;
+  /* Warm Nota accent: use the dark value for text on light surfaces and the
+     brighter value on midnight surfaces so the orange remains readable. */
+  --nota-orange-600: #b45309;
+  --nota-orange-400: #f79009;
+  --accent-warm: var(--nota-orange-600);
   /* Channel-only copies of the three steps that alpha tokens below need
      (shadows, focus glow, background wash). rgb() cannot take a hex var, so
      these exist so no ramp value is ever retyped as a literal downstream. */
-  --nota-blue-400-rgb: 105 183 213;
-  --nota-blue-500-rgb: 42 118 155;
-  --nota-blue-700-rgb: 23 74 99;
+  --nota-blue-400-rgb: 120 169 191;
+  --nota-blue-500-rgb: 64 117 152;
+  --nota-blue-700-rgb: 56 104 136;
 
   /* Semantic tokens (light) */
   --brand: var(--nota-blue-700);
@@ -40,18 +45,33 @@
   --brand-hover: var(--nota-blue-800);
   --on-accent: #ffffff; /* text/knob on saturated accents (tier pills, toggle) — white in every theme */
 
-  --bg: #f2f5f7;
-  --surface: #fbfcfd;
-  --surface-inset: #eaf1f5;
-  --surface-hover: #e2ebf0;
-  --ink: #0d1b27;
-  --ink-muted: #526574;
-  --border: #d9e3e9;
-  --border-strong: #b6c8d4;
+  --bg: #eef5f7;
+  --surface: #fbfdfd;
+  --surface-inset: #e6f0f4;
+  --surface-hover: #dcecf2;
+  --ink: #173b52;
+  --ink-muted: #607986;
+  --subtitle-ink: #000000;
+  --border: #c5d8df;
+  --border-strong: #a9c3ce;
   --ring: var(--nota-blue-600);
 
+  /* The arrival canvas is intentionally quieter than the product theme. It
+     keeps the brand blue in the mark and the actions without turning the
+     whole first screen into a saturated colour field. */
+  --intro-bg: #eef5f7;
+  --intro-surface: #fbfdfd;
+  --intro-surface-veil: color-mix(in srgb, var(--intro-surface) 90%, transparent);
+  --intro-surface-inset: #e6f0f4;
+  --intro-surface-hover: #dcecf2;
+  --intro-ink: #173b52;
+  --intro-ink-muted: #607986;
+  --intro-border: #c5d8df;
+  --intro-border-strong: #a9c3ce;
+  --intro-tint: rgb(64 117 152 / .06);
+
   --danger: #b42318;
-  --warn: #b54708;
+  --warn: var(--accent-warm);
   --ok: var(--nota-blue-600);
   --danger-solid: #b42318; /* solid deep red for badge fills — dark --danger is a light salmon that fails white-text contrast */
   /* The tint pair (owner, 2026-08-27: « components carry no opacity — the
@@ -104,12 +124,12 @@
      (the dark values live in BOTH dark blocks below; keep all three in sync).
      Rapide is the CALM baseline and covers most of a month's cells, so its ink
      is NEUTRAL (owner, 2026-08-28, twice: « trop vert ») — the cell's tier bar
-     and the legend dot keep the green; the saturated ramp starts at urgency. */
+     and the legend dot keep the blue; the saturated ramp starts at urgency. */
   --tier-rapide-ink: var(--ink-muted); --tier-prioritaire-ink: var(--tier-prioritaire);
   --tier-urgence-ink: var(--tier-urgence); --tier-extreme-ink: var(--tier-extreme);
 
-  /* Per-service categorical hues — deliberately distinct from the green brand
-     and the green→red tier ramp; used only as calendar data-viz fills (the
+  /* Per-service categorical hues — deliberately distinct from the blue brand
+     and the blue→red tier ramp; used only as calendar data-viz fills (the
      per-service mix bar + its legend). TWO acts of the financing family
      (ADR 0010): each act owns its token here, and every theme block below
      redefines BOTH — a service colour must never fall back to a light value
@@ -135,20 +155,31 @@
   --radius-lg: 12px;
 
   color-scheme: light;
-  --shadow-sm: 0 1px 2px rgb(17 22 20 / 0.05);
-  --shadow: 0 6px 20px -8px rgb(17 22 20 / 0.12);
+  --shadow-sm: 0 1px 2px rgb(16 27 38 / 0.05);
+  --shadow: 0 6px 20px -8px rgb(16 27 38 / 0.12);
   --shadow-lg: 0 24px 50px -16px rgb(var(--nota-blue-700-rgb) / 0.24);
   --shadow-brand: 0 6px 16px -6px rgb(var(--nota-blue-700-rgb) / 0.5); /* brand-primary hover lift */
-  --logo-shadow: 0 1px 2px rgb(17 22 20 / 0.15);       /* header brand mark */
+  --logo-shadow: 0 1px 2px rgb(16 27 38 / 0.15);       /* header brand mark */
   --focus-ring: rgb(var(--nota-blue-500-rgb) / 0.3);      /* brand focus glow (3px) */
-  --backdrop: rgb(13 18 15 / 0.55);                    /* dialog scrim */
+  --backdrop: rgb(16 27 38 / 0.55);                    /* dialog scrim */
 
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
-  /* The wordmark only (brand-word / ig-wordmark) — a geometric face that
-     pairs with the logomark's blocky, rounded-terminal N instead of reading
-     as plain bold body copy. Everything else stays Inter. */
+  /* The wordmark uses a custom monoline SVG, so every letter stays aligned at
+     every size. Sora is the display face of EVERY heading — owner, 2026-09-10:
+     the Signature beta page is the reference and the whole app follows it. */
   --font-display: 'Sora', var(--font-sans);
+  --weight-display: 800;
+  /* --- Type scale: the beta pane's values, verbatim ------------------------
+     One register for the whole app. No heading rule sets its own size, face
+     or weight — it reads a step of this scale (typographie.test.mjs enforces
+     it), so the three doors, the dialogs and the beta print one voice. */
+  --type-h1: clamp(42px, 4.25vw, 68px); --type-h1-lh: 1.02; --type-h1-ls: -.055em;
+  --type-h1-compact: clamp(42px, 9vw, 58px); /* the stacked (narrow) hero */
+  --type-h2: clamp(24px, 2.35vw, 34px); --type-h2-lh: 1.15; --type-h2-ls: -.045em;
+  --type-h3: 17px; --type-h3-lh: 1.3; --type-h3-ls: -.02em;
+  --type-lead: 17px; --type-lead-lh: 1.7;
+  --type-eyebrow: 12px; --type-eyebrow-ls: .1em;
 
   --maxw: 1600px; /* maximized width — fills wide screens, side padding via .wrap */
   --gap: 20px;
@@ -206,23 +237,23 @@
     --brand-bright: var(--nota-blue-400);
     --brand-ink: #061c2a;
     --brand-hover: var(--nota-blue-400);
+    --accent-warm: var(--nota-orange-400);
 
-    /* Lifted off true black (owner, 2026-08-27 evening: « the black on the
-       dark theme is too intense ») — the whole dark ramp steps up one notch
-       and stays NEUTRAL graphite (owner, 2026-08-28: « trop vert » — the
-       green cast is gone; brand green lives on controls, not the canvas). */
-    --bg: #0f110f;
+    /* A cool blue-black canvas keeps the dark experience aligned with the
+       Nota mark; no green cast remains in the page background. */
+    --bg: #101820;
     --surface: #0f2030;
     --surface-inset: #132b3f;
     --surface-hover: #19384d;
     --ink: #f4f8fa;
     --ink-muted: #afc2cf;
+    --subtitle-ink: #f4f8fa;
     --border: #294353;
     --border-strong: #3f5f70;
     --ring: var(--nota-blue-400);
 
     --danger: #f97066;
-    --warn: #f79009;
+    --warn: var(--accent-warm);
     --ok: var(--nota-blue-500);
     --danger-solid: #b42318;
     --brand-tint: rgb(var(--nota-blue-400-rgb) / 0.06); /* softened three times (owner, 2026-08-28 « trop vert », 2026-09-01 « trop intense ») */
@@ -236,7 +267,7 @@
     --tier-urgence: #c2410c;
     --tier-extreme: #b42318;
     --tier-rapide-ink: var(--ink-muted); /* NEUTRAL — the green cast was too much (owner, 2026-08-28) */ --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
-    --svc-refinancement: #6dc3b9;
+    --svc-refinancement: #78a9bf;
     --svc-financement: #818cf8;
     --svc-testament: #f0a45d;
     --svc-procuration: #c4a7ff;
@@ -259,23 +290,23 @@
   --brand-bright: var(--nota-blue-400);
   --brand-ink: #061c2a;
   --brand-hover: var(--nota-blue-400);
+  --accent-warm: var(--nota-orange-400);
 
-  /* Lifted off true black (owner, 2026-08-27 evening: « the black on the
-     dark theme is too intense ») — the whole dark ramp steps up one notch
-     and stays NEUTRAL graphite (owner, 2026-08-28: « trop vert » — the
-     green cast is gone; brand green lives on controls, not the canvas). */
-  --bg: #0f110f;
+  /* A cool blue-black canvas keeps the dark experience aligned with the
+     Nota mark; no green cast remains in the page background. */
+  --bg: #101820;
   --surface: #0f2030;
   --surface-inset: #132b3f;
   --surface-hover: #19384d;
   --ink: #f4f8fa;
   --ink-muted: #afc2cf;
+  --subtitle-ink: #f4f8fa;
   --border: #294353;
   --border-strong: #3f5f70;
   --ring: var(--nota-blue-400);
 
   --danger: #f97066;
-  --warn: #f79009;
+  --warn: var(--accent-warm);
   --ok: var(--nota-blue-500);
   --danger-solid: #b42318;
   --brand-tint: rgb(var(--nota-blue-400-rgb) / 0.06); /* softened three times (owner, 2026-08-28 « trop vert », 2026-09-01 « trop intense ») */
@@ -289,7 +320,7 @@
   --tier-urgence: #c2410c;
   --tier-extreme: #b42318;
   --tier-rapide-ink: var(--ink-muted); /* NEUTRAL — the green cast was too much (owner, 2026-08-28) */ --tier-prioritaire-ink: #e0b44a; --tier-urgence-ink: #f0894c; --tier-extreme-ink: #f97066;
-  --svc-refinancement: #6dc3b9;
+  --svc-refinancement: #78a9bf;
   --svc-financement: #818cf8;
   --svc-testament: #f0a45d;
   --svc-procuration: #c4a7ff;
@@ -307,7 +338,7 @@
 
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 /* Selected text answers to the brand, not to the browser's default blue —
-   which read as a foreign UI on a dark hunter-green page and lost contrast on
+     which read as a foreign UI on a dark Nota page and lost contrast on
    the light one. Both halves are stated (never colour alone on a veil). */
 ::selection { background: color-mix(in srgb, var(--brand) 30%, transparent); color: var(--ink); }
 
@@ -339,7 +370,11 @@ body {
    keeps every pane's last card off the footer rule. */
 #main { flex: 1 0 auto; padding-bottom: var(--space-14); }
 
-h1, h2, h3 { letter-spacing: -0.02em; line-height: 1.15; margin: 0; }
+/* Every heading is display type on the shared scale; a pane only colours it. */
+h1, h2, h3 { font-family: var(--font-display); font-weight: var(--weight-display); margin: 0; }
+h1 { font-size: var(--type-h1); line-height: var(--type-h1-lh); letter-spacing: var(--type-h1-ls); text-wrap: balance; }
+h2 { font-size: var(--type-h2); line-height: var(--type-h2-lh); letter-spacing: var(--type-h2-ls); }
+h3 { font-size: var(--type-h3); line-height: var(--type-h3-lh); letter-spacing: var(--type-h3-ls); }
 
 a { color: var(--brand); text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -372,21 +407,28 @@ a:hover { text-decoration: underline; }
 .site-header .wrap {
   display: flex; align-items: center; gap: 12px;
   height: var(--header-h);
+  position: relative;
 }
 .brand {
   display: flex; align-items: center; gap: 8px;
   font-weight: 800; font-size: 18px; letter-spacing: -0.03em; color: var(--ink);
 }
 .brand:hover { text-decoration: none; }
-.brand-mark { width: 26px; height: 26px; display: grid; place-items: center; }
-.brand-mark img { display: block; width: 26px; height: 26px; filter: drop-shadow(var(--logo-shadow)); }
-.brand-word { font-family: var(--font-display); font-weight: 800; }
+.brand-lockup {
+  display: inline-flex; align-items: center; gap: 0; flex: none;
+  color: var(--brand); line-height: 1;
+}
+.brand-mark-svg { display: block; width: 30px; height: 30px; flex: none; transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+.brand-word { display: inline-flex; align-items: center; width: 64px; height: 30px; margin-left: -1px; color: var(--brand); line-height: 1; }
+.brand-word-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.brand-mark { width: 30px; height: 30px; display: grid; place-items: center; }
+.brand-mark img { display: block; width: 30px; height: 30px; filter: drop-shadow(var(--logo-shadow)); }
 .brand-sub {
   color: var(--brand); font-weight: 700; font-size: 10px; text-transform: uppercase;
   letter-spacing: .08em; padding: 2px 6px; background: var(--surface-inset); border-radius: var(--radius-sm);
 }
 .result-count { font-size: 12px; font-weight: 600; color: var(--ink-muted); white-space: nowrap; }
-/* Next-availability cue in the calendar toolbar — a live green dot + soonest
+/* Next-availability cue in the calendar toolbar — a live blue dot + soonest
    open date, so the carnet reads as active at a glance. */
 .cal-avail { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; color: var(--ink); white-space: nowrap; padding: 4px 11px; border: 1px solid var(--border); border-radius: var(--radius); }
 .cal-avail::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--brand-bright); flex: none; }
@@ -438,16 +480,29 @@ a:hover { text-decoration: underline; }
   transition: background-color .18s ease, color .18s ease, border-color .18s ease, transform .18s ease;
 }
 .nav-tab-icon { flex: none; color: currentColor; transition: transform .18s ease; }
+.nav-tab-badge {
+  flex: none; margin-left: 1px; padding: 2px 5px;
+  border: 1px solid currentColor; border-radius: var(--radius-xs);
+  color: var(--brand); font-size: 9px; font-weight: 800;
+  letter-spacing: .06em; line-height: 1; text-transform: uppercase;
+}
 .nav-tab:hover { background: var(--surface-inset); color: var(--ink); }
 .nav-tab:hover .nav-tab-icon { transform: translateY(-1px); }
 .nav-tab[aria-selected='true'] {
-  background: var(--surface-inset); color: var(--brand);
-  border-color: var(--border);
+  background: transparent; color: var(--brand);
+  border-color: var(--brand);
 }
-.nav-tab[aria-selected='true']::after {
-  content: ''; position: absolute; left: 10px; right: 10px; bottom: -5px;
-  height: 2px; border-radius: var(--radius-xs); background: var(--brand-bright);
-  transform-origin: center; animation: navIndicatorIn .24s cubic-bezier(.2,.8,.2,1) both;
+/* The selected tab is carried by its quiet outline and brand text; no
+   underline keeps the centered navigation visually balanced. */
+.nav-tab[aria-selected='true']::after { display: none; }
+@media (min-width: 1100px) {
+  /* Center the primary doors in the viewport, independently of the logo and
+     utility controls. The history pair stays available in the mobile drawer
+     and is hidden here so it cannot pull the visual center off-axis. */
+  .site-header .nav-history { display: none; }
+  .site-header .nav-tabs {
+    position: absolute; left: 50%; transform: translateX(-50%);
+  }
 }
 /* Header compact band: between the drawer threshold (900) and a roomy desktop
    (1100) the full control set — brand, two tabs, language, theme, both auth
@@ -466,21 +521,19 @@ a:hover { text-decoration: underline; }
 }
 
 .icon-btn {
-  appearance: none; border: 1px solid transparent; background: transparent;
+  appearance: none; border: 1px solid var(--border-strong); background: transparent;
   color: var(--ink); width: 34px; height: 34px; border-radius: var(--radius);
   cursor: pointer; display: grid; place-items: center; font-size: 16px;
   transition: background-color .12s, color .12s, border-color .12s;
 }
-.icon-btn:hover { background: var(--surface-inset); }
+.icon-btn:hover { background: transparent; border-color: var(--brand); }
 .icon-btn[aria-pressed='true'] { background: transparent; color: var(--brand); border-color: var(--brand); }
 .icon-btn svg { display: block; }
 .icon-btn:active { transform: scale(0.94); }
 /* Header tool group: guide "?" · FR | EN · theme switch sit TOGETHER on one
-   shared quiet track, every control the same 28px height (owner's ask,
-   2026-08-26: « les mettre ensemble et même grosseur »). The track is a
-   background, never a border; the segment's and the switch's own inset
-   tracks blend into it, and thin hairlines SEGMENT the strip in three
-   (same ask: guide | language | theme), each centred in the gap. */
+   shared control line (owner's ask, 2026-08-26: « les mettre ensemble et
+   même grosseur »). The line itself stays unfilled; active controls carry
+   their own surfaces. */
 .header-tools {
   --tools-gap: 12px;
   display: inline-flex; align-items: center; gap: var(--tools-gap); flex: none;
@@ -536,10 +589,11 @@ a:hover { text-decoration: underline; }
    24px knob slides one cell over. */
 .tswitch {
   appearance: none; position: relative; display: inline-flex; align-items: center;
-  flex: none; height: 28px; padding: 2px; border: 0; border-radius: var(--radius);
+  justify-content: space-between; flex: none; width: 52px; height: 28px; padding: 2px;
+  border: 0; border-radius: var(--radius);
   background: var(--surface-inset); color: var(--ink-muted); cursor: pointer;
 }
-.tswitch svg { position: relative; z-index: 1; display: block; margin: 5.5px; }
+.tswitch svg { position: relative; z-index: 1; display: block; flex: none; margin: 0 5.5px; }
 .tswitch::before {
   content: ''; position: absolute; top: 2px; left: 2px; z-index: 0;
   width: 24px; height: 24px; border-radius: var(--radius-sm);
@@ -693,6 +747,7 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 .mnav-link.is-on { background: var(--surface-inset); color: var(--brand); }
 .mnav-link svg { flex: none; color: var(--ink-muted); }
 .mnav-link.is-on svg { color: var(--brand); }
+.mnav-link .nav-tab-badge { margin-left: auto; }
 /* Focus ring drawn INSIDE the row: the drawer's rows are full-bleed, so the
    default outer ring painted a giant box around the first row on open. */
 .mnav-link:focus-visible { outline: 2px solid var(--ring); outline-offset: -2px; }
@@ -782,7 +837,7 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 }
 .auth-or::before, .auth-or::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
-/* --- Portes à venir ------------------------------------------------------ */
+/* --- Fournisseurs d’authentification ------------------------------------- */
 .auth-social { display: flex; flex-direction: column; gap: 8px; }
 .auth-social-h {
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
@@ -814,21 +869,10 @@ html.nav-open, html.nav-open body { overflow: hidden; }
   background: var(--marque-google-chip); border: 1px solid var(--border);
 }
 .auth-soc-t { flex: 1; font-size: 13.5px; font-weight: 600; color: var(--ink); }
-/* « Bientôt » : le mot est sur le bouton, pas seulement dans une infobulle —
-   la couleur seule ne dirait rien à qui ne la distingue pas. */
-.auth-soc-soon {
-  flex: none; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em;
-  padding: 2px 7px; border-radius: var(--radius-sm);
-  color: var(--ink-muted); background: var(--surface-inset); border: 1px solid var(--border);
-}
 .auth-social-note { text-align: center; margin: 4px 0 0; }
-/* Sous 420px la pastille volait la largeur du libellé, qui passait sur deux
-   lignes pour les trois fournisseurs. Elle rétrécit — le mot reste lisible et
-   reste DANS le bouton, ce qui est ce qui compte pour un lecteur d'écran. */
 @media (max-width: 420px) {
   .auth-soc-btn { padding: 8px 10px; gap: 8px; }
   .auth-soc-t { font-size: 13px; }
-  .auth-soc-soon { font-size: 9px; padding: 2px 5px; letter-spacing: .03em; }
 }
 /* La réponse au clic : vide, elle ne prend aucune place ; remplie, elle se lit
    comme une réponse et non comme une erreur. */
@@ -915,13 +959,13 @@ html.nav-open, html.nav-open body { overflow: hidden; }
    aria-label; 30px box, 44px on coarse pointers via the touch-target rule. */
 .mini-btn {
   display: inline-grid; place-items: center; flex: none;
-  width: 30px; height: 30px; padding: 0; border: 0; border-radius: var(--radius);
+  width: 30px; height: 30px; padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius);
   background: none; color: var(--ink-muted); cursor: pointer;
-  text-decoration: none; transition: background-color .12s ease, color .12s ease, transform .12s ease;
+  text-decoration: none; transition: background-color .12s ease, color .12s ease, border-color .12s ease, transform .12s ease;
 }
-.mini-btn:hover { background: var(--surface-hover); color: var(--brand); text-decoration: none; }
+.mini-btn:hover { background: transparent; border-color: var(--brand); color: var(--brand); text-decoration: none; }
 /* Pressing compresses — the standard tactile cue for an icon-only control. */
-.mini-btn:active { background: var(--surface-inset); transform: scale(.94); }
+.mini-btn:active { background: transparent; border-color: var(--brand); transform: scale(.94); }
 .mini-btn svg { display: block; }
 /* Actions stay quiet until the row they belong to is hovered or focused —
    the data reads first, the tools appear when you go for them. */
@@ -933,7 +977,7 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 /* Hero call-to-action — the buyer's first, obvious action */
 /* margin-top:auto pins the buttons to the BOTTOM of the copy column, so the
    two hero columns end on the same line instead of one trailing off. */
-.hero-cta { display: flex; align-items: center; gap: var(--space-5); flex-wrap: wrap; margin-top: auto; padding-top: var(--space-9); }
+.hero-cta { display: flex; align-items: center; gap: var(--space-5); flex-wrap: wrap; margin-top: var(--space-8); padding-top: 0; }
 /* A slim, equal pair: ONE set height rather than padding-derived boxes, so the
    filled and the outlined button can never drift apart by a border or a wrap.
    Wide screens only — under 681px the pair keeps its full touch height. */
@@ -955,13 +999,13 @@ html.nav-open, html.nav-open body { overflow: hidden; }
    the seam between an open surface and a card needs the larger share of air. */
 /* No wash of its own: the intro sits under the body's edge-to-edge fade — a
    boxed glow here ends at the content column and seams against the gutter. */
-.intro { padding: var(--intro-pad-top) 0 clamp(16px, 2.2vw, 26px); }
+.intro { padding-block: var(--intro-pad-top); }
 /* Split hero: copy on the left, live content on the right — the market pulse on
    Carnet, the "how it works" steps on Notaires. Both asides are CHROMELESS (no
    card, no border, no fill): the hero is one continuous surface, and the two
    columns are tied together by a shared top edge instead of a box. */
 .intro--hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: clamp(20px, 4vw, 48px); align-items: stretch; }
-.intro-main { min-width: 0; display: flex; flex-direction: column; }
+.intro-main { min-width: 0; display: flex; flex-direction: column; justify-content: center; }
 /* The pulse kicker sits on the SAME baseline as the .eyebrow opposite it:
    same 12px, same 700, same inherited 1.5 line-height (kept explicit — the
    two columns start on one line only as long as these agree). */
@@ -973,8 +1017,15 @@ html.nav-open, html.nav-open body { overflow: hidden; }
    box: the rows are separated by rhythm and by their own volume bar, and each
    one is a button that filters the carnet below. */
 .pulse { min-width: 0; display: flex; flex-direction: column; }
-.pulse-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.pulse-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 8px 16px;
+}
 .pulse .hero-steps-title { margin-bottom: 0; }
+.pulse-head .hero-steps-title,
+.pulse-month { min-width: 0; white-space: nowrap; }
 /* fr-CA dates are lower-case (`jeudi 20 août`). `text-transform: capitalize`
    title-cases every word and produced `Jeudi 20 Août`; ::first-letter gives a
    heading its opening capital without touching the month. */
@@ -998,7 +1049,7 @@ html.nav-open, html.nav-open body { overflow: hidden; }
    under the book arrow: the hover card must contain the arrow it points to,
    not stop 10px short and leave it floating beside the card. */
 .pulse-item .pulse-row { flex: 1; min-width: 0; padding-right: 34px; margin-right: -34px; }
-.pulse-item .mini-btn { margin-right: -8px; }
+.pulse-item .mini-btn { margin-right: -12px; }
 /* The book action wakes with the row: brand colour plus a 2px nudge toward
    where the click leads. transform joins the mini-btn transition below. */
 .pulse-item:hover .mini-reserver, .pulse-item:focus-within .mini-reserver { color: var(--brand); transform: translateX(2px); }
@@ -1026,7 +1077,7 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 }
 .pulse-row.is-on { background: var(--surface-inset); }
 .pulse-item:hover .pulse-svc, .pulse-item:focus-within .pulse-svc, .pulse-row.is-on .pulse-svc { color: var(--brand); }
-.pulse-svc { grid-column: 1 / 3; grid-row: 1; display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 14px; font-weight: 700; transition: color .12s ease; }
+.pulse-svc { grid-column: 1 / 3; grid-row: 1; display: flex; align-items: center; gap: 7px; min-width: 0; font-size: clamp(12px, 1.1vw, 14px); font-weight: 700; line-height: 1.25; transition: color .12s ease; }
 .pulse-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 /* One glyph per act, so a service is recognised before its name is read. */
 .svc-ic { flex: none; display: block; }
@@ -1040,10 +1091,10 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 .legend-item .svc-ic, .legend-status-item .svc-ic { margin-right: 1px; }
 /* Two figures per act, because they answer two questions: the floor the server
    will accept at all, and what other clients are actually offering this month. */
-.pulse-figs { grid-column: 3; grid-row: 1 / 3; display: flex; align-items: baseline; gap: 18px; white-space: nowrap; }
+.pulse-figs { grid-column: 3; grid-row: 1 / 3; display: flex; align-items: baseline; gap: clamp(10px, 1.4vw, 18px); min-width: max-content; white-space: nowrap; }
 .pulse-fig { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
-.pulse-fig-k { font-size: 10.5px; font-weight: 600; color: var(--ink-muted); letter-spacing: .01em; }
-.pulse-fig-v { font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.pulse-fig-k { font-size: 10.5px; font-weight: 600; color: var(--ink-muted); letter-spacing: .01em; white-space: nowrap; }
+.pulse-fig-v { font-size: clamp(13px, 1.2vw, 15px); font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pulse-fig-v.is-empty { color: var(--ink-muted); font-weight: 600; }
 .pulse-meta { grid-column: 1; grid-row: 2; font-size: 11.5px; color: var(--ink-muted); padding-left: 22px; white-space: nowrap; }
 /* Share of the month's demand, in the service's own hue. The gauge runs the
@@ -1070,16 +1121,15 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 @media (max-width: 900px) {
   .pulse-row { padding-block: 10px; } /* comfortable touch target when stacked */
 }
-.intro h1 { font-size: clamp(21px, 2.4vw, 28px); font-weight: 800; line-height: 1.15; margin-top: 4px; }
-/* 68ch, not 60: the hero copy owns half the page, and the shorter measure left
-   a visible blank gutter down its right edge. */
-.intro p { color: var(--ink-muted); max-width: 68ch; margin: 8px 0 0; font-size: 14.5px; line-height: 1.5; }
+.intro h1 { margin-top: 4px; }
+/* The lede mirrors the beta's: same size, leading and measure. */
+.intro p { color: var(--ink-muted); max-width: 47ch; margin: 22px 0 0; font-size: var(--type-lead); line-height: var(--type-lead-lh); }
 /* Block, not inline-block: as an inline box it sat on the line-box strut, so on
    wide viewports (where it fits on ONE line) it dropped ~4px below the aside's
    kicker opposite it and the two hero columns started off-line. */
 .eyebrow {
-  display: block; font-size: 12px; font-weight: 700; line-height: 1.5; text-transform: uppercase;
-  letter-spacing: 0.08em; color: var(--brand); margin-bottom: 8px;
+  display: block; font-size: var(--type-eyebrow); font-weight: var(--weight-display); line-height: 1.5; text-transform: uppercase;
+  letter-spacing: var(--type-eyebrow-ls); color: var(--subtitle-ink); margin-bottom: 16px;
 }
 
 
@@ -1246,7 +1296,7 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--brand); }
 .cal-cell:focus-visible { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px var(--focus-ring); }
 /* Demand days carry NO box of their own: the price + chance% (and the thin left
    tier strip) are the signal. No fill, no border — empty days stay blank, so the
-   month reads as figures on a grid, not a wall of green rectangles. */
+   month reads as figures on a grid, not a wall of blue rectangles. */
 .cal-cell.has-bids { background: transparent; }
 .cal-cell.has-bids:hover { background: var(--surface-hover); }
 /* Urgency, said in words and only on the dates where it changes the decision.
@@ -1268,9 +1318,10 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--brand); }
 .cal-urgency[data-tier='rapide'] { color: var(--tier-rapide-ink); }
 .cal-urgency[data-tier='prioritaire'] { color: var(--tier-prioritaire-ink); }
 .cal-urgency[data-tier='urgence'] { color: var(--tier-urgence-ink); }
-/* The steepest step is the one a client must not miss, so it is the only one
-   that fills rather than tints. */
-.cal-urgency[data-tier='extreme'] { color: var(--on-accent); background: var(--tier-extreme); padding: 0 var(--space-1); border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
+/* The steepest step is the one a client must not miss: it takes the darkest
+   ink of the four, but no fill — no number in the grid carries a background
+   (owner, 2026-09-10), the word and the colour say it. */
+.cal-urgency[data-tier='extreme'] { color: var(--tier-extreme-ink); }
 .legend-mult { font-weight: 800; }
 .cal-cell[data-tier]::before {
   content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
@@ -1293,12 +1344,12 @@ input[type='checkbox'], input[type='radio'] { accent-color: var(--brand); }
   font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
   color: var(--ink-muted);
 }
-/* Today gets the classic filled date-circle (a data indicator, not a button) —
-   the clearest "you are here" affordance, matching the count badge's fill. */
+/* Today is said in ink alone — brand colour and the heavy weight, no fill.
+   Owner, 2026-09-10: « remove the colour fill from the 10 and any number » —
+   a filled square read as a button, and a date is a fact, not a control. */
 .cal-cell.is-today .cal-daynum {
-  align-self: flex-start; display: inline-flex; align-items: center; justify-content: center;
-  min-width: 20px; height: 20px; padding: 0 5px; border-radius: var(--radius-sm);
-  background: var(--brand); color: var(--on-accent); font-weight: 800;
+  align-self: flex-start; display: inline-flex; align-items: center;
+  min-height: 20px; color: var(--brand); font-weight: 800;
   /* The phone grid prints the weekday as ::before with a trailing space —
      flex layout drops that space from the flow, fusing « JEU27 ». The pill
      carries its own gap (inert on desktop, where no ::before exists). */
@@ -1777,8 +1828,8 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 /* Same voice as every other pane (owner, 2026-08-27: « même taille et même
    style que espace notaire ») — the headline and lede mirror .intro h1/.intro p
    exactly, so the three doors open on one consistent register. */
-.pr-hero h1 { font-size: clamp(21px, 2.4vw, 28px); font-weight: 800; line-height: 1.15; margin-top: 4px; }
-.pr-hero p { color: var(--ink-muted); max-width: 60ch; margin: 8px 0 0; font-size: 14.5px; line-height: 1.5; }
+.pr-hero h1 { margin-top: 4px; }
+.pr-hero p { color: var(--ink-muted); max-width: 47ch; margin: 22px 0 0; font-size: var(--type-lead); line-height: var(--type-lead-lh); }
 /* The hero's own door to the claim form — the one action the pane sells. */
 .pr-hero-cta { margin-top: var(--space-8); align-self: flex-start; }
 @media (max-width: 900px) {
@@ -1828,41 +1879,26 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
   display: flex; flex-direction: column; gap: var(--space-3);
   padding: var(--space-9) var(--space-10);
   border-radius: var(--radius-lg);
-  /* Borderless (owner: « remove those big borders ») — the card reads as a
-     plain island against the hero's wash, lifted only by its shadow. The FULL
-     shadow token, not -sm: in light mode the card is white inside a white
-     band, and the faint -sm float is all but invisible there.
-     The shared 90 % skin (owner, 2026-08-27: « we can do like 95 or 90
-     opacity ») lets the hero's wash seat the cards into the band instead of
-     punching two hard islands out of it.
-     BOTH cards pour brand tint (owner, 2026-08-27 soir: « these are looking
-     weird » — on the dark themes the plain-surface sibling read as a black
-     hole beside the tinted one, two unrelated slabs). The pair now shares
-     one green register; the notaire highlight is carried by DEPTH of pour
-     (the strong mix below), never by a different kind of skin. */
-  background: color-mix(in srgb, var(--brand-tint-solid) var(--surface-veil-mix), transparent);
-  box-shadow: var(--shadow);
-  /* Blur what bleeds through: the drifting site-bg marks pass behind the
-     cards, and unblurred they read as stains through the 90% skin. */
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  /* Transparent by design: the rewards belong to the page's visual field,
+     while the hairline keeps each stat grouped without creating two opaque
+     slabs on the dark background. */
+  background: transparent;
+  border: 1px solid color-mix(in srgb, var(--brand) 42%, var(--border));
+  box-shadow: none;
   /* A plain stat (audit P1-3): the hero CTA is the one door to the claim
      form. A div that looked pressable was unreachable by keyboard and
      unnamed to a screen reader — no pointer, no lift, no corner arrow. */
 }
 .pr-card--notaire {
-  /* The highlight is the tint alone, never a ring — the OPAQUE tint token,
-     so the hero's glow can never bleed through the card. The STRONG pour:
-     at the component mix the dark themes rendered this card as washed grey
-     beside its --surface sibling (owner, 2026-08-27: « this background look
-     weird ») — the deep mix keeps it unmistakably brand-green in both. Same
-     90 % skin as its sibling, so the pair sits into the band on one finish. */
-  background: color-mix(in srgb, var(--brand-tint-solid-strong) var(--surface-veil-mix), transparent);
+  /* The stronger border is enough to distinguish the higher-value track;
+     keep the interior transparent so both cards sit on the same background. */
+  border-color: var(--brand);
 }
 /* The kicker is a label with intent, not a whisper: brand ink (the readable
    pairing .auth-soon already proves over the strong tint in both themes) and
    a wider track. The right padding keeps it clear of the corner « → » on the
    narrowest card. */
-.pr-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: var(--brand-on-tint-strong); padding-right: var(--space-12); }
+.pr-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; color: var(--subtitle-ink); padding-right: var(--space-12); }
 /* The figure IS the card (owner, 2026-08-27: « do better for 50 and 250 ») —
    display size, dense tracking, on its own line. */
 .pr-amount { margin-top: var(--space-2); font-size: clamp(36px, 3.6vw, 50px); font-weight: 800; letter-spacing: -0.035em; color: var(--brand-on-tint-strong); font-variant-numeric: tabular-nums; line-height: 1; }
@@ -2515,7 +2551,7 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .doc-valid input { accent-color: var(--brand); }
 .doc-file { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; color: var(--ink-muted); }
 .doc-file-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The ✓ only shows once the item is actually provided — a green check on
+/* The ✓ only shows once the item is actually provided — a blue check on
    every empty row made 0/8 read as done. */
 .dossier-check { flex: none; margin-top: 2px; width: 18px; height: 18px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); display: grid; place-items: center; color: transparent; font-weight: 800; font-size: 12px; }
 .dossier-check[data-on='true'] { background: transparent; color: var(--brand); border-color: var(--brand); }
@@ -2544,11 +2580,11 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
 
 /* --- Model / footer sections -------------------------------------------- */
 .section { padding: clamp(24px, 4vw, 40px) 0; border-top: 1px solid var(--border); }
-.section h2 { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+.section h2 { margin-bottom: 8px; }
 .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px; }
 @media (max-width: 780px) { .cards { grid-template-columns: 1fr; } }
 .card { border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-9); background: var(--surface); box-shadow: var(--shadow-sm); }
-.card h3 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+.card h3 { margin-bottom: 6px; }
 .card p { color: var(--ink-muted); font-size: 14px; margin: 0; }
 .price { font-size: 22px; font-weight: 800; color: var(--brand); }
 
@@ -2631,8 +2667,8 @@ dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(2px); }
    pinned to the top-right corner while the dialog scrolls and costs no layout.
    The filled circle keeps the glyph legible over whatever slides beneath it. */
 .dlg-x-form { position: sticky; top: 0; height: 0; margin: 0; z-index: 6; display: flex; justify-content: flex-end; }
-.dlg-x { appearance: none; border: 0; background: var(--surface-inset); color: var(--ink-muted); cursor: pointer; width: 34px; height: 34px; margin: 10px 10px 0 0; border-radius: var(--radius); display: grid; place-items: center; flex: none; }
-.dlg-x:hover { background: var(--surface-hover); color: var(--ink); }
+.dlg-x { appearance: none; border: 1px solid var(--border-strong); background: transparent; color: var(--ink-muted); cursor: pointer; width: 34px; height: 34px; margin: 10px 10px 0 0; border-radius: var(--radius); display: grid; place-items: center; flex: none; }
+.dlg-x:hover { background: transparent; border-color: var(--brand); color: var(--ink); }
 /* 34px is under the touch minimum — give fingers 44px without changing what a
    mouse sees. */
 @media (pointer: coarse) { .dlg-x { width: 44px; height: 44px; } }
@@ -2642,12 +2678,12 @@ dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(2px); }
 html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 /* The account-link confirmation is created after the OAuth callback. */
 #oauth-link-dialog { padding: 24px; width: min(440px, calc(100vw - 32px)); }
-#oauth-link-dialog h2 { font-size: 20px; margin: 0 0 12px; }
+#oauth-link-dialog h2 { margin: 0 0 12px; }
 #oauth-link-dialog form { display: grid; gap: 10px; margin: 18px 0; }
 #oauth-link-dialog input { box-sizing: border-box; width: 100%; min-height: 44px; }
 #oauth-link-dialog .help { line-height: 1.5; }
 .dialog-pad { padding: 22px; }
-.dialog-pad h3 { font-size: 18px; margin-bottom: 8px; }
+.dialog-pad h3 { margin-bottom: 8px; }
 .dialog-pad p { color: var(--ink-muted); font-size: 14px; margin: 0 0 16px; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
 /* The public rating badge — brand star, tabular figures, quiet count. */
@@ -2721,8 +2757,26 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 #contact-dialog h3 { margin-bottom: var(--space-3); padding-right: 52px; }
 #contact-dialog .ct-lede { padding-right: 28px; }
 #contact-dialog .ct-lede { font-size: 14px; line-height: 1.45; margin: 0 0 var(--space-6); max-width: 52ch; }
+#contact-dialog .ct-trust {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-2);
+  margin: calc(-1 * var(--space-2)) 0 var(--space-7); padding: var(--space-3);
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset);
+}
+#contact-dialog .ct-trust-item {
+  display: flex; align-items: flex-start; gap: var(--space-2); min-width: 0;
+  color: var(--ink); font-size: 11px; line-height: 1.25;
+}
+#contact-dialog .ct-trust-item strong,
+#contact-dialog .ct-trust-item small { display: block; }
+#contact-dialog .ct-trust-item strong { font-size: 11px; font-weight: 800; }
+#contact-dialog .ct-trust-item small { margin-top: 2px; color: var(--ink-muted); font-size: 10.5px; line-height: 1.25; }
+#contact-dialog .ct-trust-mark {
+  display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--brand-tint); color: var(--brand); font-weight: 800;
+}
 #contact-dialog .form-row { margin-bottom: var(--space-5); }
 #contact-dialog .lbl { margin-bottom: var(--space-2); }
+#contact-dialog .ct-field-help { margin: var(--space-2) 0 0; font-size: 11.5px; line-height: 1.35; }
 /* Le libellé et son compteur partagent UNE ligne — le compteur garde sa
    réserve (ADR 0039) sur une hauteur qui existait déjà. */
 #contact-dialog .lbl-row { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-4); }
@@ -2755,6 +2809,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
   #contact-dialog { width: calc(100vw - 16px); max-width: none; max-height: calc(100% - 16px); margin: 8px auto; }
   #contact-dialog .ct-pad { padding: var(--space-7) var(--space-6) var(--space-6); }
   #contact-dialog .ct-lede { margin-bottom: var(--space-5); padding-right: 52px; }
+  #contact-dialog .ct-trust { grid-template-columns: 1fr; margin-bottom: var(--space-6); }
   #contact-dialog .form-row { margin-bottom: var(--space-5); }
   #contact-dialog textarea { min-height: 52px; }
 }
@@ -2802,7 +2857,7 @@ html:has(dialog[open]), body:has(dialog[open]) { overflow: hidden; }
 .day-value-k { font-size: 12px; font-weight: 600; color: var(--ink-muted); flex: 1 1 12ch; min-width: 0; }
 .day-value-v { font-size: 15px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
 .day-value-note { min-height: 1.5em; font-size: 12px; color: var(--ink-muted); margin: 2px 0 0; }
-/* The live line flips green the moment the slider clears the bar. */
+/* The live line flips blue the moment the slider clears the bar. */
 .day-value-note.is-ahead { color: var(--ok); font-weight: 600; }
 /* One tap over the bar — small, inline, at the end of the strip's line. */
 .day-beat {
@@ -3190,7 +3245,7 @@ dialog:focus, dialog:focus-visible { outline: none; }
 #o-service-chips .chip-soon:hover { background: transparent; border-color: var(--border); color: var(--ink-muted); transform: none; }
 #o-service-chips .chip-soon .chip-svc-main { font-weight: 600; }
 #o-service-chips .chip-soon .chip-svc-badge { background: transparent; border-style: dashed; }
-/* Sur une feuille LARGE, les cartes d'acte se couchent : le glyphe à gauche, le
+/* Sur une feuille assez LARGE, les cartes d'acte se couchent : le glyphe à gauche, le
    nom à sa droite, le prix (ou « Bientôt ») au bout de la ligne. Debout, elles
    encaissaient toute la largeur gagnée en VIDE — près de 400 px de carte pour
    un mot, et deux actes seulement annoncés qui pesaient autant que les deux
@@ -3209,7 +3264,30 @@ dialog:focus, dialog:focus-visible { outline: none; }
   #o-service-chips .chip-svc-sub { margin-left: auto; padding-right: var(--space-6); }
   /* Le crochet du choix reprend sa place au coin, dégagé du montant. */
   #o-service-chips .chip-svc-check { top: 50%; transform: translateY(-50%) scale(.7); }
-  #o-service-chips .chip.is-on .chip-svc-check { transform: translateY(-50%); }
+    #o-service-chips .chip.is-on .chip-svc-check { transform: translateY(-50%); }
+}
+/* On narrow phones the four acts intentionally stay in one column, but they
+   are still simple choices — not four tall poster cards. Keep the 44px touch
+   floor while placing the icon, name and day figure on a compact two-line
+   rail. One column also gives long names their full reading width. */
+@media (max-width: 520px) {
+  #o-service-chips { grid-template-columns: 1fr; grid-auto-rows: auto; gap: 8px; }
+  #o-service-chips .chip {
+    display: grid; grid-template-columns: 36px minmax(0, 1fr);
+    grid-template-rows: auto auto; align-items: center; justify-content: stretch;
+    gap: 2px 10px; min-height: 76px; box-sizing: border-box;
+    padding: 10px 12px; text-align: left; white-space: normal;
+  }
+  #o-service-chips .chip-svc-badge { grid-column: 1; grid-row: 1 / span 2; }
+  #o-service-chips .chip-svc-main {
+    grid-column: 2; grid-row: 1; min-width: 0; font-size: 14px;
+    line-height: 1.25; overflow-wrap: anywhere;
+  }
+  #o-service-chips .chip-svc-sub {
+    grid-column: 2; grid-row: 2; min-height: 0 !important; margin: 0;
+    padding: 0; line-height: 1.2;
+  }
+  #o-service-chips .chip-svc-check { top: 8px; right: 8px; font-size: 12px; }
 }
 #o-service-chips .chip-soon .svc-ic { opacity: .7; }
 /* « Bientôt » tient sur la ligne RÉSERVÉE AU PRIX, sous le nom (2026-09-06) :
@@ -3331,9 +3409,9 @@ dialog:focus, dialog:focus-visible { outline: none; }
      oubli. */
   grid-template-areas:
     "hero       hero"
-    "livehead   ."
+    "livehead   beta"
     "live       console"
-    "carnet     ."
+    "live       carnet"
     "conformite conformite"
     "guarantee  guarantee";
   column-gap: clamp(32px, 5vw, 80px);
@@ -3346,7 +3424,7 @@ dialog:focus, dialog:focus-visible { outline: none; }
    the pane folds into one centred column: gate, then agenda. */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])):has(#notary-live[hidden]) {
   grid-template-columns: minmax(0, 520px);
-  grid-template-areas: "hero" "console" "conformite" "carnet" "guarantee";
+  grid-template-areas: "hero" "beta" "console" "conformite" "carnet" "guarantee";
   justify-content: center;
 }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])):has(#notary-live[hidden]) .nc-landing-head { display: none; }
@@ -3355,16 +3433,18 @@ dialog:focus, dialog:focus-visible { outline: none; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro-main     { max-width: none; }
 /* Keep a readable measure on the lede without capping the whole hero block. */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro p { max-width: 78ch; }
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-ai-beta-note {
+  grid-area: beta; align-self: start; width: 100%; margin-top: var(--space-2);
+}
+#pane-notaires .notary-ai-beta-note[hidden] { display: none !important; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-live        { grid-area: live; align-self: start; }
-/* L'agenda ferme la colonne de gauche, sous la grille des demandes — jamais
-   une bande pleine largeur (retour du propriétaire, 2026-08-25 : à pleine
-   largeur ce n'était que de l'air). Il garde la largeur de sa colonne. */
+/* L'agenda ferme la colonne de droite, sous la porte d'accès : les demandes
+   restent la lecture principale à gauche et l'outil de prospection accompagne
+   naturellement le compte notaire sans descendre sous tout le contenu. */
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet  {
   grid-area: carnet; align-self: start;
-  /* Sa propre bande, pas la queue de la grille des demandes : le même filet
-     que « Conformité » emploie plus bas, donc la colonne se lit en trois
-     temps — les demandes, l'agenda, la conformité. */
-  margin-top: var(--space-16); padding-top: var(--space-12);
+  /* Sa propre bande, sous la porte, sans créer un second écran vide. */
+  margin-top: var(--space-10); padding-top: var(--space-8);
   border-top: 1px solid var(--border);
 }
 /* The console anchors to the TOP of the "live" row — no margin at all: its
@@ -3379,7 +3459,7 @@ dialog:focus, dialog:focus-visible { outline: none; }
      plain 90 % skin it read as furniture (owner, 2026-08-27: « ça semble
      faible versus la partie à gauche »). It takes a brand pour: tint alone,
      never a ring, same 90 % skin — the REGULAR tint, not the strong pour
-     (owner, 2026-08-27 soir: the deep green read too intense beside the
+     (owner, 2026-08-27 soir: the deep blue read too intense beside the
      grid). Signed in, the console is a workspace and stays fully opaque. */
   background: color-mix(in srgb, var(--brand-tint-solid) var(--surface-veil-mix), transparent);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
@@ -3402,6 +3482,55 @@ dialog:focus, dialog:focus-visible { outline: none; }
 /* Hero collapses to a single column on THIS pane only (the client carnet hero
    keeps its two columns). */
 #pane-notaires .intro--hero { display: block; }
+#pane-notaires > .wrap:has(#notary-authed:not([hidden])) .notary-ai-beta-note { display: none; }
+
+/* Assisted-preparation announcement: it belongs in the right rail beside the
+   inventory, with an outlined resting state and no filled slab. Its explanation
+   is a hover/focus surface, so it floats over the page and never changes the
+   height of the landing grid. */
+.beta-teaser { position: relative; }
+.beta-teaser-trigger {
+  appearance: none; display: flex; align-items: center; gap: var(--space-4);
+  width: 100%; min-height: 44px; box-sizing: border-box; padding: var(--space-5) var(--space-6);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: transparent; color: var(--ink); font: inherit; text-align: left;
+  transition: border-color .15s, box-shadow .15s;
+}
+.beta-teaser-trigger:hover,
+.beta-teaser:focus-within .beta-teaser-trigger { border-color: var(--border-strong); }
+.beta-teaser-copy { display: grid; gap: 1px; min-width: 0; }
+.beta-teaser-trigger .sub-card-kicker { margin: 0; font-size: 9.5px; }
+.beta-teaser-trigger .sub-card-title { font-size: 12.5px; line-height: 1.2; }
+.beta-teaser-hint { margin-left: auto; color: var(--ink-muted); font-size: 12px; white-space: nowrap; }
+.beta-teaser-info {
+  appearance: none; display: grid; place-items: center; flex: none; width: 32px; height: 32px;
+  border: 1px solid var(--border-strong); border-radius: 50%; color: var(--brand);
+  background: var(--surface-inset); font: inherit; font-size: 15px; font-weight: 800; line-height: 1;
+  cursor: pointer; transition: border-color .15s, transform .15s;
+}
+.beta-teaser-info:hover { border-color: var(--brand); transform: scale(1.05); }
+.beta-teaser-info:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
+.beta-teaser:hover, .beta-teaser:focus-within { z-index: 30; }
+.beta-teaser-details {
+  position: absolute; z-index: 40; top: calc(100% + var(--space-4)); right: 0;
+  width: min(520px, calc(100vw - 32px)); max-height: min(70vh, 430px); box-sizing: border-box;
+  overflow-y: auto; margin: 0; padding: var(--pad-card); border: 1px solid var(--border);
+  border-radius: var(--radius-lg); background: var(--surface); box-shadow: var(--shadow-lg);
+  opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-4px);
+  transition: opacity .15s ease, visibility .15s ease, transform .15s ease;
+}
+.beta-teaser:hover .beta-teaser-details,
+.beta-teaser:focus-within .beta-teaser-details {
+  opacity: 1; visibility: visible; pointer-events: auto; transform: none;
+}
+.beta-teaser-details .sub-card-sub { margin-top: 0; }
+.beta-teaser-details p { margin-inline: 0; }
+.beta-teaser-details .help { margin: var(--space-5) 0 0; }
+.beta-teaser-ask { margin: var(--space-5) 0 var(--space-3); color: var(--ink); font-size: 12.5px; font-weight: 700; }
+.beta-teaser-details .btn { width: auto; }
+@media (max-width: 560px) {
+  .beta-teaser-details { right: auto; left: 0; width: min(520px, calc(100vw - 32px)); }
+}
 /* SIGNED-IN: the pane is a workspace, not a pitch. The hero keeps only its
    heading (panes focus their h1 on navigation), the lede goes, and the
    prospecting band slides behind the console (flex order — the wrap is a flex
@@ -3411,7 +3540,7 @@ dialog:focus, dialog:focus-visible { outline: none; }
 /* Signed-in, the headline is a room label, not a pitch: it shrinks and the
    intro's air tightens so the first CONFIRMABLE demand lands on the first
    screen at every width. */
-#pane-notaires > .wrap:has(#notary-authed:not([hidden])) .intro--hero h1 { font-size: 18px; }
+#pane-notaires > .wrap:has(#notary-authed:not([hidden])) .intro--hero h1 { font-size: var(--type-h3); line-height: var(--type-h3-lh); letter-spacing: var(--type-h3-ls); }
 #pane-notaires > .wrap:has(#notary-authed:not([hidden])) .intro { padding-bottom: 6px; }
 #pane-notaires > .wrap:has(#notary-authed:not([hidden])) .notary-carnet { order: 1; }
 #pane-notaires > .wrap:has(#notary-authed:not([hidden])) .nota-guarantee { order: 2; }
@@ -3433,7 +3562,7 @@ dialog:focus, dialog:focus-visible { outline: none; }
 @media (max-width: 1000px) {
   #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas: "hero" "livehead" "live" "console" "conformite" "carnet" "guarantee";
+    grid-template-areas: "hero" "beta" "livehead" "live" "console" "conformite" "carnet" "guarantee";
   }
   /* The two-column rule sizes this margin to seat the console on the hero
      H1's line. Stacked, the card steps down the page on the same --space-10
@@ -3449,16 +3578,18 @@ dialog:focus, dialog:focus-visible { outline: none; }
    line of pitch. Cards mirror the console's .nc-card surface; the whole card
    is a button into the sign-in. */
 .nc-live[hidden] { display: none; }
+.nc-live {
+  padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface-veil); box-shadow: var(--shadow-sm);
+}
 .nc-live-head { display: flex; align-items: baseline; gap: var(--space-6); flex-wrap: wrap; margin-bottom: var(--space-5); }
 .nc-live-h { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; margin: 0; }
 /* Signed-in the wrap is a flex column and the inventory is the console's own
    list — the landing header row has nothing to head. */
 #pane-notaires > .wrap:has(#notary-authed:not([hidden])) .nc-landing-head { display: none; }
-/* auto-rows 1fr: every row — including the lone "+N autres" overflow card on
-   narrow grids — shares the same height, so no card breaks the row format.
-   auto-FIT (not fill): a sparse month collapses the empty tracks, so three
-   tiles widen into a full, deliberate row instead of huddling beside a void. */
-.nc-live-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(215px, 100%), 1fr)); grid-auto-rows: 1fr; gap: var(--space-5); }
+/* Natural rows keep the live inventory compact; auto-FIT (not fill) lets a
+   sparse month widen its tiles instead of huddling beside a void. */
+.nc-live-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(215px, 100%), 1fr)); grid-auto-rows: auto; gap: var(--space-4); }
 /* The act's name never shares a line with the tier pill. It used to: at four
    up on a desktop the name had ~84px and read « Refinance… », at two up on a
    phone ~60px and read « Refin… » — refinancement and financement became the
@@ -3526,6 +3657,7 @@ dialog:focus, dialog:focus-visible { outline: none; }
   .nc-live-amt { font-size: 17px; }
   .nc-live-meta { font-size: 11px; }
 }
+
 .nc-live-more:hover { border-style: solid; border-color: var(--brand); background: var(--brand-tint-solid); }
 .nc-live-more strong { font-size: 14px; font-weight: 800; }
 .nc-live-more .nc-live-meta { color: inherit; }
@@ -3550,7 +3682,7 @@ dialog:focus, dialog:focus-visible { outline: none; }
   background: var(--surface-inset);
 }
 .nc-week-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
-.nc-week-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); }
+.nc-week-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--subtitle-ink); }
 .nc-week-total { position: relative; display: inline-flex; align-items: baseline; gap: var(--space-3); font-size: 13px; color: var(--ink-muted); }
 .nc-week-total strong { display: inline-block; color: var(--brand); font-weight: 800; font-variant-numeric: tabular-nums; }
 /* A small pop each time money lands on the board. */
@@ -3711,6 +3843,35 @@ dialog:focus, dialog:focus-visible { outline: none; }
 }
 
 #notary-console { margin-top: 12px; max-width: none; }
+
+/* Paid AI preparation is an optional work surface, not a gate on the free
+   dossier. Keep its conversion card compact and let the normal checklist lead. */
+.nc-ai-product {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px 20px;
+  align-items: center; margin: 0 0 var(--space-6); padding: 16px 18px;
+  border: 1px solid color-mix(in srgb, var(--brand) 28%, var(--border));
+  border-radius: var(--radius); background: color-mix(in srgb, var(--brand-tint-solid) 42%, var(--surface));
+}
+.nc-ai-product-copy { min-width: 0; }
+.nc-ai-kicker { margin: 0 0 3px; color: var(--subtitle-ink); font-size: 10px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.nc-ai-title { margin: 0; color: var(--ink); font-size: 17px; line-height: 1.2; }
+.nc-ai-lead { margin: 5px 0 0; color: var(--ink-muted); font-size: 13px; line-height: 1.45; }
+.nc-ai-product-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 7px; }
+.nc-ai-product-actions select, .nc-ai-product-actions input { min-height: 34px; max-width: 260px; padding: 6px 8px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; font-size: 12px; }
+.nc-ai-product-actions input { width: 60px; }
+.nc-ai-quota { padding: 7px 10px; border-radius: var(--radius-sm); background: var(--surface); color: var(--brand-ink); font-size: 12px; font-weight: 750; }
+.nc-ai-product-status { grid-column: 1 / -1; margin: 0; }
+.nc-ai-questions { margin: 8px 0 16px; padding-left: 20px; }
+.nc-ai-questions > li { margin: 0 0 14px; }
+.nc-ai-question-feedback { margin-top: 8px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-inset); }
+.nc-ai-question-feedback .field { margin: 0 0 8px; }
+.nc-ai-question-feedback textarea { width: 100%; min-height: 44px; resize: vertical; }
+.nc-ai-question-feedback .btn { margin-top: 2px; }
+.nc-ai-question-feedback [role='status'] { margin: 7px 0 0; }
+@media (max-width: 680px) {
+  .nc-ai-product { grid-template-columns: 1fr; }
+  .nc-ai-product-actions { justify-content: flex-start; }
+}
 /* Gate headings (« Accédez aux demandes », « Vérifiez votre boîte courriel »)
    speak in the panel-heading register the partners form panel set: 18px,
    tightened, with the same breath below before the form begins. */
@@ -3722,7 +3883,7 @@ dialog:focus, dialog:focus-visible { outline: none; }
 .nc-gate-main { min-width: 0; }
 /* The gate's brand kicker — same grammar as the carnet card's « Votre outil
    de prospection », so the right column speaks with one voice. */
-.nc-gate-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: var(--space-3); }
+.nc-gate-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--subtitle-ink); margin-bottom: var(--space-3); }
 /* On the brand-poured card the gate heading carries the column: a step up
    from the console's working 18px, still under the hero's h1. */
 #notary-console .nc-gate .h-sub { font-size: 21px; margin-bottom: var(--space-7); }
@@ -3741,7 +3902,7 @@ dialog:focus, dialog:focus-visible { outline: none; }
 .nc-auth .form-row input { width: 100%; padding: 10px 12px; font-size: 15px; }
 /* Opaque surface under the brand outline: on the poured card a transparent
    button let the tint bleed through and the door dissolved into its wall. */
-.nc-auth-cta { width: 100%; padding: 10px 16px; font-size: 15px; background: var(--surface); }
+.nc-auth-cta { width: 100%; padding: 10px 16px; font-size: 15px; background: var(--brand); color: var(--brand-ink); border-color: var(--brand); }
 .nc-auth-fine { margin-top: 10px; }
 /* New-notary welcome: the gate's second step. It REPLACES the email step (the
    "Continuer" action branched here), so it must read as a welcome, not as an
@@ -3996,7 +4157,7 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 
 /* Inline forms (proposition / documents) open under the card's actions. */
 .nc-inline { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
-.nc-form-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); }
+.nc-form-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--subtitle-ink); }
 .nc-form-row { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
 .nc-form-lbl { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: var(--ink-muted); }
 .nc-propose-amt { max-width: 140px; }
@@ -4010,7 +4171,7 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 .nc-missing { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: var(--danger); border: 1px solid var(--danger); border-radius: var(--radius-sm); padding: 0 6px; }
 
 .nc-dossier { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
-.nc-dossier-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: 8px; }
+.nc-dossier-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--subtitle-ink); margin-bottom: 8px; }
 .nc-workflow { margin: 12px 0 16px; padding: 12px 14px; background: var(--surface-inset); border: 1px solid var(--border); border-radius: var(--radius); }
 .nc-workflow .nc-dossier-h { margin-bottom: 6px; }
 .nc-workflow-ai { margin: 8px 0; font-size: 13px; color: var(--ink); }
@@ -4138,7 +4299,7 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
 }
 .nc-banner[hidden] { display: none; }
 .nc-banner-body { flex: 1 1 280px; min-width: 0; }
-.nc-banner-h { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; color: var(--brand); }
+.nc-banner-h { font-size: 14px; font-weight: 800; letter-spacing: -0.01em; color: var(--subtitle-ink); }
 .nc-banner-p { margin: var(--space-2) 0 0; font-size: 13px; color: var(--ink-muted); }
 .nc-banner-list { margin: var(--space-2) 0 0; padding-left: 18px; font-size: 13px; color: var(--ink); }
 .nc-banner-list li { padding: 1px 0; }
@@ -4345,6 +4506,47 @@ body.is-notary-session #tab-notaires { pointer-events: none; }
   content: ''; position: absolute; left: 0; top: 8px; width: 8px; height: 8px;
   border-radius: var(--radius-xs); background: var(--brand);
 }
+/* --- Security and compliance -------------------------------------------
+   A quiet trust block: one outer surface, with no stack of nested borders or
+   certification-looking badges. The wording deliberately distinguishes an
+   active programme from a completed audit. */
+.compliance-section {
+  margin-top: var(--space-8); padding: clamp(20px, 3vw, 28px);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: var(--surface-inset);
+}
+.compliance-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 20px;
+}
+.compliance-head .eyebrow { display: block; margin-bottom: 6px; }
+.compliance-head h2 { max-width: 680px; margin: 0; }
+.compliance-head p { max-width: 760px; margin: 10px 0 0; color: var(--ink-muted); font-size: 14px; line-height: 1.55; }
+.compliance-status {
+  flex: none; display: inline-flex; align-items: center; min-height: 32px;
+  padding: 6px 11px; border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--brand) 12%, var(--surface));
+  color: var(--brand); font-size: 12px; font-weight: 800;
+  white-space: nowrap;
+}
+.compliance-grid {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px; margin-top: 20px;
+}
+.compliance-card {
+  display: flex; flex-direction: column; justify-content: center; gap: 4px;
+  min-width: 0; min-height: 70px; padding: 14px 16px;
+  border-radius: var(--radius); background: var(--surface);
+}
+.compliance-card strong { color: var(--ink); font-size: 15px; line-height: 1.25; overflow-wrap: anywhere; }
+.compliance-card span { color: var(--ink-muted); font-size: 13px; line-height: 1.3; }
+.compliance-note { margin: 16px 0 0; color: var(--ink-muted); font-size: 12px; line-height: 1.5; }
+@media (max-width: 680px) {
+  .compliance-head { display: block; }
+  .compliance-status { margin-top: 14px; }
+  .compliance-grid { grid-template-columns: 1fr; gap: 8px; }
+  .compliance-card { min-height: 0; }
+}
 /* The legal panes' version line: an unreviewed draft says so, and when it changed. */
 .legal-stamp { margin: var(--space-4) 0 0; font-size: 12px; font-weight: 600; letter-spacing: .01em; color: var(--ink-muted); }
 
@@ -4397,29 +4599,29 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
    inactive, so the sequence replays on each door the visitor walks through.
    Inside .intro--hero the cascade must run on .intro-main's CHILDREN (the
    eyebrow/h1/p live one level down), so the column itself stays still. */
-@keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
-@keyframes heroIn { from { opacity: 0; transform: translateY(12px); filter: blur(5px); } to { opacity: 1; transform: none; filter: none; } }
-@keyframes cardPop { 0% { opacity: 0; transform: scale(.6); } 65% { opacity: 1; transform: scale(1.04); } 100% { opacity: 1; transform: none; } }
-@keyframes amtGlow { 0%, 100% { text-shadow: none; } 50% { text-shadow: 0 0 12px color-mix(in srgb, var(--brand-bright) 45%, transparent); } }
-.intro > *, .intro--hero .intro-main > * { animation: heroIn .5s cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: none; } }
+@keyframes heroIn { from { opacity: 0; transform: translateY(8px); filter: blur(1.5px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes cardPop { 0% { opacity: 0; transform: scale(.94); } 70% { opacity: 1; transform: scale(1.01); } 100% { opacity: 1; transform: none; } }
+@keyframes amtGlow { 0%, 100% { text-shadow: none; } 50% { text-shadow: 0 0 7px color-mix(in srgb, var(--brand-bright) 22%, transparent); } }
+.intro > *, .intro--hero .intro-main > * { animation: heroIn .42s cubic-bezier(.2, .7, .2, 1) both; }
 .intro--hero > .intro-main { animation: none; }
 .intro .eyebrow { animation-delay: .04s; }
 .intro h1 { animation-delay: .12s; }
 .intro p { animation-delay: .24s; }
 .intro .hero-cta { animation-delay: .36s; }
 /* The market pulse is the films' demand card: it pops, then its rows stack. */
-.intro--hero .pulse { animation: cardPop .5s cubic-bezier(.2, .9, .3, 1.3) .4s both; }
-.pulse-rows > * { animation: fadeUp .38s cubic-bezier(.2, .8, .2, 1) both; }
+.intro--hero .pulse { animation: cardPop .46s cubic-bezier(.2, .9, .3, 1.12) .32s both; }
+.pulse-rows > * { animation: fadeUp .32s cubic-bezier(.2, .8, .2, 1) both; }
 .pulse-rows > *:nth-child(2) { animation-delay: .08s; }
 .pulse-rows > *:nth-child(3) { animation-delay: .16s; }
 .pulse-rows > *:nth-child(4) { animation-delay: .24s; }
 /* Notaires: the live open demands stagger in like the film's feed. */
-.nc-live-grid > * { animation: fadeUp .42s cubic-bezier(.2, .8, .2, 1) both; }
+.nc-live-grid > * { animation: fadeUp .36s cubic-bezier(.2, .8, .2, 1) both; }
 .nc-live-grid > *:nth-child(2) { animation-delay: .09s; }
 .nc-live-grid > *:nth-child(3) { animation-delay: .18s; }
 .nc-live-grid > *:nth-child(4) { animation-delay: .27s; }
 /* Partenaires: the two reward cards pop in turn, their amounts glow once. */
-.pr-rewards .pr-card { animation: cardPop .45s cubic-bezier(.2, .9, .3, 1.3) .35s both; }
+.pr-rewards .pr-card { animation: cardPop .42s cubic-bezier(.2, .9, .3, 1.12) .3s both; }
 .pr-rewards .pr-card--notaire { animation-delay: .5s; }
 .pr-amount { animation: amtGlow .9s ease 1s 2; }
 .cards .card { animation: fadeUp .42s cubic-bezier(.2, .8, .2, 1) both; }
@@ -4437,8 +4639,8 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .dossier-item { transition: background-color .14s ease; }
 .dossier-item:hover { background: var(--surface-inset); }
 .legend-item { transition: color .14s ease; }
-.brand-mark img { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
-.brand:hover .brand-mark img { transform: rotate(-6deg) scale(1.06); }
+.brand-mark img, .brand-mark-svg { transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+.brand:hover .brand-mark img, .brand:hover .brand-mark-svg { transform: rotate(-6deg) scale(1.06); }
 
 /* Subscribe card — borderless floating panel (white surface, soft shadow):
    the "Le carnet dans votre agenda" band on the Notaires page. */
@@ -4452,7 +4654,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .sub-card-head { display: flex; align-items: center; gap: 11px; }
 .sub-card-logo { flex: none; display: grid; place-items: center; }
 .sub-card-logo img { display: block; }
-.sub-card-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: 3px; }
+.sub-card-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--subtitle-ink); margin-bottom: 3px; }
 .sub-card-title { font-weight: 700; font-size: 13.5px; line-height: 1.2; }
 .sub-card-sub { font-size: 12px; color: var(--ink-muted); margin-top: 2px; line-height: 1.45; }
 .calendar-subscription-field { display: grid; gap: 6px; margin: 10px 0; }
@@ -4461,6 +4663,45 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 .sub-card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
 .sub-card-actions .btn { flex: 1 1 auto; gap: 6px; padding-left: 10px; padding-right: 10px; }
 .brand-ic { flex: none; display: block; }
+
+/* Link subscription is a deliberate secondary action, not a native details
+   disclosure. The old summary inherited browser marker/focus treatment and
+   made the long URL instructions read like a broken form on narrow rails. */
+.sub-link-toggle {
+  appearance: none; display: flex; align-items: center; gap: 9px; width: 100%;
+  margin-top: 12px; padding: 10px 0 0; border: 0; border-top: 1px solid var(--border);
+  background: transparent; color: var(--ink); font: inherit; font-size: 12.5px;
+  font-weight: 700; text-align: left; cursor: pointer;
+}
+.sub-link-toggle:disabled { cursor: not-allowed; opacity: .55; }
+.sub-link-toggle:not(:disabled):hover { color: var(--brand); }
+.sub-link-toggle:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; border-radius: var(--radius-sm); }
+.sub-link-toggle-main { display: inline-flex; align-items: center; gap: 7px; min-width: 0; }
+.sub-link-icon { width: 16px; height: 16px; flex: none; color: var(--brand); }
+.sub-link-toggle-hint { margin-left: auto; color: var(--ink-muted); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.sub-link-chevron { flex: none; color: var(--brand); font-size: 16px; line-height: 1; transform: translateY(-1px); transition: transform .15s ease; }
+.sub-link-toggle[aria-expanded='true'] .sub-link-chevron { transform: rotate(180deg) translateY(1px); }
+.sub-link-panel { margin-top: 9px; padding: 11px 12px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); }
+.sub-link-panel[hidden] { display: none; }
+.sub-link-panel-copy { display: grid; gap: 2px; }
+.sub-link-panel-copy strong { font-size: 12.5px; line-height: 1.3; }
+.sub-link-panel-copy span { color: var(--ink-muted); font-size: 11.5px; line-height: 1.4; }
+.sub-link-panel .calendar-subscription-field { margin: 11px 0 0; }
+.sub-link-panel label { color: var(--ink-muted); font-size: 11px; font-weight: 700; }
+.subscription-input-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 8px; }
+.subscription-input-row input { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.subscription-input-row .btn { justify-self: stretch; white-space: nowrap; }
+.sub-card-footnote { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--border); }
+
+@media (max-width: 520px) {
+  .sub-card-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .sub-card-actions .btn { min-width: 0; }
+}
+@media (max-width: 400px) {
+  .subscription-input-row { grid-template-columns: 1fr; }
+  .subscription-input-row .btn { width: 100%; }
+  .sub-link-toggle-hint { display: none; }
+}
 /* Sits under the footer tagline now (no auto margin — the grid places it). */
 .footer-contact { display: flex; align-items: center; gap: 2px; margin-top: 8px; }
 .nc-card-actions .mini-btn { margin-left: auto; }
@@ -4492,7 +4733,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 @media (max-width: 900px) {
   /* 14 top / 4 bottom inverted the desktop asymmetry and let the market copy
      nearly touch the calendar card. */
-  .intro { padding: var(--space-7) 0 var(--space-6); }
+  .intro { padding-block: var(--space-7); }
 }
 /* THE HERO'S TWO-COLUMN THRESHOLD, and everything that follows from it.
    Below this the market panel cannot sit beside the copy, so it stacks under
@@ -4537,13 +4778,13 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
     border: 1px solid var(--border);
   }
   .pulse-row.is-on { border-color: var(--brand); }
-  .pulse-svc { font-size: 13.5px; }
+  .pulse-svc { font-size: clamp(12px, 3.5vw, 13.5px); }
   /* The captions STAY: two bare amounts stacked read as one confusing price.
      Each figure takes a full line of its card — caption left, amount right. */
   .pulse-figs { flex-direction: column; align-items: stretch; gap: 3px; }
   /* « repère du mois » + a five-figure amount do not fit one 115px line at
      320px: let the amount drop under its caption instead of past the card. */
-  .pulse-fig { flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 8px; }
+  .pulse-fig { flex-direction: row; flex-wrap: nowrap; justify-content: space-between; align-items: baseline; gap: 8px; min-width: 0; }
   .pulse-fig-k { font-size: 10.5px; }
   .pulse-fig-v { font-size: 14px; }
   .pulse-bar, .pulse-meta { display: none; }
@@ -4553,6 +4794,24 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
      the first-visit onboarding and the footer link. Desktop keeps the
      bubble, one tap from anywhere. */
   .guide-fab { display: none; }
+}
+
+/* At phone widths, give the offering strip one calm reading column. Two
+   narrow cards force both the service name and the caption/value pair onto
+   extra lines (especially « Power of attorney » and « month’s reference »).
+   One wider card keeps each fact on one line and lets the four acts scan as a
+   consistent list without clipping or ellipses. */
+@media (max-width: 480px) {
+  .pulse-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .pulse-rows { grid-template-columns: minmax(0, 1fr); }
+  .pulse-fig { flex-wrap: nowrap; }
+  .pulse-head { display: flex; }
+  .pulse-svc { white-space: nowrap; }
 }
 /* The DRAWER threshold is 900: above it the header carries the full control
    set (compact band 900–1099.98); below it everything hands off to the
@@ -4566,6 +4825,633 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   #lang-toggle { display: none; }
   /* Both controls moved to the drawer: an empty strip is not a control. */
   .header-tools { display: none; }
+}
+
+/* ==========================================================================
+   Quiet arrival refinement
+   The first decision should feel like a calm welcome: the mark carries the
+   identity, the two paths remain obvious, and the surrounding motion stays
+   peripheral. Language detection remains active in i18n.js; only its chrome
+   is removed from the visual layout.
+   ========================================================================== */
+@keyframes igChooserReveal {
+  from { opacity: 0; transform: translateY(12px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes igLogoReveal {
+  from { opacity: 0; transform: translateY(8px) scale(.96); }
+  to { opacity: 1; transform: none; }
+}
+.ig:not(.ig-out) .ig-chooser { animation: igChooserReveal .62s cubic-bezier(.2, .75, .2, 1) both; }
+.ig:not(.ig-out) .ig-chooser > .ig-wordmark { animation: igLogoReveal .7s cubic-bezier(.2, .75, .2, 1) .06s both; }
+.ig:not(.ig-out) .ig-chooser > .ig-title { animation: fadeUp .42s ease .12s both; }
+.ig:not(.ig-out) .ig-chooser > .ig-lede { animation: fadeUp .42s ease .18s both; }
+.ig:not(.ig-out) .ig-chooser > .ig-doors { animation: fadeUp .42s ease .24s both; }
+.ig:not(.ig-out) .ig-chooser > .ig-enter { animation: fadeUp .42s ease .3s both; }
+
+.ig-chooser {
+  background: var(--surface-veil);
+  box-shadow: var(--shadow), 0 18px 48px -28px rgb(var(--nota-blue-700-rgb) / .28);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+.ig-door { transition: border-color .18s ease, transform .18s ease, box-shadow .18s ease; }
+.ig-door:hover { transform: translateY(-1px); box-shadow: var(--shadow-sm); }
+.ig-enter {
+  color: var(--brand);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding-inline: 16px;
+  transition: border-color .18s ease, background-color .18s ease, transform .18s ease;
+}
+.ig-enter:hover { color: var(--brand); border-color: var(--border-strong); background: var(--surface-inset); transform: translateY(-1px); }
+
+/* Keep the language API, URL override and keyboard coverage intact while the
+   product presents one quiet browser-selected language by default. */
+.language-control { opacity: 0 !important; pointer-events: auto !important; }
+#lang-toggle.language-control {
+  position: relative !important;
+  top: auto; right: auto; width: 1px; height: 1px;
+  margin: 0; padding: 0; overflow: visible; border: 0;
+  z-index: 1;
+}
+.ig-chooser > .language-control { width: 1px; height: 1px; overflow: visible; }
+.ig-controls > .language-control {
+  position: absolute !important; inset: 0 auto auto 0;
+  width: 1px; height: 1px; margin: 0; padding: 0; overflow: visible;
+}
+.mnav-pref.language-control {
+  min-height: 1px; height: 1px; margin-block: -1px !important; overflow: visible;
+}
+
+@media (min-width: 1080px) {
+  .ig-chooser {
+    display: flex;
+    width: min(920px, 94vw);
+    max-width: 920px;
+    padding-inline: clamp(48px, 7vw, 88px);
+  }
+  .ig-chooser > .ig-wordmark,
+  .ig-chooser > .ig-title,
+  .ig-chooser > .ig-lede,
+  .ig-chooser > .ig-doors,
+  .ig-chooser > .ig-enter { grid-area: auto; }
+  .ig-doors { flex-direction: row; gap: 14px; }
+  .ig-enter { justify-self: auto; }
+}
+
+/* Consent is still explicit, but reads as a small preference notice instead
+   of a dominant bottom panel. */
+.analytics-consent {
+  left: 50%; right: auto; bottom: 16px;
+  width: min(560px, calc(100vw - 32px)); max-width: none;
+  padding: 12px 14px;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border-color: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.analytics-consent p { margin-bottom: 8px; font-size: 12px; line-height: 1.45; }
+.analytics-consent button, #analytics-preferences:not(.footer-link) { padding: 7px 10px; margin-right: 4px; font-size: 12px; }
+.analytics-consent a { font-size: 12px; }
+
+/* The transient toast follows the same low-contrast language as the consent
+   notice and never competes with a form or a confirmation action. */
+.toast {
+  bottom: 18px;
+  padding: 10px 14px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+}
+
+/* Intro gate feedback pass: let the Nota field participate in the chooser,
+   make the full N + OTA lockup unmistakable, and give the two decisions a
+   confident bit of motion without moving the page around. */
+@keyframes igDoorHoverLift {
+  0% { transform: translateY(0) scale(1) rotate(0); }
+  46% { transform: translateY(-9px) scale(1.035) rotate(-.35deg); }
+  100% { transform: translateY(-4px) scale(1.018) rotate(0); }
+}
+@keyframes igDoorSweep {
+  from { transform: translateX(-120%) rotate(14deg); opacity: 0; }
+  22% { opacity: 1; }
+  to { transform: translateX(120%) rotate(14deg); opacity: 0; }
+}
+@keyframes igDoorArrow {
+  0% { transform: translateY(-50%) translateX(0); }
+  45% { transform: translateY(-50%) translateX(7px) scale(1.12); }
+  100% { transform: translateY(-50%) translateX(3px) scale(1.04); }
+}
+
+.ig-chooser {
+  background: linear-gradient(145deg,
+    color-mix(in srgb, var(--surface) 64%, transparent),
+    color-mix(in srgb, var(--surface) 78%, transparent));
+  border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
+  box-shadow: var(--shadow), 0 22px 56px -30px rgb(var(--nota-blue-700-rgb) / .36);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+.ig-chooser > .ig-wordmark .ig-word {
+  width: 2.2em;
+  margin-left: -.02em;
+  font-size: .58em;
+}
+.mark-drift--intro { opacity: .86; }
+.mark-drift--intro i { opacity: calc(var(--o, .025) * 1.18); }
+
+.ig-door {
+  isolation: isolate;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.06);
+  backdrop-filter: blur(10px) saturate(1.06);
+  will-change: transform;
+  transition: border-color .26s ease, background-color .26s ease, box-shadow .26s ease;
+}
+.ig-door > * { position: relative; z-index: 1; }
+.ig-door::after {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  inset: -90% -30%;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 42%, rgb(var(--nota-blue-400-rgb) / .38) 50%, transparent 58%);
+  opacity: 0;
+}
+.ig-door:hover,
+.ig-door:focus-visible {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--surface-hover) 84%, transparent);
+  box-shadow: 0 20px 34px -20px rgb(var(--nota-blue-700-rgb) / .52), 0 0 0 1px rgb(var(--nota-blue-500-rgb) / .18);
+}
+.ig-door:hover { animation: igDoorHoverLift .68s cubic-bezier(.2, .82, .2, 1) both; }
+.ig-door:hover::after { animation: igDoorSweep .72s ease-out both; }
+.ig-door:hover .ig-door-arrow { animation: igDoorArrow .62s cubic-bezier(.2, .8, .2, 1) both; }
+.ig-door:hover::before,
+.ig-door:focus-visible::before { transform: scaleY(1.35); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ig-door:hover { animation: none; transform: none; }
+  .ig-door:hover::after,
+  .ig-door:hover .ig-door-arrow { animation: none; }
+}
+
+/* --- Nota signature identity -------------------------------------------
+   The signature beta is Nota's clearest brand moment: calm institutional
+   blue, an editorial display face, and one precise piece of interface art.
+   Keep the atmosphere on the page and the surfaces solid so the mark remains
+   legible when the language or theme changes. */
+#pane-beta {
+  --beta-ink: var(--nota-blue-900);
+  --beta-shadow: 0 26px 64px -34px rgb(var(--nota-blue-700-rgb) / .56);
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+  background:
+    radial-gradient(42% 32% at 76% 18%, rgb(var(--nota-blue-400-rgb) / .1), transparent 72%),
+    linear-gradient(180deg, rgb(var(--nota-blue-400-rgb) / .045), transparent 440px);
+}
+
+#pane-beta .beta-page { position: relative; }
+
+#pane-beta .beta-page {
+  max-width: 1884px;
+  padding-top: clamp(64px, 6.2vw, 128px);
+}
+
+#pane-beta .beta-intro {
+  position: relative;
+  padding-top: clamp(32px, 4.8vw, 88px);
+  padding-left: clamp(0px, 1vw, 14px);
+}
+
+#pane-beta .beta-intro::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: clamp(32px, 4.8vw, 72px);
+  width: 3px;
+  height: 68px;
+  background: linear-gradient(180deg, var(--brand), var(--brand-bright));
+}
+
+#pane-beta .beta-intro h1 {
+  color: var(--beta-ink);
+}
+
+#pane-beta .beta-eyebrow {
+  color: var(--subtitle-ink);
+}
+
+#pane-beta .beta-dot {
+  box-shadow: 0 0 0 4px rgb(var(--nota-blue-400-rgb) / .12);
+}
+
+#pane-beta .beta-preview {
+  width: min(100%, 760px);
+  border-color: color-mix(in srgb, var(--brand) 24%, var(--border));
+  box-shadow: var(--beta-shadow);
+  transform: translateY(-2px);
+}
+
+#pane-beta .beta-preview-scene {
+  min-height: clamp(290px, 22vw, 370px);
+}
+
+#pane-beta .beta-preview-top > span:first-child {
+  color: var(--beta-ink);
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -.055em;
+}
+
+#pane-beta .beta-preview-tag {
+  color: var(--brand);
+  border-color: color-mix(in srgb, var(--brand) 30%, var(--border));
+  font-weight: 700;
+}
+
+#pane-beta .beta-preview-person {
+  border-color: color-mix(in srgb, var(--brand) 26%, var(--border-strong));
+}
+
+#pane-beta .beta-preview-paper {
+  border-color: color-mix(in srgb, var(--brand) 34%, var(--border-strong));
+  box-shadow: 10px 16px 28px -18px rgb(var(--nota-blue-700-rgb) / .7);
+}
+
+#pane-beta .beta-preview-steps {
+  color: var(--beta-ink);
+}
+
+#pane-beta .beta-preview-steps li:not(:last-child)::after {
+  border-color: var(--brand-bright);
+}
+
+#pane-beta .beta-boundary {
+  background: color-mix(in srgb, var(--surface) 94%, var(--brand));
+  box-shadow: 0 12px 28px -24px rgb(var(--nota-blue-700-rgb) / .75);
+}
+
+#pane-beta .beta-section-heading h2,
+#pane-beta .beta-access-grid h2 {
+  color: var(--beta-ink);
+}
+
+@media (max-width: 820px) {
+  #pane-beta .beta-page {
+    padding-top: 38px;
+    padding-bottom: 44px;
+  }
+  #pane-beta .beta-intro { padding-left: 0; }
+  #pane-beta .beta-intro { padding-top: 0; }
+  #pane-beta .beta-intro::before { display: none; }
+  #pane-beta .beta-preview { transform: none; }
+}
+
+/* --- Signature beta: editorial visual pass ------------------------------
+   The beta is the one public pane that sells a new experience. Keep its
+   content model and copy stable, but give the story a distinct stage: an
+   atmospheric canvas, a confident headline, and a preview that feels like a
+   real product surface instead of two adjacent boxes. */
+#pane-beta {
+  position: relative;
+  isolation: isolate;
+  overflow: clip;
+}
+
+#pane-beta::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  top: -180px;
+  right: -8%;
+  width: 72%;
+  height: 720px;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 42%, rgb(var(--nota-blue-400-rgb) / .13), transparent 68%);
+}
+
+#pane-beta .beta-page {
+  max-width: 1600px;
+  padding-top: clamp(48px, 5.5vw, 88px);
+  padding-bottom: clamp(56px, 6vw, 96px);
+}
+
+#pane-beta .beta-hero {
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+  gap: clamp(48px, 6vw, 96px);
+  align-items: start;
+}
+
+#pane-beta .beta-intro {
+  padding-top: clamp(32px, 4.8vw, 72px);
+}
+
+#pane-beta .beta-eyebrow {
+  color: var(--subtitle-ink);
+}
+
+#pane-beta .beta-intro h1 {
+  max-width: 12ch;
+  margin-bottom: 22px;
+}
+
+#pane-beta .beta-actions {
+  gap: 16px;
+  margin-top: 30px;
+}
+
+#pane-beta .beta-actions .btn-primary {
+  padding-inline: 18px;
+  box-shadow: 0 9px 20px -12px rgb(var(--nota-blue-700-rgb) / .8);
+}
+
+#pane-beta #beta-preview::after {
+  content: '↗';
+  margin-left: 4px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+#pane-beta .beta-caption {
+  max-width: 44ch;
+  margin-top: 18px;
+  font-size: 12.5px;
+}
+
+#pane-beta .beta-preview {
+  position: relative;
+  width: min(100%, 640px);
+  padding: clamp(26px, 3vw, 36px);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: 0 24px 60px -28px rgb(var(--nota-blue-700-rgb) / .5);
+  overflow: hidden;
+}
+
+#pane-beta .beta-preview::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 44%;
+  height: 4px;
+  background: linear-gradient(90deg, var(--brand), var(--brand-bright));
+}
+
+#pane-beta .beta-preview::after {
+  content: '';
+  position: absolute;
+  top: -90px;
+  right: -90px;
+  width: 230px;
+  height: 230px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  box-shadow: 0 0 0 22px rgb(var(--nota-blue-400-rgb) / .035), 0 0 0 44px rgb(var(--nota-blue-400-rgb) / .022);
+  pointer-events: none;
+}
+
+#pane-beta .beta-preview-top {
+  position: relative;
+  z-index: 1;
+  font-size: 16px;
+  letter-spacing: -.02em;
+}
+
+#pane-beta .beta-preview-tag {
+  padding: 7px 10px;
+  font-size: 11px;
+  background: var(--surface-inset);
+}
+
+#pane-beta .beta-preview-scene {
+  position: relative;
+  z-index: 1;
+  gap: clamp(18px, 2.6vw, 28px);
+  margin: 30px 0 26px;
+  min-height: clamp(250px, 19vw, 300px);
+}
+
+#pane-beta .beta-preview-person {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, var(--surface-inset), color-mix(in srgb, var(--brand) 7%, var(--surface-inset)));
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / .34);
+}
+
+#pane-beta .beta-preview-person::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: .55;
+  background: linear-gradient(rgb(var(--nota-blue-400-rgb) / .1) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--nota-blue-400-rgb) / .1) 1px, transparent 1px);
+  background-size: 32px 32px;
+  mask-image: linear-gradient(to bottom, transparent, black 22%, black 78%, transparent);
+}
+
+#pane-beta .beta-preview-person::after {
+  content: '';
+  position: absolute;
+  width: 46%;
+  aspect-ratio: 1;
+  top: 13%;
+  left: 20%;
+  border-radius: 50%;
+  background: rgb(var(--nota-blue-400-rgb) / .13);
+  filter: blur(22px);
+}
+
+#pane-beta .beta-preview-person svg {
+  position: relative;
+  z-index: 1;
+  width: 68%;
+  stroke: var(--nota-blue-400);
+}
+
+#pane-beta .beta-preview-paper {
+  position: relative;
+  z-index: 1;
+  border-radius: var(--radius-sm);
+  padding: 25px 20px;
+  transform: rotate(3deg) translateY(2px);
+  box-shadow: 8px 12px 22px -15px rgb(var(--nota-blue-700-rgb) / .65);
+}
+
+#pane-beta .beta-preview-paper::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 34px;
+  height: 34px;
+  background: linear-gradient(135deg, transparent 49%, var(--surface-inset) 50%);
+  opacity: .8;
+}
+
+#pane-beta .beta-preview-paper i {
+  height: 5px;
+  margin: 12px 0;
+  border-radius: var(--radius-xs);
+}
+
+#pane-beta .beta-preview-paper svg {
+  position: relative;
+  z-index: 1;
+  margin-top: 22px;
+  stroke-width: 1.9;
+}
+
+#pane-beta .beta-preview-steps {
+  position: relative;
+  z-index: 1;
+  padding-top: 18px;
+  font-size: 12px;
+  letter-spacing: .01em;
+}
+
+#pane-beta .beta-boundary {
+  grid-template-columns: minmax(220px, 270px) 1fr;
+  gap: clamp(24px, 4vw, 56px);
+  margin-top: clamp(42px, 5vw, 68px);
+  padding: 23px 28px;
+  border-left-width: 4px;
+  border-radius: 0 var(--radius-lg) var(--radius-lg) 0;
+  background: color-mix(in srgb, var(--surface) 96%, var(--brand));
+}
+
+#pane-beta .beta-boundary strong {
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+#pane-beta .beta-boundary p {
+  max-width: 92ch;
+  font-size: 13px;
+}
+
+#pane-beta .beta-experience {
+  margin-top: clamp(48px, 6vw, 84px);
+}
+
+#pane-beta .beta-section-heading {
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) 1fr;
+  gap: 24px;
+  align-items: baseline;
+  padding-bottom: 17px;
+  border-bottom: 1px solid var(--border);
+}
+
+#pane-beta .beta-section-heading .beta-eyebrow {
+  margin: 0;
+}
+
+#pane-beta .beta-section-heading h2 {
+  margin: 0;
+}
+
+#pane-beta .beta-features {
+  gap: 18px;
+  margin-top: 20px;
+}
+
+#pane-beta .beta-features li {
+  position: relative;
+  padding: 23px 24px 25px;
+  border-top-width: 4px;
+  border-radius: 0 0 var(--radius) var(--radius);
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+
+#pane-beta .beta-features li:hover,
+#pane-beta .beta-features li:focus-within {
+  transform: translateY(-4px);
+  border-color: var(--border-strong);
+  border-top-color: var(--brand);
+  box-shadow: var(--shadow);
+}
+
+#pane-beta .beta-features h3 {
+  margin-top: 13px;
+}
+
+#pane-beta .beta-features p {
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+#pane-beta .beta-access-grid {
+  gap: 18px;
+  margin-top: clamp(40px, 5vw, 64px);
+}
+
+#pane-beta .beta-access,
+#pane-beta .beta-upcoming {
+  padding: clamp(24px, 3vw, 34px);
+  border-radius: var(--radius);
+}
+
+@media (max-width: 980px) {
+  #pane-beta .beta-hero {
+    gap: 40px;
+  }
+
+  #pane-beta .beta-preview {
+    width: 100%;
+  }
+
+  #pane-beta .beta-intro h1 {
+    max-width: 14ch;
+  }
+}
+
+@media (max-width: 820px) {
+  #pane-beta .beta-page {
+    padding-top: 38px;
+  }
+
+  #pane-beta .beta-hero {
+    grid-template-columns: 1fr;
+    gap: 34px;
+  }
+
+  #pane-beta .beta-intro {
+    padding-top: 0;
+  }
+
+  #pane-beta .beta-intro h1 {
+    max-width: 14ch;
+    font-size: var(--type-h1-compact);
+  }
+
+  #pane-beta .beta-preview {
+    justify-self: start;
+    max-width: 640px;
+  }
+
+  #pane-beta .beta-section-heading {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  #pane-beta .beta-boundary {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #pane-beta .beta-features li { transition: none; }
 }
 /* Above the drawer threshold the drawer can never appear, open class or not. */
 @media (min-width: 900px) {
@@ -4596,7 +5482,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .brand-sub { display: none; }
   .brand { font-size: 17px; }
   .nav-tab { padding: 6px 9px; font-size: 13px; }
-  .intro h1, .pr-hero h1 { font-size: clamp(20px, 5.6vw, 25px); }
+  .intro h1, .pr-hero h1 { font-size: var(--type-h1-compact); }
   /* No padding here. The cal container queries own cell padding, and a
      viewport rule this late in the file silently outranks all of them. */
   /* No min-height: @container cal owns cell sizing, and a viewport rule this
@@ -4691,7 +5577,6 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
 @media (max-width: 420px) {
   .nav-tabs { gap: 0; }
   .nav-tab { padding: 6px 7px; font-size: 12px; }
-  .brand-word { font-size: 17px; }
   /* .cal-cell and .cal-daynum are sized by @container cal, not from here. */
 }
 
@@ -4758,21 +5643,62 @@ html { scroll-behavior: smooth; scroll-padding-top: var(--sticky-top); }
 .ig {
   position: fixed; inset: 0; z-index: 200;
   background: var(--bg);
+  --bg: var(--intro-bg);
+  --surface: var(--intro-surface);
+  --surface-inset: var(--intro-surface-inset);
+  --surface-hover: var(--intro-surface-hover);
+  --surface-veil: var(--intro-surface-veil);
+  --surface-hover-veil: color-mix(in srgb, var(--intro-surface-hover) 90%, transparent);
+  --ink: var(--intro-ink);
+  --ink-muted: var(--intro-ink-muted);
+  --border: var(--intro-border);
+  --border-strong: var(--intro-border-strong);
+  --brand: var(--nota-blue-700);
+  --brand-bright: var(--nota-blue-500);
+  --brand-tint: var(--intro-tint);
+  --brand-tint-solid: var(--intro-surface-inset);
+  --ring: var(--nota-blue-600);
+  --shadow-lg: var(--shadow);
+  background-image: radial-gradient(60% 70% at 50% 8%, var(--brand-tint), transparent 72%);
   display: flex; align-items: center; align-items: safe center; justify-content: center;
   padding: 14px; overflow-y: auto;
 }
+.ig::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .2;
+  background:
+    radial-gradient(42% 34% at 10% 18%, rgb(var(--nota-blue-400-rgb) / .22), transparent 78%),
+    radial-gradient(38% 34% at 88% 78%, rgb(var(--nota-blue-500-rgb) / .18), transparent 80%),
+    radial-gradient(26% 28% at 58% 44%, var(--brand-tint), transparent 76%),
+    linear-gradient(115deg, transparent 30%, rgb(var(--nota-blue-400-rgb) / .05) 48%, transparent 66%);
+  filter: blur(22px); transform: scale(1.08); animation: igLightDrift 26s ease-in-out infinite alternate;
+}
+@keyframes igLightDrift {
+  from { transform: scale(1.08) translate3d(-2%, -1%, 0) rotate(-1deg); opacity: .55; }
+  to { transform: scale(1.16) translate3d(2%, 1%, 0) rotate(1deg); opacity: .9; }
+}
+.ig::before {
+  content: ""; position: absolute; inset: -20%; pointer-events: none;
+  background:
+    radial-gradient(34% 38% at 18% 18%, var(--brand-tint), transparent 72%),
+    radial-gradient(42% 46% at 84% 78%, var(--brand-tint), transparent 74%);
+  opacity: .36; animation: igAura 22s ease-in-out infinite alternate;
+}
+@keyframes igAura {
+  from { transform: translate3d(-2%, -1%, 0) scale(1); }
+  to { transform: translate3d(2%, 1%, 0) scale(1.05); }
+}
 .ig.ig-out { opacity: 0; transition: opacity 0.3s ease; }
-body.ig-open { overflow: hidden; }
-/* Ambient mark drift — the Nota logo, twenty times, adrift far behind the
-   content (app.js driftBuild deals each copy its place and tempo). One fixed
-   site-wide layer (#site-bg) rides behind ALL panes — no band boundary ever
-   slices a mark again — and the intro gate keeps a copy of its own (#ig-bg)
-   above its opaque overlay. Whisper-faint so neither theme loses contrast;
-   still under prefers-reduced-motion. */
+html.ig-open, body.ig-open { overflow: hidden; }
+/* Ambient mark drift — the Nota logo, twenty-four times, adrift far behind the
+   site content (app.js driftBuild deals each copy its place and tempo). One
+   fixed site-wide layer (#site-bg) rides behind ALL panes — no band boundary
+   ever slices a mark again. The arrival chooser stays clear; the gate's
+   animated aura supplies motion without a second field of cubes. */
 .mark-drift { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 /* Behind everything, edge to edge, and it arrives smoothly — a slow fade-in
    so the scene breathes into place instead of popping. */
-.mark-drift--site { position: fixed; z-index: -1; animation: mark-fade 1.6s ease-out both; }
+.mark-drift--site { display: block; opacity: .42; }
+.mark-drift--intro { display: block; opacity: .72; }
 @keyframes mark-fade { from { opacity: 0; } to { opacity: 1; } }
 /* Two clocks per mark, both endless and seamless: the wrapper wanders a
    closed loop through two waypoints (out, across, home — never retracing
@@ -4788,7 +5714,7 @@ body.ig-open { overflow: hidden; }
   width: var(--s); height: var(--s);
   /* Half the die's edge — every face folds out to this depth. */
   --h: calc(var(--s) / 2);
-  opacity: var(--o, 0.06);
+  opacity: var(--o, 0.025);
   filter: blur(var(--blur, 0px));
   /* The stage depth that turns the tumble from a flat spin into a die
      rolling toward and away from the eye. */
@@ -4826,35 +5752,91 @@ body.ig-open { overflow: hidden; }
    fixed, full-viewport layer) — a plain centred measure is enough. */
 .ig-inner { flex: none; position: relative; z-index: 1; width: min(1040px, 96vw); display: flex; flex-direction: column; align-items: center; }
 
-/* The name and the existing mark are a single, readable brand signature. */
-.ig-wordmark { display: flex; align-items: center; gap: .23em; color: var(--brand); font-family: var(--font-display); font-size: 32px; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
+/* The introduction uses the mark alone, so the first visual is crisp at any
+   language and viewport size. */
+.ig-wordmark { display: inline-flex; align-items: center; justify-content: center; gap: .02em; color: var(--brand); font-family: var(--font-display); font-size: 32px; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
 .ig-wordmark svg { width: 1em; height: 1em; flex: none; }
-.ig-signature { font-size: clamp(64px, 9vw, 112px); }
-.ig-chooser { display: flex; flex-direction: column; align-items: center; gap: 22px; text-align: center; max-width: 760px; width: 100%; }
+.ig-wordmark .ig-mark { display: block; width: .9em; height: .9em; flex: none; }
+.ig-wordmark .ig-word { display: inline-flex; align-items: center; width: 2.18em; height: 1.08em; margin-left: -.055em; color: var(--brand); font-size: .50em; line-height: 1; }
+.ig-wordmark .brand-word-svg { width: 100%; height: 100%; }
+.ig-signature { position: relative; font-size: clamp(64px, 9vw, 112px); filter: drop-shadow(0 14px 24px rgb(var(--nota-blue-700-rgb) / .2)); }
+.ig-signature .ig-word { width: 2.18em; height: 1.08em; font-size: .50em; margin-top: .05em; }
+.ig-signature::before {
+  content: ""; position: absolute; z-index: -1; width: 1.34em; height: 1.34em;
+  border: 1px solid var(--brand-tint); border-radius: 50%;
+  box-shadow: 0 0 0 14px rgb(var(--nota-blue-500-rgb) / .035), 0 0 0 28px rgb(var(--nota-blue-500-rgb) / .02);
+  animation: igOrbit 8s ease-in-out infinite;
+}
+@keyframes igOrbit {
+  0%, 100% { transform: scale(.94) rotate(-3deg); opacity: .55; }
+  50% { transform: scale(1.04) rotate(3deg); opacity: 1; }
+}
+.ig-chooser {
+  position: relative; display: flex; flex-direction: column; align-items: center; gap: 22px;
+  text-align: center; max-width: 820px; width: min(100%, 820px);
+  padding: clamp(42px, 6vw, 68px) clamp(24px, 6vw, 72px) clamp(34px, 5vw, 52px);
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+  background: linear-gradient(145deg, var(--surface-veil), var(--surface)); box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(18px);
+}
+.ig-chooser::before {
+  content: ""; position: absolute; top: -1px; left: 15%; right: 15%; height: 2px;
+  border-radius: var(--radius-xs); background: linear-gradient(90deg, transparent, var(--brand-bright), transparent);
+  opacity: .8;
+}
 /* .ig [data-set-lang] below gives these buttons a 44px touch target, so the
    track has to grow to match — at the base 28px/2px it clipped the active
    button's own highlight by 8px top and bottom. */
-.ig-chooser > .mini-seg { height: 52px; padding: 4px; gap: 4px; margin-bottom: 12px; border: 1px solid var(--border); }
-.ig-title { font-size: clamp(28px, 4vw, 44px); font-weight: 800; letter-spacing: -.03em; line-height: 1.12; margin: 8px 0 0; text-wrap: balance; }
-.ig-lede { color: var(--ink-muted); font-size: clamp(18px, 2vw, 22px); line-height: 1.4; margin: -8px 0 10px; text-wrap: balance; }
-.ig-doors { display: flex; gap: 16px; justify-content: center; width: 100%; }
+.ig-chooser > .mini-seg { position: absolute; top: 20px; right: 24px; height: 44px; padding: 0; gap: 0; margin: 0; border: 1px solid var(--border); }
+.ig-title { max-width: 20ch; color: var(--brand); font-size: clamp(28px, 3.5vw, 40px); font-weight: 700; letter-spacing: -.025em; line-height: 1.1; margin: 0; text-wrap: balance; }
+.ig-lede { color: var(--ink-muted); font-size: clamp(17px, 1.8vw, 20px); line-height: 1.45; margin: -4px 0 10px; text-wrap: balance; }
+.ig-doors { display: flex; gap: 14px; justify-content: center; width: 100%; }
 .ig-door {
   position: relative; flex: 1; min-width: 0;
   font: inherit; cursor: pointer; text-align: left;
   display: flex; flex-direction: column; gap: 8px;
   background: var(--surface); color: var(--ink);
   border: 1px solid var(--border); border-radius: var(--radius-lg);
-  padding: 24px 46px 24px 24px;
+  padding: 18px 42px 18px 20px;
   transition: border-color .15s, transform .15s, box-shadow .15s;
 }
-.ig-door:hover { border-color: var(--brand); transform: translateY(-2px); box-shadow: var(--shadow); }
+.ig-door::before { content: ""; position: absolute; left: 0; top: 14px; bottom: 14px; width: 3px; border-radius: var(--radius-xs); background: var(--brand); opacity: .45; transition: opacity .15s, transform .15s; }
+.ig-door:hover { border-color: var(--brand); transform: translateY(-3px); box-shadow: var(--shadow); }
+.ig-door:hover::before, .ig-door:focus-visible::before { opacity: 1; transform: scaleY(1.15); }
 .ig-door:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; }
-.ig-door-t { font-size: 18px; font-weight: 800; }
+.ig-door-t { color: var(--brand); font-size: 18px; font-weight: 650; }
 .ig-door-s { font-size: 16px; font-weight: 500; color: var(--ink-muted); line-height: 1.4; }
 .ig-door-arrow { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); color: var(--brand); font-size: 24px; }
 .ig-enter { font: inherit; cursor: pointer; background: none; border: none; color: var(--ink-muted); font-size: 16px; font-weight: 600; padding: 10px; min-height: 44px; }
 .ig-enter:hover { color: var(--ink); }
 .ig-enter:focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; border-radius: var(--radius); }
+
+/* Wide screens get a calmer editorial split: the promise stays on one axis
+   while the two equal doors form a clean decision rail. The mobile rules below
+   return to the single reading column so nothing is squeezed on a phone. */
+@media (min-width: 1080px) {
+  .ig-chooser {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(330px, 1fr);
+    grid-template-areas:
+      "brand doors"
+      "title doors"
+      "lede doors"
+      "enter enter";
+    column-gap: 46px; row-gap: 12px;
+    align-items: center; text-align: center;
+    padding-inline: clamp(42px, 5vw, 68px);
+  }
+  .ig-wordmark { grid-area: brand; }
+  .ig-title { grid-area: title; max-width: 20ch; font-size: clamp(28px, 3vw, 38px); }
+  .ig-lede { grid-area: lede; margin: 0 0 8px; }
+  .ig-doors { grid-area: doors; position: relative; flex-direction: column; gap: 12px; }
+  .ig-doors::before {
+    content: ""; position: absolute; left: -23px; top: 6%; bottom: 6%; width: 1px;
+    background: linear-gradient(to bottom, transparent, var(--border), transparent);
+  }
+  .ig-enter { grid-area: enter; justify-self: center; }
+}
 
 /* Full viewport film. Playback controls stay in normal flow below the stage. */
 .ig-frame { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; background: var(--surface); }
@@ -4863,16 +5845,22 @@ body.ig-open { overflow: hidden; }
   container-type: size; flex: 1; min-height: 0; width: 100%;
   background: var(--surface); position: relative; overflow: hidden;
 }
+.ig-stage::before {
+  content: ""; position: absolute; z-index: 0; pointer-events: none;
+  width: clamp(220px, 34vw, 560px); height: clamp(220px, 34vw, 560px);
+  left: -9%; top: 42%; border: 1px solid var(--border); border-radius: 50%;
+  box-shadow: 0 0 90px var(--brand-tint); opacity: .5;
+  transform-style: preserve-3d; animation: igStageOrbit 20s ease-in-out infinite alternate;
+}
 .ig-stage::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 85% 10%, var(--brand-tint), transparent 65%); }
 .ig-masthead {
   position: absolute; z-index: 2; top: 0; left: 0; right: 0;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
   padding: max(24px, env(safe-area-inset-top)) max(32px, env(safe-area-inset-right)) 20px max(32px, env(safe-area-inset-left));
 }
-.ig-audience { color: var(--ink-muted); font-size: 16px; font-weight: 600; line-height: 1.4; text-align: right; }
-/* A still wordmark, never another moving subject competing with the message. */
-.ig-atmosphere { position: absolute; inset: 0; overflow: hidden; pointer-events: none; display: flex; align-items: flex-end; justify-content: center; }
-.ig-atmosphere > span { font-family: var(--font-display); font-size: 48cqw; font-weight: 800; letter-spacing: -.03em; line-height: .7; color: var(--brand); opacity: .045; transform: translateY(.12em); }
+.ig-masthead .ig-wordmark { padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-veil); box-shadow: var(--shadow-sm); }
+.ig-audience { display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; color: var(--ink-muted); font-size: 16px; font-weight: 700; line-height: 1.4; text-align: right; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-veil); box-shadow: var(--shadow-sm); }
+.ig-audience::before { content: ""; width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--brand-bright); box-shadow: 0 0 0 4px var(--brand-tint); animation: igStatusPulse 2.8s ease-in-out infinite; }
 .ig-scene {
   position: absolute; inset: 88px 0 0; z-index: 1;
   display: flex; flex-direction: column; align-items: center;
@@ -4883,20 +5871,28 @@ body.ig-open { overflow: hidden; }
 }
 .ig-scene .ig-signature { font-size: clamp(64px, 9cqw, 112px); margin-bottom: 8px; }
 .ig-h {
-  font-size: clamp(32px, 5.4cqw, 72px); font-weight: 800;
+  color: var(--brand); font-size: clamp(32px, 5.4cqw, 72px); font-weight: 700;
   letter-spacing: -.035em; line-height: 1.08; margin: 0;
   text-wrap: balance; max-width: 19ch;
 }
 .ig-sub { font-size: clamp(18px, 2.2cqw, 28px); font-weight: 500; line-height: 1.45; color: var(--ink-muted); margin: 0; max-width: 43ch; text-wrap: balance; }
 .ig-note { font-size: 16px; line-height: 1.5; color: var(--ink-muted); margin: 0; max-width: 44ch; text-wrap: balance; }
-.ig-story-symbol { display: grid; place-items: center; width: clamp(72px, 10cqw, 120px); height: clamp(72px, 10cqw, 120px); flex: none; border-radius: var(--radius-lg); background: var(--brand-tint-solid); color: var(--brand); }
+.ig-story-symbol { display: grid; place-items: center; width: clamp(72px, 10cqw, 120px); height: clamp(72px, 10cqw, 120px); flex: none; border-radius: var(--radius-lg); background: var(--brand-tint-solid); color: var(--brand); box-shadow: var(--shadow-sm); }
 .ig-story-icon { width: 58%; height: 58%; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.ig-progress { position: absolute; bottom: 0; left: 0; height: 4px; background: var(--brand-bright); width: 100%; z-index: 5; transform: scaleX(0); transform-origin: left center; }
+.ig-progress-track { position: absolute; z-index: 5; bottom: 0; left: 0; width: 100%; height: 18px; }
+.ig-progress { position: absolute; inset: auto 0 7px; height: 4px; background: var(--brand-bright); width: 100%; transform: scaleX(0); transform-origin: left center; pointer-events: none; }
+.ig-progress-seek { position: absolute; inset: 0; width: 100%; height: 18px; margin: 0; appearance: none; background: transparent; cursor: pointer; opacity: .14; }
+.ig-progress-seek::-webkit-slider-runnable-track { height: 18px; background: transparent; }
+.ig-progress-seek::-moz-range-track { height: 18px; background: transparent; }
+.ig-progress-seek::-webkit-slider-thumb { width: 18px; height: 18px; appearance: none; border: 0; border-radius: 50%; background: var(--brand-bright); }
+.ig-progress-seek::-moz-range-thumb { width: 18px; height: 18px; border: 0; border-radius: 50%; background: var(--brand-bright); }
+.ig-progress-seek:focus-visible { opacity: 1; outline: 3px solid var(--ring); outline-offset: 3px; }
 .ig-controls {
   display: flex; align-items: center; gap: 12px; width: 100%; flex: none;
   padding: 12px max(24px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
   background: var(--surface); border-top: 1px solid var(--border);
 }
+.ig-controls > .mini-seg { height: 48px; padding: 2px; flex: none; }
 .ig-skip {
   display: block; margin-left: auto;
   font: inherit; font-size: 16px; font-weight: 700; cursor: pointer;
@@ -4904,19 +5900,21 @@ body.ig-open { overflow: hidden; }
   border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 16px; min-height: 44px;
 }
 .ig-pause { font: inherit; font-size: 16px; font-weight: 700; cursor: pointer; color: var(--ink); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; min-height: 44px; }
-.ig-cta { font: inherit; font-size: clamp(18px, 2cqw, 22px); line-height: 1.3; font-weight: 700; color: var(--brand-ink); background: var(--brand); border: 1px solid var(--brand); border-radius: var(--radius); cursor: pointer; min-height: 52px; padding: 14px 28px; }
+.ig-cta { font: inherit; font-size: clamp(17px, 2cqw, 21px); line-height: 1.3; font-weight: 700; color: var(--brand-ink); background: var(--brand); border: 1px solid var(--brand); border-radius: var(--radius); cursor: pointer; min-height: 46px; padding: 11px 22px; }
 .ig-cta:hover { box-shadow: var(--shadow); }
 .ig [data-set-lang] { min-width: 44px; min-height: 44px; font-size: 16px; }
 .ig-skip:focus-visible, .ig-pause:focus-visible, .ig-cta:focus-visible { outline: 3px solid var(--ring); outline-offset: 3px; }
 .ig-stage.is-paused, .ig-stage.is-paused *, .ig-stage.is-paused *::before, .ig-stage.is-paused *::after { animation-play-state: paused !important; }
-@keyframes igIn { from { opacity: 0; visibility: hidden; transform: translateY(12px); } to { opacity: 1; visibility: visible; transform: none; } }
-@keyframes igOut { from { opacity: 1; visibility: visible; } to { opacity: 0; visibility: hidden; } }
+@keyframes igIn { from { opacity: 0; visibility: hidden; transform: translate3d(0, 14px, 0) scale(.985); filter: blur(2px); } 65% { opacity: 1; filter: blur(0); } to { opacity: 1; visibility: visible; transform: none; filter: blur(0); } }
+@keyframes igOut { from { opacity: 1; visibility: visible; transform: none; filter: blur(0); } to { opacity: 0; visibility: hidden; transform: translate3d(0, -8px, 0) scale(1.01); filter: blur(1px); } }
 @keyframes igBarAnim { from { transform: scaleX(0); } to { transform: scaleX(1); } }
-.run .ig-progress { animation: igBarAnim 14s linear both; }
+@keyframes igStageOrbit { 0% { transform: translate3d(0, 0, 0) rotateX(66deg) rotateZ(-18deg); } 100% { transform: translate3d(15vw, -8vh, 120px) rotateX(72deg) rotateZ(28deg); } }
+@keyframes igStatusPulse { 0%, 100% { box-shadow: 0 0 0 3px var(--brand-tint); opacity: .72; } 50% { box-shadow: 0 0 0 7px var(--brand-tint); opacity: 1; } }
+.run .ig-progress { animation: igBarAnim 14s linear calc(-1 * var(--ig-seek-offset, 0ms)) both; }
 /* Four distinct beats, 3.5s apiece (was 5s — felt sluggish). Text settles in
    0.3 seconds, leaving time to read. */
-.run .ig-scene { animation: igIn .3s ease var(--ig-at) both, igOut .2s ease calc(var(--ig-at) + 3.3s) forwards; }
-.run .ig-c4, .run .ig-n4 { animation: igIn .3s ease var(--ig-at) both; }
+.run .ig-scene { animation: igIn .38s cubic-bezier(.2, .8, .2, 1) calc(var(--ig-at) - var(--ig-seek-offset, 0ms)) both, igOut .32s ease calc(var(--ig-at) + 3.18s - var(--ig-seek-offset, 0ms)) forwards; }
+.run .ig-c4, .run .ig-n4 { animation: igIn .3s ease calc(var(--ig-at) - var(--ig-seek-offset, 0ms)) both; }
 .ig-c1, .ig-n1 { --ig-at: 0s; }
 .ig-c2, .ig-n2 { --ig-at: 3.5s; }
 .ig-c3, .ig-n3 { --ig-at: 7s; }
@@ -4926,8 +5924,9 @@ body.ig-open { overflow: hidden; }
 @media (max-width: 640px) {
   .ig { padding: 20px; }
   .ig-inner { width: 100%; }
-  .ig-chooser { gap: 20px; }
-  .ig-chooser > .mini-seg { margin-bottom: 4px; }
+  .ig-chooser { display: flex; }
+  .ig-chooser { gap: 18px; border-radius: var(--radius-lg); }
+  .ig-chooser > .mini-seg { top: 16px; right: 16px; }
   .ig-doors { flex-direction: column; gap: 12px; }
   .ig-door { width: 100%; padding: 20px 40px 20px 20px; }
   .ig-masthead { padding: max(20px, env(safe-area-inset-top)) 20px 16px; }
@@ -4940,11 +5939,16 @@ body.ig-open { overflow: hidden; }
   .ig-skip { white-space: nowrap; padding-inline: 12px; }
 }
 @media (max-width: 640px) and (max-height: 700px) {
-  .ig-chooser { gap: 14px; }
-  .ig-chooser .ig-signature { font-size: 56px; }
-  .ig-title { font-size: 28px; margin-top: 0; }
-  .ig-lede { margin: 0; font-size: 18px; }
-  .ig-door { padding-block: 14px; gap: 4px; }
+  .ig-chooser { gap: 12px; padding: 72px 10px 14px; }
+  .ig-chooser > .mini-seg { top: 14px; right: 14px; }
+  .ig-chooser .ig-signature { font-size: 52px; }
+  .ig-title { font-size: 26px; margin-top: 0; }
+  .ig-lede { margin: 0; font-size: 16px; }
+  .ig-doors { gap: 8px; }
+  .ig-door { padding: 12px 36px 12px 16px; gap: 3px; }
+  .ig-door-t { font-size: 16px; }
+  .ig-door-s { font-size: 14px; }
+  .ig-enter { font-size: 14px; padding-block: 6px; }
   .ig-scene { gap: 16px; padding: 16px 20px 24px; }
   .ig-scene .ig-signature { font-size: 56px; margin-bottom: 0; }
   .ig-cta { padding-block: 12px; min-height: 48px; }
@@ -4986,8 +5990,8 @@ body.ig-open { overflow: hidden; }
    with the gate. The band is no longer the form's next sibling (it sits in the
    pane's grid, one level up), so the fold reads the gate through the wrap. */
 #pane-notaires > .wrap:has(#notary-auth-form[hidden]) #nc-conformite { display: none; }
-.nc-conformite-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--brand); margin-bottom: var(--space-3); }
-.nc-conformite-h { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; margin: 0 0 var(--space-5); }
+.nc-conformite-kicker { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--subtitle-ink); margin-bottom: var(--space-3); }
+.nc-conformite-h { font-size: 15px; font-weight: 800; letter-spacing: -0.01em; color: var(--subtitle-ink); margin: 0 0 var(--space-5); }
 .nc-conformite-tiles { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
 .nc-conformite-tile {
   display: grid; grid-template-columns: auto 1fr; column-gap: var(--space-5); row-gap: var(--space-1); align-items: start;
@@ -4999,7 +6003,7 @@ body.ig-open { overflow: hidden; }
   display: grid; place-items: center; color: var(--brand); background: var(--brand-tint);
 }
 .nc-conformite-ic svg { width: 18px; height: 18px; }
-.nc-conformite-art { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--brand); }
+.nc-conformite-art { font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--subtitle-ink); }
 .nc-conformite-txt { font-size: 13px; line-height: 1.45; color: var(--ink); }
 .nc-conformite-order { margin: var(--space-5) 0 0; font-size: 12.5px; font-weight: 700; color: var(--ink-muted); }
 .nc-conformite-link { display: inline-block; margin-top: var(--space-3); font-size: 13px; font-weight: 700; color: var(--brand); }
@@ -5008,7 +6012,7 @@ body.ig-open { overflow: hidden; }
    Live support chat (ADR 0026 · ADR 0033 §5) — the floating question door.
    Its own `sup-*` namespace: the retained-act `.chat-*` rules (a flex column,
    start-aligned) once reached in and dropped the visitor's bubbles on the
-   wrong side. Same square scale as every control; brand green only on the
+   wrong side. Same square scale as every control; brand blue only on the
    trigger and the visitor's own bubbles. Fixed above everything, footer
    included — and STACKED above the guide « ? » bubble on desktop: bottom
    70px clears the bubble's 16px + 42px (ux-nav.test.mjs pins the sum).
@@ -5017,13 +6021,13 @@ body.ig-open { overflow: hidden; }
    ========================================================================== */
 .sup-wrap { position: fixed; right: 16px; bottom: 70px; z-index: 60; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }
 .sup-fab {
-  appearance: none; border: 0; cursor: pointer; position: relative;
+  appearance: none; border: 1px solid var(--brand); cursor: pointer; position: relative;
   width: 48px; height: 48px; border-radius: var(--radius);
-  background: var(--brand); color: var(--brand-ink);
+  background: transparent; color: var(--brand);
   display: inline-flex; align-items: center; justify-content: center;
-  box-shadow: var(--shadow-brand);
+  box-shadow: none;
 }
-.sup-fab:hover { background: var(--brand-hover); }
+.sup-fab:hover { background: transparent; border-color: var(--brand-hover); color: var(--brand-hover); }
 .sup-fab:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 /* The unread mark — the one round thing here: an 8px dot, as the register allows. */
 .sup-fab-dot { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px var(--brand); }
@@ -5040,11 +6044,11 @@ body.ig-open { overflow: hidden; }
 /* La fermeture est une icône carrée du registre, pas un caractère posé dans le
    texte : même gabarit que les autres boutons-icônes, et une cible de 28 px. */
 .sup-close {
-  appearance: none; border: 0; background: transparent; color: var(--ink-muted);
+  appearance: none; border: 1px solid var(--border); background: transparent; color: var(--ink-muted);
   font: inherit; font-size: 14px; line-height: 1; cursor: pointer; flex: none;
   width: 28px; height: 28px; display: inline-grid; place-items: center; border-radius: var(--radius-sm);
 }
-.sup-close:hover { background: var(--surface-inset); color: var(--ink); }
+.sup-close:hover { background: transparent; border-color: var(--brand); color: var(--ink); }
 .sup-close:focus-visible { outline: 2px solid var(--brand); outline-offset: 1px; }
 /* ADR 0046 — le journal ne réserve plus 96 px de vide. Un fil neuf n'a rien à
    montrer : ce sont les questions d'amorce, juste dessous, qui occupent la
@@ -5192,8 +6196,9 @@ body.ig-open { overflow: hidden; }
   :root, :root[data-theme='dark'], :root:not([data-theme='light']) {
     color-scheme: light;
     --brand: var(--nota-blue-700); --brand-bright: var(--nota-blue-500); --brand-ink: #ffffff; --brand-hover: var(--nota-blue-800);
-    --bg: #ffffff; --surface: #ffffff; --surface-inset: #eaf1f5; --surface-hover: #e2ebf0;
-    --ink: #0d1b27; --ink-muted: #526574; --border: #d9e3e9; --border-strong: #b6c8d4; --ring: var(--nota-blue-600);
+    --bg: #ffffff; --surface: #ffffff; --surface-inset: #ebf1f5; --surface-hover: #e4edf1;
+    --ink: #101b26; --ink-muted: #5b6c72; --border: #cbd8d5; --border-strong: #b3c7c9; --ring: var(--nota-blue-600);
+    --subtitle-ink: #000000;
     --shadow-sm: none; --shadow: none; --shadow-lg: none; --shadow-brand: none;
   }
   .site-header, .site-footer nav, .guide-fab, .sup-wrap, .mark-drift, .mnav, .mnav-scrim,
@@ -5269,7 +6274,7 @@ body.ig-open { overflow: hidden; }
 }
 .account-tour[open] { animation: account-tour-in .2s ease-out; }
 .account-tour::backdrop { background: rgb(0 0 0 / .16); }
-.account-tour h2 { margin: 10px 0; font-size: 21px; line-height: 1.25; }
+.account-tour h2 { margin: 10px 0; }
 .account-tour p { margin: 0 0 20px; line-height: 1.6; }
 .account-tour-progress { color: var(--brand); font-size: 12px; font-weight: 700; }
 .account-tour-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
@@ -5358,10 +6363,27 @@ body.ig-open { overflow: hidden; }
   flex: none; width: 100%; min-width: 0; box-sizing: border-box;
 }
 .o-criteria .crit-other input[type='text'] { width: 100%; max-width: none; box-sizing: border-box; }
-.o-criteria .crit-sec > .crit-more .crit-sec-grid { padding: 12px; }
+/* The optional rows share the same question rails as their section's required
+   rows. Keep the vertical separation, but do not add a second horizontal
+   inset inside the disclosure. */
+.o-criteria .crit-sec > .crit-more .crit-sec-grid { padding: var(--space-6) 0 var(--space-4); }
 .o-criteria .crit-more > summary { padding: 12px; min-height: 44px; box-sizing: border-box; }
 .o-criteria .crit-more[open] > summary { border-bottom: 1px solid var(--border); margin-bottom: 0; }
 .o-criteria .crit-sec-grid > .crit-row { margin: 0; }
+
+/* Keep every questionnaire track inside its card. Without an explicit
+   shrinkable width, a nested flex track can preserve its intrinsic content
+   width at browser zoom and pull the right-hand choices away from the shared
+   rail. */
+.o-criteria .crit-sec-grid,
+.o-criteria .crit-row,
+.o-criteria .crit-dep,
+.o-criteria .crit-dep .seg {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
 
 /* Postal lookup: a compact input followed by a clear geographic result. */
 #o-where-step .coverage-note { background: var(--surface-inset); border-color: var(--border); padding: 16px; }
@@ -5409,6 +6431,151 @@ body.ig-open { overflow: hidden; }
 /* Search and delivery recovery stay inside the dependency-free messenger. */
 .sup-topic-search { width: 100%; margin-top: 6px; min-height: 36px; }
 .sup-topic-empty { margin: 6px 0; color: var(--ink-muted); }
+
+/* --- Booking component consistency --------------------------------------
+   One header pattern for every criterion: the label owns the left rail, the
+   information affordance owns the top-right rail, and answer effects own a
+   separate right rail. The question card itself is a surface, not another
+   outlined box inside the outlined section. */
+#day-dialog .o-criteria .crit-head,
+#day-dialog .o-criteria .crit-text {
+  position: relative;
+  min-width: 0;
+  min-height: 44px;
+  padding-right: 52px;
+  align-items: center;
+}
+
+#day-dialog .o-criteria .crit-head > .itip,
+#day-dialog .o-criteria .crit-text > .itip,
+#day-dialog .o-criteria .crit-sec-h > .itip {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin: 0;
+  transform: none;
+}
+
+#day-dialog .o-criteria .crit-sec-h:has(> .itip) {
+  position: relative;
+  padding-right: 52px;
+}
+
+#day-dialog .o-criteria .crit-head > .crit-label,
+#day-dialog .o-criteria .crit-text > .crit-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
+}
+
+#day-dialog .o-criteria .crit-req {
+  max-width: 100%;
+  margin-left: 8px;
+  white-space: normal;
+}
+
+#day-dialog .o-criteria .crit-flag { align-items: center; }
+#day-dialog .o-criteria .crit-flag input { margin-top: 0; }
+
+/* Labels and prices are separate flex items. This keeps « Pas encore
+   demandée » and « +200 $ » readable at every width. */
+#day-dialog .o-criteria .crit-row .seg-btn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  min-height: 44px;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+#day-dialog .o-criteria .crit-row .seg-btn .crit-add {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 12px;
+  white-space: nowrap;
+}
+
+/* Keep controls readable without adding another visual frame around the
+   question: the section is the grouping boundary, the surface is the row. */
+#day-dialog .o-criteria .crit-sec-grid > .crit-row {
+  border: 0;
+  background: var(--surface);
+}
+
+#day-dialog .o-criteria .crit-sec {
+  /* A confident blue wash separates each subsection from the white answer
+     surfaces without adding another outline around the question. */
+  background: color-mix(in srgb, var(--brand-bright) 20%, var(--surface));
+}
+
+#day-dialog .o-criteria .crit-more[open] > summary {
+  border-bottom: 0;
+  margin-bottom: var(--space-3);
+}
+
+/* Three-choice rows have no safe inline layout below tablet width. A single
+   full-width answer per line preserves the left label rail and the right
+   price rail instead of allowing a 2+1 wrap. */
+@media (max-width: 900px) {
+  #day-dialog .o-criteria .crit-row .seg {
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-3);
+  }
+
+  #day-dialog .o-criteria .crit-row .seg-btn {
+    width: 100%;
+    max-width: none;
+    flex: 1 1 auto;
+  }
+}
+
+/* Offer sections: the white parent is the deliberate separator. The tinted
+   cards remain part of the Nota palette, but their spacing is now a real gap
+   instead of blue meeting blue at a border. */
+#day-dialog .book-step-offer,
+#day-dialog .o-criteria {
+  background: var(--surface);
+}
+
+#day-dialog .book-step-offer {
+  gap: var(--space-12);
+}
+
+/* The offer step is intentionally allowed to remain a block in the base
+   layout; use a sibling margin as well so the white separator survives that
+   cascade and remains visible between each tinted section. */
+#day-dialog .book-step-offer > .offer-sec + .offer-sec {
+  margin-top: var(--space-12);
+}
+
+#day-dialog .o-criteria {
+  gap: var(--space-12);
+}
+
+#day-dialog .offer-sec,
+#day-dialog .o-criteria .crit-sec {
+  background: var(--surface-inset);
+}
+
+#day-dialog .offer-sec .crit-sec-h,
+#day-dialog .o-criteria .crit-sec-h {
+  background: var(--surface);
+}
+
+/* Section pictograms are brand signals, not controls: no enclosing border or
+   tint, including after the section is completed. */
+#day-dialog .crit-sec-ic {
+  border: 0;
+  background: transparent;
+  color: var(--brand);
+  transition: color .15s;
+}
+
 .sup-msg[data-delivery='unconfirmed'] .sup-bubble { border: 1px dashed var(--border-strong); }
 .sup-delivery { color: var(--ink-muted); font-size: 12px; }
 .sup-recover { font: inherit; font-size: 12px; padding: 6px 8px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); cursor: pointer; }
@@ -5424,7 +6591,7 @@ body.ig-open { overflow: hidden; }
    avant tout le reste. Le bandeau bêta est au-dessus de tout et ne se cache
    jamais.
    ========================================================================== */
-.salle { position: fixed; inset: 0; z-index: 11000; display: flex; flex-direction: column; background: var(--hunter-950); color: #f6f9f7; }
+.salle { position: fixed; inset: 0; z-index: 11000; display: flex; flex-direction: column; background: var(--nota-blue-950); color: #f4f8fa; }
 .salle[hidden] { display: none; }
 /* Le fond de la page ne défile plus derrière la salle. */
 body.salle-ouverte { overflow: hidden; }
@@ -5442,46 +6609,46 @@ body.salle-ouverte { overflow: hidden; }
    voler l'attention de la personne d'en face. */
 .salle-video-local { position: absolute; right: 16px; bottom: 16px; width: 22%; min-width: 140px; max-width: 260px; height: auto; aspect-ratio: 4 / 3; border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: var(--shadow-lg); }
 
-.salle-rail { display: flex; flex-direction: column; gap: 14px; padding: 18px; overflow-y: auto; background: var(--hunter-900); border-left: 1px solid var(--hunter-800); }
-.salle-bloc { padding: 14px; background: rgb(255 255 255 / 0.04); border: 1px solid var(--hunter-800); border-radius: var(--radius); }
+.salle-rail { display: flex; flex-direction: column; gap: 14px; padding: 18px; overflow-y: auto; background: var(--nota-blue-900); border-left: 1px solid var(--nota-blue-800); }
+.salle-bloc { padding: 14px; background: rgb(255 255 255 / 0.04); border: 1px solid var(--nota-blue-800); border-radius: var(--radius); }
 .salle-etape-nom { margin: 0 0 8px; font-size: 18px; line-height: 1.3; }
 .salle-etape-conduite { margin: 0 0 8px; font-size: 15px; line-height: 1.5; }
-.salle-etape-constat { margin: 0; font-size: 13px; line-height: 1.45; color: var(--hunter-300); }
+.salle-etape-constat { margin: 0; font-size: 13px; line-height: 1.45; color: var(--nota-blue-300); }
 
 /* La chaîne d'authentification. C'est la ligne qu'on lit à voix haute : elle a
    droit à la plus grosse typographie de l'écran, en chasse fixe pour que S et 5
    ne se confondent pas. */
 .salle-bloc-sas { text-align: center; }
-.salle-sas-titre { margin: 0 0 6px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--hunter-300); }
+.salle-sas-titre { margin: 0 0 6px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--nota-blue-300); }
 .salle-sas { margin: 0; font-family: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace; font-size: 34px; font-weight: 700; letter-spacing: 0.12em; }
-.salle-sas.is-confirme { color: var(--hunter-400); }
-.salle-sas-aide { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--hunter-300); }
+.salle-sas.is-confirme { color: var(--nota-blue-400); }
+.salle-sas-aide { margin: 6px 0 0; font-size: 12px; line-height: 1.4; color: var(--nota-blue-300); }
 
-.salle-portes-titre { margin: 0 0 8px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--hunter-300); }
+.salle-portes-titre { margin: 0 0 8px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--nota-blue-300); }
 .salle-portes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
 .salle-porte { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 4px 8px; font-size: 14px; line-height: 1.4; }
 .salle-porte-marque { color: var(--warn); font-weight: 700; }
-.salle-porte.is-ouverte .salle-porte-marque { color: var(--hunter-400); }
+.salle-porte.is-ouverte .salle-porte-marque { color: var(--nota-blue-400); }
 .salle-porte-nom { font-weight: 600; }
 /* Une porte fermée DIT pourquoi. Le motif s'aligne sous le nom, pas sous la
    marque : c'est une phrase, pas une puce. */
-.salle-porte-motif { grid-column: 2; margin: 0; font-size: 13px; line-height: 1.4; color: var(--hunter-200); }
+.salle-porte-motif { grid-column: 2; margin: 0; font-size: 13px; line-height: 1.4; color: var(--nota-blue-200); }
 
 .salle-statut { display: flex; flex-direction: column; gap: 8px; }
-.salle-statut-ligne { margin: 0; font-size: 13px; line-height: 1.45; color: var(--hunter-200); }
+.salle-statut-ligne { margin: 0; font-size: 13px; line-height: 1.45; color: var(--nota-blue-200); }
 .salle-statut-ligne.is-alerte { padding: 10px; background: rgb(180 35 24 / 0.18); border: 1px solid var(--danger); border-radius: var(--radius-sm); color: #ffe4e1; }
 .salle-statut-ligne.is-enregistre { color: var(--warn); font-weight: 600; }
-.salle-empreinte { display: block; overflow-wrap: anywhere; font-family: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace; font-size: 11px; line-height: 1.5; color: var(--hunter-300); }
+.salle-empreinte { display: block; overflow-wrap: anywhere; font-family: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace; font-size: 11px; line-height: 1.5; color: var(--nota-blue-300); }
 
 .salle-refus { display: flex; flex-direction: column; gap: 6px; padding: 10px; background: rgb(180 35 24 / 0.18); border: 1px solid var(--danger); border-radius: var(--radius-sm); }
 .salle-refus[hidden] { display: none; }
 .salle-refus-ligne { margin: 0; font-size: 13px; line-height: 1.45; color: #ffe4e1; }
 
 .salle-actions { display: flex; flex-direction: column; gap: 8px; }
-.salle-btn { font: inherit; font-size: 14px; font-weight: 600; padding: 11px 14px; cursor: pointer; text-align: left; color: #f6f9f7; background: rgb(255 255 255 / 0.06); border: 1px solid var(--hunter-700); border-radius: var(--radius-sm); }
+.salle-btn { font: inherit; font-size: 14px; font-weight: 600; padding: 11px 14px; cursor: pointer; text-align: left; color: #f4f8fa; background: rgb(255 255 255 / 0.06); border: 1px solid var(--nota-blue-700); border-radius: var(--radius-sm); }
 .salle-btn:hover:not(:disabled) { background: rgb(255 255 255 / 0.12); }
-.salle-btn.is-primaire { background: var(--hunter-600); border-color: var(--hunter-500); }
-.salle-btn.is-primaire:hover:not(:disabled) { background: var(--hunter-500); }
+.salle-btn.is-primaire { background: var(--nota-blue-600); border-color: var(--nota-blue-500); }
+.salle-btn.is-primaire:hover:not(:disabled) { background: var(--nota-blue-500); }
 .salle-btn.is-discret { background: transparent; font-weight: 500; }
 .salle-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .salle-quitter { margin-top: auto; }
@@ -5490,7 +6657,7 @@ body.salle-ouverte { overflow: hidden; }
    conduit rarement depuis un téléphone, le client souvent. */
 @media (max-width: 860px) {
   .salle-scene { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(180px, 40vh) minmax(0, 1fr); }
-  .salle-rail { border-left: 0; border-top: 1px solid var(--hunter-800); }
+  .salle-rail { border-left: 0; border-top: 1px solid var(--nota-blue-800); }
   .salle-sas { font-size: 28px; }
 }
 
@@ -5500,52 +6667,58 @@ body.salle-ouverte { overflow: hidden; }
 .salle-annonce-pastille { display: inline-block; margin: 0 0 8px; padding: 3px 10px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--brand-ink); background: var(--brand); border-radius: var(--radius-xs); }
 .salle-annonce-actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
 
-/* Beta: an explicit home for experiments, separate from booking. */
-.beta-page { max-width: 1120px; padding-top: 52px; padding-bottom: 72px; }
-.beta-hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 56px; align-items: center; }
-.beta-eyebrow { display: flex; align-items: center; gap: 9px; margin: 0 0 18px; font-size: 12px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-muted); }
+/* Beta: an explicit home for experiments, but still part of the public site.
+   It shares the carnet's open canvas, measure and editorial rhythm; the beta
+   is a feature of Nota, not a separate branded microsite. */
+.beta-page { max-width: var(--maxw); padding-top: clamp(28px, 3.2vw, 48px); padding-bottom: clamp(40px, 5vw, 72px); }
+.beta-hero { display: grid; grid-template-columns: minmax(0, .94fr) minmax(0, 1.06fr); gap: clamp(32px, 5vw, 72px); align-items: center; }
+.beta-eyebrow { display: flex; align-items: center; gap: 9px; margin: 0 0 16px; font-size: var(--type-eyebrow); font-weight: var(--weight-display); letter-spacing: var(--type-eyebrow-ls); text-transform: uppercase; color: var(--ink-muted); }
 .beta-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.beta-intro h1 { max-width: 560px; margin: 0 0 22px; font-size: clamp(32px, 4.2vw, 52px); line-height: 1.08; letter-spacing: -.04em; }
-.beta-lead { max-width: 500px; color: var(--ink-muted); font-size: 18px; line-height: 1.7; }
-.beta-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 26px; }
+.beta-intro h1 { max-width: 560px; margin: 0 0 16px; }
+.beta-lead { max-width: 47ch; color: var(--ink-muted); font-size: var(--type-lead); line-height: var(--type-lead-lh); }
+.beta-actions { display: flex; flex-wrap: wrap; gap: var(--space-6); align-items: center; margin-top: var(--space-10); }
 .beta-actions .btn { min-height: 44px; white-space: normal; text-align: center; }
-.beta-caption { margin: 18px 0 0; max-width: 440px; color: var(--ink-muted); font-size: 13px; line-height: 1.6; }
-.beta-preview { border: 1px solid var(--border-strong); border-radius: var(--radius-lg); padding: 22px; background: var(--surface); box-shadow: 0 18px 45px rgb(var(--nota-blue-700-rgb) / .08); }
+.beta-actions .btn-lg { padding-inline: 17px; }
+.beta-caption { margin: var(--space-6) 0 0; max-width: 56ch; color: var(--ink-muted); font-size: 12px; line-height: 1.55; }
+.beta-preview { width: min(100%, 600px); justify-self: end; border: 1px solid var(--border); border-radius: var(--radius-lg); padding: clamp(20px, 2.4vw, 30px); background: var(--surface); box-shadow: var(--shadow-sm); }
 .beta-preview-top { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; font-weight: 700; }
-.beta-preview-tag { font-size: 11px; color: var(--ink-muted); background: var(--surface-inset); padding: 6px 9px; border-radius: var(--radius-xs); }
-.beta-preview-scene { display: grid; grid-template-columns: .9fr 1fr; gap: 16px; margin: 22px 0; min-height: 220px; }
-.beta-preview-person { display: flex; align-items: center; justify-content: center; background: var(--nota-blue-900); border-radius: var(--radius); }
+.beta-preview-tag { font-size: 11px; color: var(--ink-muted); background: transparent; border: 1px solid var(--border); padding: 6px 9px; border-radius: var(--radius-xs); }
+.beta-preview-scene { display: grid; grid-template-columns: .9fr 1fr; gap: clamp(14px, 2vw, 22px); margin: 22px 0 20px; min-height: 228px; }
+.beta-preview-person { display: flex; align-items: center; justify-content: center; background: var(--surface-inset); border: 1px solid var(--border-strong); border-radius: var(--radius); }
 .beta-preview-person svg { width: 80%; stroke: var(--nota-blue-300); stroke-width: 1.5; }
-.beta-preview-paper { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 22px 16px; transform: rotate(3deg); background: var(--surface); }
+.beta-preview-paper { min-width: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); padding: 22px 16px; transform: rotate(3deg); background: var(--surface); box-shadow: var(--shadow-sm); }
 .beta-paper-brand { display: block; color: var(--ink-muted); font-size: 13px; font-weight: 700; margin-bottom: 25px; }
 .beta-preview-paper i { display: block; height: 4px; background: var(--border); margin: 11px 0; }
 .beta-preview-paper i:nth-of-type(2) { width: 80%; }
 .beta-preview-paper i:nth-of-type(4) { width: 60%; }
 .beta-preview-paper svg { width: 100%; margin-top: 16px; stroke: var(--brand); stroke-width: 1.7; }
 .beta-preview-steps { list-style: none; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 16px 0 0; margin: 0; border-top: 1px solid var(--border); font-size: 11px; color: var(--ink-muted); }
-.beta-boundary { display: grid; grid-template-columns: 210px 1fr; gap: 24px; align-items: start; margin-top: 40px; padding: 22px 26px; border-left: 3px solid var(--brand); background: var(--surface-inset); border-radius: 0 var(--radius) var(--radius) 0; font-size: 14px; line-height: 1.7; }
+.beta-preview-steps li { flex: 1 1 0; }
+.beta-preview-steps li:not(:last-child) { position: relative; }
+.beta-preview-steps li:not(:last-child)::after { content: ''; position: absolute; top: .65em; right: 8px; width: 18px; border-top: 1px solid var(--border-strong); transform: translateX(50%); }
+.beta-boundary { display: grid; grid-template-columns: minmax(180px, 220px) 1fr; gap: clamp(20px, 3vw, 36px); align-items: start; margin-top: clamp(28px, 3.5vw, 40px); padding: 20px 24px; border: 1px solid var(--border); border-left: 3px solid var(--brand); background: var(--surface); border-radius: 0 var(--radius) var(--radius) 0; font-size: 14px; line-height: 1.65; box-shadow: var(--shadow-sm); }
 .beta-boundary p { margin: 0; color: var(--ink-muted); }
-.beta-experience { margin-top: 64px; }
-.beta-section-heading h2, .beta-access-grid h2 { margin: 0 0 22px; font-size: 27px; line-height: 1.25; letter-spacing: -.025em; }
-.beta-features { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 32px; margin: 28px 0 0; padding: 0; }
-.beta-features li { border-top: 1px solid var(--border-strong); padding-top: 22px; }
+.beta-experience { margin-top: clamp(32px, 4vw, 52px); }
+.beta-section-heading h2, .beta-access-grid h2 { margin: 0 0 16px; }
+.beta-features { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(16px, 2.5vw, 28px); margin: 24px 0 0; padding: 0; }
+.beta-features li { min-width: 0; padding: 18px 18px 20px; border: 1px solid var(--border); border-top: 3px solid var(--brand); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-sm); }
 .beta-step { font-size: 13px; font-weight: 700; color: var(--ink-muted); }
-.beta-features h3 { font-size: 19px; margin: 16px 0 10px; }
+.beta-features h3 { margin: 10px 0 8px; }
 .beta-features p, .beta-access-grid p, .beta-demo p { font-size: 14px; color: var(--ink-muted); line-height: 1.7; }
-.beta-access-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; margin-top: 44px; }
-.beta-access, .beta-upcoming { min-width: 0; border: 1px solid var(--border); background: var(--surface); padding: 30px; border-radius: var(--radius); }
-.beta-upcoming { background: transparent; }
+.beta-access-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(18px, 3vw, 32px); margin-top: clamp(32px, 4vw, 48px); }
+.beta-access, .beta-upcoming { min-width: 0; border: 1px solid var(--border); background: var(--surface); padding: clamp(20px, 3vw, 30px); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
+.beta-upcoming { background: var(--surface-inset); }
 .beta-access-grid .beta-eyebrow { color: var(--ink-muted); font-size: 12px; }
-.beta-access-grid .btn { margin-top: 8px; min-height: 44px; white-space: normal; text-align: center; }
+.beta-access-grid .btn { margin-top: 12px; min-height: 44px; white-space: normal; text-align: center; }
 .beta-upcoming ul { padding-left: 20px; color: var(--ink-muted); font-size: 14px; line-height: 1.7; }
 .beta-upcoming li + li { margin-top: 12px; }
-.beta-demo { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-top: 32px; padding: 20px 0; }
+.beta-demo { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); margin-top: clamp(24px, 3vw, 36px); padding: 16px 0; }
 .beta-demo summary { cursor: pointer; padding: 4px 0; min-height: 32px; font-size: 15px; font-weight: 650; }
 .beta-demo summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 5px; }
 .beta-demo p { max-width: 850px; }
 @media (max-width: 980px) {
-  .beta-hero { gap: 28px; }
-  .beta-preview { padding: 17px; }
+  .beta-hero { gap: 32px; }
+  .beta-preview { padding: 20px; }
   .beta-preview-scene { min-height: 190px; gap: 10px; }
 }
 @media (max-width: 720px) {
@@ -5560,4 +6733,757 @@ body.salle-ouverte { overflow: hidden; }
   .beta-access, .beta-upcoming { padding: 24px; }
   .beta-access-grid { margin-top: 28px; }
   .beta-lead { font-size: 16px; }
+}
+
+/* --- Notary landing polish ----------------------------------------------
+   The first section is a clean blue anchor: no translucent film, decorative
+   wash, animated entrance, or heavy black headline. */
+#pane-notaires .intro--hero {
+  margin-top: var(--space-4);
+  padding: var(--space-9) var(--space-12);
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--brand);
+  box-shadow: none;
+}
+
+#pane-notaires .intro--hero h1 {
+  color: var(--brand-ink);
+  animation: none;
+}
+
+#pane-notaires .intro--hero p {
+  color: var(--brand-ink);
+  opacity: .88;
+  animation: none;
+}
+
+#pane-notaires .intro--hero .eyebrow {
+  color: var(--brand-ink);
+  opacity: .86;
+  animation: none;
+}
+
+#pane-notaires .nc-live-head {
+  padding-inline: var(--space-2);
+}
+
+#pane-notaires .nc-live-h,
+#pane-notaires #notary-console .h-sub {
+  color: var(--brand-hover);
+  font-weight: 700;
+}
+
+#pane-notaires .nc-live {
+  padding: var(--space-5);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+#pane-notaires .nc-live-card {
+  border-color: var(--border);
+  border-radius: var(--radius);
+  background: var(--nota-blue-50);
+}
+
+#pane-notaires .nc-live-card:hover {
+  border-color: var(--brand);
+  background: var(--surface-hover);
+}
+
+#pane-notaires .nc-live-svc-name,
+#pane-notaires .nc-live-amt {
+  color: var(--brand-hover);
+}
+
+#pane-notaires .nc-live-amt {
+  font-weight: 700;
+}
+
+#pane-notaires .nc-live-meta {
+  color: var(--ink-muted);
+}
+
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console {
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+#pane-notaires .nc-auth-cta {
+  background: var(--brand);
+  border-color: var(--brand);
+  color: var(--brand-ink);
+}
+
+#pane-notaires .nc-auth-cta:hover {
+  background: var(--brand-hover);
+  border-color: var(--brand-hover);
+}
+
+#pane-notaires .nc-signup-open {
+  color: var(--brand);
+}
+
+.brand-word {
+  color: var(--brand-hover);
+}
+
+@media (max-width: 640px) {
+  #pane-notaires .intro--hero {
+    margin-top: var(--space-4);
+    padding: var(--space-9) var(--space-8);
+  }
+
+  #pane-notaires .intro--hero h1 {
+    font-size: var(--type-h1-compact);
+  }
+
+  #pane-notaires .nc-live {
+    padding: var(--space-5);
+  }
+}
+
+/* Final notary landing surface: keep the compact, square-edged Nota system
+   last in the cascade so legacy treatments cannot reintroduce a side rail or
+   white floating cards. */
+#pane-notaires .intro--hero {
+  background: linear-gradient(135deg, var(--surface-inset) 0%, var(--brand-tint-solid) 100%);
+  box-shadow: var(--shadow-sm);
+}
+#pane-notaires .intro--hero h1 { color: var(--brand-hover); }
+#pane-notaires .intro--hero p { color: var(--ink-muted); opacity: 1; }
+#pane-notaires .intro--hero .eyebrow { color: var(--subtitle-ink); opacity: 1; }
+#pane-notaires .nc-live {
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, var(--surface-veil), var(--surface-inset));
+}
+#pane-notaires .nc-live-card {
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+}
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console {
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, var(--surface-inset) 0%, var(--brand-tint-solid) 100%);
+}
+
+/* --- Partenaires: same Nota surface language as Carnet / Espace notaire ---
+   The partner page is a conversion surface, not a loose collection of
+   outlined boxes. The hero groups the value, the story and claim form then
+   share the same compact rhythm. */
+#pane-partenaires .pr-hero {
+  margin-top: var(--space-4);
+  padding: var(--space-10) var(--space-12) var(--space-9);
+  border-radius: var(--radius);
+  background: linear-gradient(135deg, var(--surface-inset) 0%, var(--brand-tint-solid) 100%);
+  box-shadow: var(--shadow-sm);
+  align-items: start;
+}
+#pane-partenaires .pr-hero h1 {
+  color: var(--brand-hover);
+}
+#pane-partenaires .pr-hero-copy > p { max-width: 58ch; }
+#pane-partenaires .pr-rewards { gap: var(--space-5); }
+#pane-partenaires .pr-card {
+  min-height: 0;
+  padding: var(--space-8) var(--space-9);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, var(--surface-veil), var(--surface-inset));
+  box-shadow: var(--shadow-sm);
+}
+#pane-partenaires .pr-card--notaire {
+  border-color: var(--brand);
+  background: linear-gradient(145deg, var(--brand-tint-solid-strong), var(--surface-inset));
+}
+#pane-partenaires .pr-amount { color: var(--brand-hover); }
+#pane-partenaires .pr-estimate {
+  margin-top: 0;
+  padding: var(--space-7) var(--space-8);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+  box-shadow: var(--shadow-sm);
+}
+#pane-partenaires .pr-hero-cta,
+#pane-partenaires #partner-form .btn-primary {
+  background: transparent;
+  border-color: var(--brand);
+  color: var(--brand);
+  box-shadow: none;
+}
+#pane-partenaires .pr-hero-cta:hover,
+#pane-partenaires #partner-form .btn-primary:hover:not(:disabled) {
+  background: var(--brand-tint-solid);
+  border-color: var(--brand-hover);
+  color: var(--brand-hover);
+}
+#pane-partenaires .pr-aud { background: transparent; }
+#pane-partenaires .pr-aud[aria-pressed='true'] { background: var(--brand-tint-solid-strong); }
+#pane-partenaires .pr-grid { margin-top: var(--space-8); gap: var(--space-10); }
+#pane-partenaires .pr-steps-band {
+  padding: var(--space-8) var(--space-9);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, var(--surface-veil), var(--surface-inset));
+  box-shadow: var(--shadow-sm);
+}
+#pane-partenaires .pr-how-title { margin-top: 0; }
+#pane-partenaires .pr-form-panel {
+  padding: var(--space-9);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: linear-gradient(145deg, var(--surface-inset), var(--brand-tint-solid));
+  box-shadow: var(--shadow-lg);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+#pane-partenaires .pr-faq .disclosure {
+  border-radius: var(--radius);
+  background: var(--surface-inset);
+}
+#pane-partenaires .pr-faq .disclosure[open] { background: var(--surface-hover); }
+#pane-partenaires .pr-pitch .note { margin-top: var(--space-8); }
+#pane-notaires .nc-auth-cta {
+  background: transparent;
+  border-color: var(--brand);
+  color: var(--brand);
+  box-shadow: none;
+}
+#pane-notaires .nc-auth-cta:hover {
+  background: var(--brand-tint-solid);
+  border-color: var(--brand-hover);
+  color: var(--brand-hover);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  #pane-partenaires .pr-hero-copy > *,
+  #pane-partenaires .pr-estimate,
+  #pane-partenaires .pr-grid > * {
+    animation: fadeUp .42s cubic-bezier(.2, .8, .2, 1) both;
+  }
+  #pane-partenaires .pr-hero-copy > *:nth-child(2) { animation-delay: .06s; }
+  #pane-partenaires .pr-hero-copy > *:nth-child(3) { animation-delay: .12s; }
+  #pane-partenaires .pr-hero-copy > *:nth-child(4) { animation-delay: .18s; }
+  #pane-partenaires .pr-hero-copy > *:nth-child(5) { animation-delay: .24s; }
+  #pane-partenaires .pr-estimate { animation-delay: .18s; }
+  #pane-partenaires .pr-grid > *:nth-child(2) { animation-delay: .1s; }
+}
+
+@media (min-width: 901px) {
+  #pane-partenaires .pr-hero { grid-template-rows: auto auto; }
+  #pane-partenaires .pr-hero-copy { grid-row: 1 / span 2; }
+  #pane-partenaires .pr-rewards { grid-row: 1; }
+  #pane-partenaires .pr-estimate { grid-row: 2; }
+}
+
+@media (max-width: 900px) {
+  #pane-partenaires .pr-hero { padding-inline: var(--space-8); }
+  #pane-partenaires .pr-form-panel,
+  #pane-partenaires .pr-steps-band { padding: var(--space-8); }
+}
+
+/* --- Notary landing: focused split --------------------------------------
+   The landing has two jobs: show the week on the left and open the notary
+   door on the right. Keep the split compact and let the page background do
+   the framing; large outlined slabs made the previous version feel wider
+   than it was. The beta announcement remains available from its own tab, but
+   is not part of this acquisition path. */
+.notary-landing-left {
+  grid-area: left;
+  min-width: 0;
+}
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
+  width: min(100%, 1440px);
+  grid-template-columns: minmax(0, 1.55fr) minmax(300px, .75fr);
+  grid-template-areas:
+    "left       right"
+    "conformite conformite"
+    "guarantee  guarantee";
+  column-gap: clamp(24px, 3vw, 48px);
+}
+
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-landing-right {
+  grid-area: right;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+}
+
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-ai-beta-note {
+  display: none;
+}
+
+#pane-notaires .intro--hero {
+  margin-top: var(--space-6);
+  padding: var(--space-10) 0 var(--space-8);
+  background: transparent;
+  box-shadow: none;
+}
+
+#pane-notaires .intro--hero h1 {
+  color: var(--brand-bright);
+}
+
+#pane-notaires .intro--hero p {
+  max-width: 58ch;
+  color: var(--ink-muted);
+}
+
+#pane-notaires .nc-live-head {
+  padding-inline: 0;
+  margin-top: var(--space-2);
+}
+
+#pane-notaires .nc-live {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#pane-notaires .nc-live-grid {
+  gap: var(--space-5);
+}
+
+#pane-notaires .nc-live-card {
+  background: color-mix(in srgb, var(--brand-bright) 7%, var(--surface));
+}
+
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console {
+  align-self: start;
+  width: 100%;
+  margin: var(--space-6) 0 0;
+  padding: clamp(22px, 3vw, 36px);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--brand-bright) 11%, var(--surface));
+  box-shadow: none;
+}
+
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-landing-right #notary-console {
+  order: 1;
+  margin-top: var(--space-6);
+}
+
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console .nc-gate {
+  max-width: none;
+}
+
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet {
+  order: 2;
+  margin: var(--space-6) 0 0;
+  padding: 0;
+  border-top: 0;
+}
+
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet .sub-card {
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.beta-teaser-info {
+  background: transparent;
+}
+
+.beta-teaser-info:hover {
+  background: transparent;
+}
+
+.guide-fab {
+  background: transparent;
+  box-shadow: none;
+}
+
+.guide-fab:hover {
+  background: transparent;
+  box-shadow: none;
+  border-color: var(--brand);
+}
+
+@media (max-width: 899.98px) {
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 0;
+  }
+
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-landing-left,
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-landing-right {
+    display: contents;
+  }
+
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro--hero { order: 1; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { order: 2; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-live-head { order: 3; width: 100%; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-live { order: 4; width: 100%; align-self: stretch; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet { order: 5; width: 100%; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #nc-conformite { order: 6; width: 100%; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nota-guarantee { order: 7; width: 100%; }
+
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console {
+    margin-top: 0;
+  }
+
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-live-head {
+    margin-top: var(--space-12);
+  }
+
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet {
+    margin-top: var(--space-10);
+  }
+}
+
+@media (max-width: 560px) {
+  #pane-notaires .intro--hero {
+    margin-top: var(--space-4);
+    padding-block: var(--space-8) var(--space-7);
+  }
+
+  #pane-notaires .intro--hero h1 {
+    font-size: var(--type-h1-compact);
+  }
+
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console {
+    padding: var(--space-8);
+  }
+}
+
+/* --- Account menu refinement ---------------------------------------------
+   Keep the account hub calm and flat: the shadow separates it from the page,
+   while the identity row remains part of the menu instead of becoming a card
+   inside another card. */
+.acct-panel {
+  width: min(368px, calc(100vw - 24px));
+  padding: 10px;
+  border: 0;
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+.acct-panel-head {
+  align-items: center;
+  gap: 8px;
+  padding: 2px;
+}
+.acct-panel-head .acct-head {
+  gap: 11px;
+  padding: 10px;
+  border: 0;
+  background: transparent;
+}
+.acct-panel-head .acct-head:hover,
+.acct-panel-head .acct-head:focus-visible {
+  background: var(--surface-hover);
+}
+.acct-avatar {
+  width: 40px;
+  height: 40px;
+  background: var(--surface);
+  border-color: var(--border-strong);
+}
+.acct-item-title { font-size: 15px; letter-spacing: -0.01em; }
+.acct-item-sub { font-size: 12px; line-height: 1.35; }
+.acct-role { margin-top: 3px; padding: 2px 7px; background: transparent; }
+.acct-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+}
+.acct-close:hover,
+.acct-close:focus-visible {
+  border-color: var(--border);
+  background: var(--surface-hover);
+}
+.acct-sep { margin: 8px 4px; background: color-mix(in srgb, var(--border-strong) 70%, transparent); }
+.acct-actions { gap: 3px; padding: 1px 2px; }
+.acct-action {
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  transition: background-color .16s ease, border-color .16s ease, transform .16s ease;
+}
+.acct-action svg {
+  width: 18px;
+  height: 18px;
+  color: var(--brand);
+}
+.acct-action:hover,
+.acct-action:focus-visible {
+  border-color: var(--border);
+  background: var(--surface-hover);
+}
+.acct-action:hover { transform: translateX(2px); }
+.acct-action:last-child {
+  margin-top: 4px;
+  border-top-color: var(--border);
+  color: var(--ink-muted);
+}
+.acct-action:last-child svg { color: var(--ink-muted); }
+.acct-notifs { margin-top: 2px; }
+.acct-panel .notif-head {
+  padding: 5px 10px 4px;
+  color: var(--ink-muted);
+}
+.acct-panel .notif-list {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-veil);
+}
+.acct-panel .notif-item {
+  padding: 9px 34px 9px 10px;
+  border-bottom-color: var(--border);
+}
+.acct-panel .notif-item:last-child { border-bottom: 0; }
+.acct-panel .notif-item.is-unread { background: var(--surface-hover); }
+.acct-legal {
+  gap: 2px;
+  padding: 0 2px 1px;
+}
+.acct-legal-link { padding: 5px 7px; }
+
+@media (max-width: 899.98px) {
+  .acct-panel {
+    position: fixed;
+    top: calc(var(--header-h) + 8px);
+    right: 8px;
+    width: min(360px, calc(100vw - 16px));
+  }
+}
+
+/* Final visual pass: these rules intentionally sit after the responsive intro
+   rules so the calm chooser treatment wins at every viewport size. */
+#pane-beta {
+  --beta-heading: #101820;
+}
+
+html[data-theme='dark'] #pane-beta {
+  --beta-heading: var(--ink);
+}
+
+#pane-beta .beta-intro h1,
+#pane-beta .beta-section-heading h2,
+#pane-beta .beta-access-grid h2 {
+  color: var(--beta-heading);
+}
+
+#pane-beta .beta-eyebrow { color: var(--subtitle-ink); }
+
+#pane-beta .beta-experience { margin-top: clamp(56px, 7vw, 104px); }
+#pane-beta .beta-access-grid { margin-top: clamp(48px, 6vw, 80px); }
+#pane-beta .beta-demo { margin-top: clamp(36px, 4vw, 56px); }
+
+#pane-beta .beta-preview,
+#pane-beta .beta-features li,
+#pane-beta .beta-access,
+#pane-beta .beta-upcoming,
+#pane-beta .beta-actions .btn {
+  transition: transform .28s cubic-bezier(.2, .8, .2, 1),
+    box-shadow .28s ease, border-color .2s ease, background-color .2s ease;
+}
+
+#pane-beta .beta-preview:hover,
+#pane-beta .beta-preview:focus-within {
+  transform: translateY(-7px);
+  box-shadow: 0 30px 64px -30px rgb(var(--nota-blue-700-rgb) / .6);
+}
+
+#pane-beta .beta-preview-paper {
+  transition: transform .35s cubic-bezier(.2, .8, .2, 1);
+}
+
+#pane-beta .beta-preview:hover .beta-preview-paper,
+#pane-beta .beta-preview:focus-within .beta-preview-paper {
+  transform: rotate(1.2deg) translateY(-4px);
+}
+
+#pane-beta .beta-actions .btn:hover,
+#pane-beta .beta-actions .btn:focus-visible {
+  transform: translateY(-2px);
+}
+
+@keyframes beta-brand-rise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+#pane-beta .beta-intro { animation: beta-brand-rise .55s cubic-bezier(.2, .8, .2, 1) both; }
+#pane-beta .beta-preview { animation: beta-brand-rise .65s .06s cubic-bezier(.2, .8, .2, 1) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  #pane-beta .beta-intro,
+  #pane-beta .beta-preview { animation: none; }
+  #pane-beta .beta-preview,
+  #pane-beta .beta-preview-paper,
+  #pane-beta .beta-features li,
+  #pane-beta .beta-access,
+  #pane-beta .beta-upcoming,
+  #pane-beta .beta-actions .btn { transition: none; }
+}
+
+.ig-chooser {
+  /* Let the ambient marks pass through as one soft field. The foreground
+     stays crisp; only the background is blurred, which visually joins the
+     N block and OTA without washing out the lettering. */
+  background: linear-gradient(145deg,
+    color-mix(in srgb, var(--surface) 64%, transparent),
+    color-mix(in srgb, var(--surface) 78%, transparent));
+  border-color: color-mix(in srgb, var(--border-strong) 72%, transparent);
+  box-shadow: var(--shadow), 0 22px 56px -30px rgb(var(--nota-blue-700-rgb) / .36);
+  -webkit-backdrop-filter: blur(18px) saturate(1.08);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+.ig-chooser > .ig-wordmark .ig-word {
+  width: 2.2em;
+  margin-left: -.02em;
+  font-size: .58em;
+}
+.mark-drift--intro { opacity: .86; }
+.mark-drift--intro i { opacity: calc(var(--o, .025) * 1.18); }
+.ig-door {
+  isolation: isolate;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+  -webkit-backdrop-filter: blur(10px) saturate(1.06);
+  backdrop-filter: blur(10px) saturate(1.06);
+  will-change: transform;
+  transition: border-color .26s ease, background-color .26s ease, box-shadow .26s ease;
+}
+.ig-door:hover,
+.ig-door:focus-visible {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--surface-hover) 84%, transparent);
+  box-shadow: 0 20px 34px -20px rgb(var(--nota-blue-700-rgb) / .52), 0 0 0 1px rgb(var(--nota-blue-500-rgb) / .18);
+}
+.ig-door:hover { animation: igDoorHoverLift .68s cubic-bezier(.2, .82, .2, 1) both; }
+.ig-door:hover::after { animation: igDoorSweep .72s ease-out both; }
+.ig-door:hover .ig-door-arrow { animation: igDoorArrow .62s cubic-bezier(.2, .8, .2, 1) both; }
+.ig-door:hover::before,
+.ig-door:focus-visible::before { transform: scaleY(1.35); }
+.ig-enter {
+  color: var(--brand);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding-inline: 16px;
+  transition: border-color .18s ease, background-color .18s ease, transform .18s ease;
+}
+.ig-enter:hover { color: var(--brand); border-color: var(--border-strong); background: var(--surface-inset); transform: translateY(-1px); }
+.language-control { opacity: 0 !important; pointer-events: auto !important; }
+#lang-toggle.language-control {
+  position: relative !important;
+  top: auto; right: auto; width: 1px; height: 1px;
+  margin: 0; padding: 0; overflow: visible; border: 0;
+  z-index: 1;
+}
+.ig-chooser > .language-control { width: 1px; height: 1px; overflow: visible; }
+.ig-controls > .language-control {
+  position: absolute !important; inset: 0 auto auto 0;
+  width: 1px; height: 1px; margin: 0; padding: 0; overflow: visible;
+}
+.mnav-pref.language-control {
+  min-height: 1px; height: 1px; margin-block: -1px !important; overflow: visible;
+}
+#lang-toggle.language-control { min-width: 0 !important; }
+@media (min-width: 1080px) {
+  .ig-chooser {
+    display: flex;
+    width: min(920px, 94vw);
+    max-width: 920px;
+    padding-inline: clamp(48px, 7vw, 88px);
+  }
+  .ig-chooser > .ig-wordmark,
+  .ig-chooser > .ig-title,
+  .ig-chooser > .ig-lede,
+  .ig-chooser > .ig-doors,
+  .ig-chooser > .ig-enter { grid-area: auto; }
+  .ig-doors { flex-direction: row; gap: 14px; }
+}
+.analytics-consent {
+  left: 50%; right: auto; bottom: 16px;
+  width: min(560px, calc(100vw - 32px)); max-width: none;
+  padding: 12px 14px;
+  transform: translateX(-50%);
+  background: var(--surface);
+  border-color: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.analytics-consent p { margin-bottom: 8px; font-size: 12px; line-height: 1.45; }
+.analytics-consent button, #analytics-preferences:not(.footer-link) { padding: 7px 10px; margin-right: 4px; font-size: 12px; }
+.analytics-consent a { font-size: 12px; }
+.toast {
+  bottom: 18px;
+  padding: 10px 14px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ig-door:hover,
+  .ig-door:focus-visible { animation: none; transform: none; }
+  .ig-door:hover::after,
+  .ig-door:hover .ig-door-arrow { animation: none; }
+}
+
+/* Keep the locale control discoverable in the real header and mobile drawer.
+   The arrival-film copies remain intentionally quiet, but the application
+   shell must always expose the FR | EN choice promised by the product. */
+.language-control {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+#lang-toggle.language-control {
+  position: relative !important;
+  width: auto;
+  height: auto;
+  min-width: auto !important;
+  margin: 0;
+  padding: 2px;
+  overflow: visible;
+}
+
+.mnav-pref.language-control {
+  min-height: 0;
+  height: auto;
+  margin-block: 0 !important;
+  overflow: visible;
+}
+
+.ig-chooser > .language-control,
+.ig-controls > .language-control {
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* The section tint should whisper blue against the white card. The white
+   parent and the 24 px sibling margin are the visual separator. */
+#day-dialog .offer-sec,
+#day-dialog .o-criteria .crit-sec {
+  background: color-mix(in srgb, var(--brand-bright) 6%, var(--surface));
+}
+
+/* Information is an affordance, but the glyph itself is not another boxed
+   card: keep it brand-coloured and remove the enclosing ring. */
+#day-dialog .itip-btn,
+#day-dialog .itip-btn:hover,
+#day-dialog .itip[data-open='true'] .itip-btn {
+  border: 0;
+  background: transparent;
+  color: var(--brand);
 }

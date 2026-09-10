@@ -1,1171 +1,382 @@
 # Nota — Business Plan
 
-**A market for urgent notarial acts - and a protocol for hidden capacity.**
+**A market for urgent notarial acts, followed by tools that reduce preparation work.**
 
-- Version: 1.5
-- Date: 2026-09-09
-- Stage: product live, pre-revenue
-- Raise: **250 000 $ CAD pre-seed**, 12 months of runway
-- Contact: Anthony Paquet — anthonypaquet1508@gmail.com
+info@gonota.ca
 
-> **What changed in 1.5.** Added the Courtiers Immobiliers partner channel: a
-> unique referral code, a 50 $ reward when a referred customer converts into a
-> retained and settled notarial act, and a four-party outcome where the customer
-> gets the date, the notary keeps their full fee, the courtier earns a transparent
-> acquisition reward, and Nota earns its own service line.
->
-> **What changed in 1.4.** Reframed the commercial outcome around the notary's
-> incremental gross-fee opportunity, the customer's deadline problem, and the
-> zero-obligation subscription: free to join, no full-calendar sharing, and no
-> required action unless a request fits.
->
-> **What changed in 1.3.** Added a cited market and AI strategy research companion
-> covering Canada province by province, priority civil-law countries, adjacent
-> urgent-service markets, and the evidence required for an investor-grade AI
-> plan: baselines, act-specific evaluations, human accountability, data rights,
-> model economics, and monitoring.
->
-> **What changed in 1.2.** This revision makes the Nota product boundary explicit:
-> Québec City first, then Quebec-wide and international notarial expansion, with
-> a reusable hidden-capacity demand market as the broader platform thesis. It
-> also makes the provider actions explicit: accept, counter-propose, request
-> information, or pass without sharing a private agenda.
->
-> **What changed in 1.1.** Version 1.0 described a **10 % commission on the
-> notary's fee** as what the code did, and proposed restructuring it. That
-> commission has since been **removed from the product**, not merely proposed
-> for removal: Nota now charges the client **its own published price**, per
-> service, and the notary's *honoraires* reach them whole. Every economic figure
-> in this plan has been recomputed from the shipped pricing grid in
-> `packages/domain/index.js` — unit economics, revenue per act, gross margin,
-> break-even and the three-year projection. **Gross margin per act is materially
-> lower than version 1.0 claimed** (about **73 %** since the date ladder and the service lines were repriced on 2026-09-05 by ADR 0038 and ADR 0042, not 89–91 %), because Nota
-> bears the card-processing fee on the *whole* amount the client pays, including
-> the notary's fee, which Nota never keeps. §8.2 shows the arithmetic.
+**https://plan.gonata.ca/**
 
----
+**Proposed raise: 250 000 $ pre-seed.** Product development and public deployment are evidenced; repeatable paid demand, live settlement and professional launch clearance are not established by the reviewed records. The financing scenario targets 244 completed acts and approximately 80 813 $ of Nota revenue in Year 1. These are targets, not traction.
+
+This revision reconciles the four-service code catalogue, published fee grid, referral accrual, market arithmetic, payment costs, completion funnel and funding requirements. It replaces the previous claim that approximately 240 000 $ funds the business through Year 3. Under the revised base assumptions, approximately **430 119 $**, including a 25 000 $ planning reserve, is required at the worst annual endpoint; monthly timing beyond Year 1 could require more.
+
+[French executive summary](plan-affaires-sommaire.md) · [Financial model and monthly cash](planning/business-plan-model.json) · [Review and outstanding evidence](planning/business-plan-review-2026-09-09.md)
 
 ## 1. Executive summary
 
-Québec abolished mandatory notarial tariffs in **1991**. For thirty-five years,
-notary fees have been free-floating and privately negotiated — and in all that
-time **no price discovery mechanism ever emerged**. A client whose mortgage
-rate hold expires next Tuesday has no way to learn what next Tuesday costs, and
-a notary with an empty Tuesday has no way to sell it.
+Nota connects a client who needs a notarial act by a particular date with a notary who has suitable capacity. The client supplies the service, date, location, relevant facts and offered professional fee. A notary can accept, counter-propose, request information or pass without publishing a private calendar. Joining and browsing are free for notaries.
 
-**Nota is that mechanism.** A client posts the date they need an *acte notarié*
-signed and what they will pay for it. Notaries watch a public calendar - the
-*carnet* - and pick up the work that fits their schedule. They do not publish
-their private agenda. For each qualified demand, a provider can accept, make a
-counter-proposal, request what is missing, or do nothing. Because the offer is
-attached to a date, **the market prices urgency**: a signature needed tomorrow
-clears at a multiple of one needed in three weeks.
+**Nota is capacity infrastructure for notaries, not a replacement for notaries.** Our promise is explicit: Nota is not intended to break the profession or remove notary jobs. We are repairing a broken supply-and-demand market where time-sensitive clients struggle to find an available professional, while qualified notaries lose capacity to fragmented discovery, empty calendar slots and repetitive preparation work. Nota organizes qualified demand, makes available capacity easier to use and keeps the practising notary responsible for professional judgment, client advice and the act itself. The reasons for the shortage and the size of the incremental market remain validation questions, so each cohort must be measured rather than assumed.
 
-Nota is deliberately two businesses in sequence. First, it is the Quebec City
-market for basic, repeatable, deadline-driven notarial acts. Then it becomes a
-notary operating layer that turns a retained demand into a complete,
-act-specific work packet. The long-term asset is a reusable **hidden-capacity
-demand market**: customers bid around a deadline; service providers respond
-without exposing their full calendar. That mechanism can travel to other
-provinces, civil-law countries, and - with sector-specific safeguards - other
-industries where demand is urgent and supply is scarce.
+The future model-enabled layer follows the same boundary. Its target is to automate up to 80% of validated, repeatable intake, checks and dossier assembly under a notary's review, so a practice can accept more qualified demand, increase its potential earning capacity and help restore supply. It is a tool in the notary's hands, not a substitute for independent legal judgment. The target will be measured by act type, reviewed by notaries and released only with the required legal, security and quality controls.
 
-Two things make this fundable now rather than in five years:
+**Learning loop and notary participation.** For supported simple notarial acts, Nota's models can improve over time from permitted, aggregated user signals and structured notary feedback. The loop measures where users need clarification, where a dossier is abandoned or corrected, and which preparation steps a notary accepts, changes or rejects. Nota then turns those observations into versioned model and workflow improvements, with privacy controls, act-specific evaluation, notary review, auditability and rollback before any production release. No identifiable client file becomes training material by default, and no live model update can change a professional conclusion without a new review gate.
 
-1. **The product already exists.** ~40 000 lines across a pure domain core, an
-   HTTP/DynamoDB API, a zero-dependency SPA, an operator console, a Cucumber BDD
-   suite and a Playwright end-to-end suite, Terraform infrastructure live on AWS
-   `ca-central-1`, Stripe Connect payments, notary authentication, transactional
-   email, and CI/CD gating the deploy. Built solo. This raise does not fund a
-   build — it funds **distribution and liquidity**.
-2. **The rails for a remote act are law.** Bill 34 (in force 24 October 2023)
-   made the *acte notarié technologique* permanent in Québec. Remote signature
-   is legal — but under art. 46 it is **exceptional**, party-requested and
-   circumstance-justified. That constraint is not an obstacle to route around;
-   it is the wedge. See §7.
+User-behavior signals can tune question order, clarity and guidance. They cannot label legal facts or make a legal conclusion. Model changes are prepared offline, tested on a held-out set and approved before release.
 
-**The ask.** 250 000 $ for 12 months, to take the live product from zero to
-proven liquidity in the Québec City market, restructure monetization onto
-déontologie-safe footing, and build the compliance layer that makes remote
-signing routine for the cases where the law already allows it.
+The participation model is designed to let the whole network benefit. A practising notary who contributes workflow feedback, reviewed examples, edge cases or evaluation time may receive a potential equity instrument, subject to written terms, securities review, professional independence rules and the absence of any guaranteed value. A notary who prefers not to contribute directly can use the model-enabled layer through a monthly software subscription. The subscription provides access without requiring direct feedback contribution, while the equity path recognizes deeper collaboration. Neither path transfers legal responsibility from the notary to Nota. Users should receive clearer next steps and fewer preparation loops, participating notaries should gain a more useful capacity tool, and Nota should improve its product through evidence rather than assumptions.
 
-| Horizon | Acts closed | Charged to clients | Nota revenue | Gross profit |
-| --- | ---: | ---: | ---: | ---: |
-| Y1 — Québec City, financing catalogue | 244 | 762 800 $ | 80 800 $ | 58 600 $ |
-| Y2 — All Québec, remote layer | 2 800 | 8 749 400 $ | 927 400 $ | 672 800 $ |
-| Y3 — Widening act catalogue | 11 000 | 34 373 200 $ | 3 643 200 $ | 2 643 100 $ |
+The proposed initial commercial focus remains **financing and refinancing in Québec City and its surrounding service area**. The current repository also supports wills and powers of attorney. Those services need their own demand, pricing and professional validation; their revenue is excluded from the financing scenario rather than assumed to subsidize it. No catalogue change is made by this plan.
 
-**Read the third column, not the second.** Nota's revenue is its own published
-price per act, not a percentage of what changes hands, so the amount flowing
-through the platform is a scale indicator and nothing more. Year 3 is roughly
-**10 % of the two-service addressable act volume** — a bigger share of a smaller
-category than version 1.0 claimed, which is the direct consequence of the
-financing-first catalogue (§5). The plan does not require winning the market. It
-requires being the place where price is discovered.
+Nota charges its own disclosed service and date fees to the client. The notary receives the agreed professional fee in full under the implemented settlement design. This structure is a product decision, **not a legal opinion**. Launch depends on the outstanding professional, tax, payment and operating conditions in §7.
 
----
+The investment thesis has three stages: establish reliable local matching; reduce the notary's preparation time with evidence-backed work packets; expand geographically and by service only after those results are measured. The longer-term opportunity is a reusable market for urgent demand and privately held provider capacity. International and adjacent-industry expansion are options, not funded promises in this round.
 
-## 2. Two findings that reshaped this plan
+The money collected for notaries is not Nota revenue. The operating result includes illustrative service and loss costs, and the stated operating budget; it is not audited net income. The 250 000 $ raise supports the first-year experiment under the assumptions in §12, with a follow-on financing decision needed before the second-year cost base is committed.
 
-This plan was written against the statute and the code, not against
-assumptions. Two things came back different from the working hypothesis, and
-both are load-bearing. They are stated here, up front, because an investor will
-find them in diligence and it is better that they find them already answered.
+## 2. Customer problem and value proposition
 
-### 2.1 Remote signing is already legal — and that is *better* news than it sounds
+**Initial customer.** A Québec City homeowner or buyer with an approved financing need, a real lender or transaction deadline, and enough documentation for a notary to assess feasibility. A renewal alone does not necessarily require a new notarial act. Intake must distinguish simple renewal, refinancing, lender transfer, new hypothec and any separately required sale act.
 
-The original Phase 2 premise was "clients must currently appear in person; going
-fully online expands the market 100×." In Québec that premise is **half wrong**,
-and the half that is wrong is the half that was going to be expensive.
+The working problem hypotheses are that customers struggle to locate suitable near-term capacity, compare the complete price and determine which documents are missing. Notaries may value qualified incremental work that fits existing capacity. The plan does not claim that every notary has unused capacity, that urgency always commands a premium, or that online competitors do not exist.
 
-The *acte notarié technologique* signed by videoconference is permanent law, not
-a pandemic measure. The infrastructure exists and is sanctioned: a
-CNQ-prescribed videoconference channel, the notary's official digital signature,
-a technological minute. **Nota does not need to lobby a remote act into
-existence, build a novel legal instrument, or wait on a regulator.** That is
-years and hundreds of thousands of dollars removed from Phase 2.
-
-What *is* true is narrower and more interesting. Under **art. 46** of the *Loi
-sur le notariat*, as amended by Bill 34, a notary may only **exceptionally**
-authorize remote signature, where circumstances require it and the parties'
-rights are preserved. The request must come **from a party**, and the justifying
-circumstance must be **specific to that party** — distance from an available
-notary, health or functional limitation, weather, an unforeseen event
-prejudicing another party. **Convenience does not qualify.** Bill 34 deliberately
-pulled back from what had become normal practice during COVID, which is why it
-remains contested within the profession.
-
-So the barrier is not the technology and not the law's silence. **The barrier is
-that the justification burden and the disciplinary exposure sit entirely on the
-individual notary**, who therefore defaults to "come in person" because that is
-the option that never generates a complaint.
-
-**That is a product.** Nota can capture the party's request, structure the
-qualifying circumstance, document it in an auditable record attached to the
-dossier, and hand the notary a defensible file. It converts a discretionary
-judgment call with personal downside into a standard, evidenced workflow. This
-is worth more to a notary than the marketplace itself, and it is not something a
-generalist e-signature company will ever build.
-
-**Restated Phase 2 thesis:** the expansion does not come from making a legal
-signature possible. It comes from **removing geography as a matching
-constraint** — see §7.
-
-### 2.2 The revenue model was a déontologie risk. It has been removed.
-
-Version 1.0 of this plan reported that `apps/api/src/billing.js` implemented a
-**10 % commission** on a completed act, collected as a Stripe Connect
-application fee against the notary's account, and proposed restructuring it. A
-later variant made the percentage float between 5 % and 15 % according to an
-internal score. **Both are gone from the product.** They are stated here only so
-a reader who finds them in the git history or in a dated audit knows they were
-retired, and by which decision.
-
-**What the code does today.** An offer carries **two lines**, which the client
-reads separately before committing anything:
-
-| Line | Who receives it | What sets it |
+| Participant | Value to test | Evidence needed |
 | --- | --- | --- |
-| **Honoraires** | **The notary, in full** | The amount the client offers |
-| **The price of Nota** | Nota | A grid published in advance — the service asked for, plus a date-guarantee line — never the notary, their record, or the value of the act |
+| Client | Find an appropriate notary before the deadline, with a comprehensible quote and next steps | On-time paid completions, abandonment reasons, total-price comprehension |
+| Notary | Optional incremental work, full agreed honoraires, fewer preparation loops | Acceptance, repeat participation, preparation time and net incremental benefit |
+| Referral partner | A useful destination for an eligible client, with disclosed reward terms where permissible | Attributed settled acts, partner activation, complaint and cancellation rates |
+| Nota | Earn its own fee while delivering reliable matching and preparation | Contribution after payment, service, acquisition and loss costs |
 
-The client's card is authorized for the **total** of the two, on Nota's own
-Stripe account. At signing Nota captures that total, keeps its own two lines and
-transfers the *honoraires* to the notary's connected account. **Nota deducts
-nothing from a professional fee, and the notary abandons nothing.**
+One additional standard financing per month at the current starting professional fee represents 21 600 $ in annual **gross professional fees**; refinancing represents 24 000 $. These are arithmetic illustrations before notary expenses and taxes, not predicted income. The product must demonstrate genuinely incremental work rather than simply move existing clients onto a paid channel.
 
-**Why this shape and no other.** Four texts, read against the code, forbid the
-retired arrangement and require this one:
+**Validation plan.** Interview at least 10 notaries and 10 eligible clients or recent borrowers, document actual recent workflows and rejected requests, then follow the first 30 real eligible requests to their outcome. These are proposed discovery targets. Separate interview enthusiasm from commitments, accepted requests and paid completion. Review [notary interviews](go-to-market/entrevue-notaire.md) and the [30-day validation plan](go-to-market/plan-pmf-30-jours.md).
 
-- **Art. 32.1 2° of the *Loi sur le notariat*** presumes **usurpation of a
-  notary's functions** by an intermediary who "obtains from a notary the
-  abandonment of part of their fees" — 2 500 to 125 000 $, doubled on repeat.
-- **Art. 32 of the *Code de déontologie des notaires*** forbids a notary from
-  sharing fees with someone who is not a member of a professional order. The
-  same conclusion taken from the other end: the prohibition binds the notary,
-  the presumption binds Nota, and fixing one without the other fixes nothing.
-- **Art. 29.1** forbids any agreement endangering the notary's independence and
-  disinterest — which a fee indexed on a score awarded by a private company is.
-- **Art. 32.1 3°** excludes the intermediary who supplies services "with no
-  responsibility toward the notary for their fees". Nota authorizes, captures
-  and guarantees the notary's net, deliberately.
+## 3. Product and current catalogue
 
-Decisions: [ADR 0031](decisions/0031-le-prix-de-nota-est-celui-de-nota.md)
-retired the share; [ADR 0034](decisions/0034-le-prix-de-nota-est-une-grille-par-service.md)
-turned Nota's single price into the per-service grid. `commission-config.js` was
-deleted and replaced by `prix-nota-config.js`; the notary console no longer
-receives a rate of any kind, because showing one would describe an arrangement
-that no longer exists.
+### 3.1 Prices and the date mechanism
 
-**No notary was ever billed under the retired model** — no act had yet been
-carried on the platform when it was removed.
+The following table is generated from the current domain defaults. Starting fees are product inputs, not evidence of market-clearing prices. Production admin overrides and a customer's frozen quote can differ; the dated September 8 production receipt verified the two financing tariffs, not deployment of all subsequent code changes.
 
-**What is still open, and what the 20 000 $ legal line now buys.** The
-*direction* of the money is settled and verifiable on the Stripe wire: the
-client pays the platform. What remains open is the legal **qualification** of
-Nota's own price — whether a regulator reads a per-act charge by an intermediary
-as Nota's own service revenue or as something art. 32.1 still reaches — plus
-three narrower questions: the display of evaluations (art. 70), the
-qualification of the internal cote, and price presentation (art. 71–72,
-including the fact that **taxes and disbursements are in neither line and appear
-nowhere in the product yet**). A written opinion is budgeted at 20 000 $ and
-remains **required before the first live act**. Getting it on file is also a
-genuine competitive asset: it is the kind of work a well-funded entrant from
-outside Québec will not know it needs to do.
+<!-- MODEL:catalogue -->
+<!-- /MODEL:catalogue -->
 
-> **Wording discipline, permanently.** No surface, document or comment may
-> describe Nota as taking a *commission*, a *share* or a *split* of a notary's
-> fees; may attach a rating, average or *cote* to a **named** notary on a client
-> surface (art. 70); may claim to be *cheaper than a notary* (art. 32.1 1°); or
-> may call Nota's price *fixed* — it is a grid, published per service.
+<!-- MODEL:tiers -->
+<!-- /MODEL:tiers -->
 
----
+The date addition belongs to Nota. The suggested urgency multiplier affects the offered notary fee. They must remain distinct. The notary assesses the facts, fee and feasibility independently; an urgency band is not a finding that an act can safely close in that time. The domain enforces a starting floor and a five-times premium cap. Criteria can increase the base, so that cap does not bound collection losses adequately by itself.
 
-## 3. The problem
+A client-facing quote must identify the suppliers, services, Nota fee, any date fee, taxes and disbursements or their explicit exclusions. A requested date and a notary's acceptance are different states. The scope and remedy of any “date guarantee” require approved terms and measured capacity before it is marketed as guaranteed performance.
 
-### For the client
+### 3.2 Workflow and boundaries
 
-Notarial pricing in Québec is opaque and time-blind.
+The intended journey is qualification → itemized quote → request posted → notary assessment and acceptance → complete dossier → professional act → payment capture, transfer and reconciliation. Counter-proposals, missing documents, failed authorizations, cancellation and unfilled deadlines require explicit recovery paths.
 
-- Fees have been unregulated since 1991. Each notary sets their own. Published
-  ranges are wide — a mortgage or refinancing act runs roughly 1 500–3 500 $ —
-  and the client has no way to know where in the range they land until they
-  call.
-- Price discovery costs the client a sequence of phone calls during business
-  hours, which is exactly the tax that stops people from acting.
-- **Urgency has no price.** A client who needs a signature in 48 hours cannot
-  pay to jump the queue, because there is no queue and no market — only a
-  receptionist saying the first opening is in three weeks.
-- **And the deadline is not theirs.** A mortgage rate hold expires on a date the
-  lender set. When the notarial calendar cannot meet it, the client loses the
-  rate — a loss measured in thousands of dollars over the term, caused by an
-  appointment nobody could price.
+The domain and API enforce shared prices and offer validation. The bilingual public UI and private admin console have zero runtime dependencies. These architectural choices support maintainability; they do not make a new jurisdiction, regulated act or external integration merely a data change. Each requires its own rules, contracts, operating process and verification.
 
-### For the notary
+An acte de vente is not a current catalogue service. A financing request attached to a purchase must clearly identify whether another notary or workflow handles the sale, publication and funds. Wills and powers of attorney have separate capacity, consent, scope and possible protection-mandate questions. Do not treat their preparation as a financing template with a new label.
 
-- Roughly **3 900 notaries** practise in Québec. Their calendars have holes, and
-  a hole in a notary's calendar is unrecoverable inventory — it expires like an
-  airline seat.
-- There is no channel to sell short-notice availability. A cancelled Thursday
-  cannot be listed anywhere.
-- Client acquisition is referral-and-signage. There is no marketplace to
-  buy demand from, and the alternatives — buying leads, sharing fees — are
-  either ineffective or prohibited.
+## 4. Evidence of readiness and traction
 
-**The gap:** a deregulated market with real price dispersion, real supply
-elasticity and real demand urgency, and no mechanism connecting any of it.
+This plan reviews repository files and dated release reports. It does not certify the current live environment or inspect the company's bank account, customer ledger or signed contracts.
 
----
+| Area | Evidence reviewed | What remains unproven |
+| --- | --- | --- |
+| Public product | September 8 release, production checks and search submissions | Paid demand, actual indexing/ranking and customer outcomes |
+| Payments | Real Stripe sandbox checkout, capture, transfer, reversal and refund; live secrets staged | Live activation, bank payout, recovery cases and correct merchant branding |
+| Tax | Operator registration evidence recorded September 8; product discloses exclusions | Tax calculation/collection and responsibility for notaries' separate supplies |
+| Four-service catalogue | Current domain definitions and service-specific preparation tests | Deployment parity and professional validation for every service |
+| Signing room | September 9 working rehearsal, with synthetic ceremony and evidence receipt | Legally operative notarial signing, provider authorization and archival compliance |
+| AI preparation | Structured, source-cited preparation and synthetic tests | Passing live extraction evaluation and measured professional time savings |
+| Acquisition | Search Console/Bing setup and submitted public pages | Organic traffic, CAC, partner conversions and repeat notary activity |
 
-## 4. The product
+Sources: [launch evidence](go-to-market/launch-evidence/2026-09-08-activation.md), [payment readiness](qa/2026-09-08-stripe-production-readiness.md), [working rehearsal](signing-beta-release.md), [Bedrock verification](ai/bedrock-verification-2026-09-09.md), [four-service evaluation](ai/notary-ai-evaluation-2026-09-09.md).
 
-### 4.1 The mechanism
+**Traction reporting rule.** No verified commercial count is supplied here. Keep signups, verified providers, active providers, requests, acceptances, completed acts and settled revenue separate. Demo fixtures, test payments, rehearsal signatures and search submissions never count as customer traction.
 
-The client picks a service, a signing date and an amount. The **tier** is derived
-from how many days away the date is, and it is the axis that makes the calendar
-mean something:
+## 5. Market and competition
 
-| Tier | Days to date | Premium on the **notary's** fee | Nota's **date-guarantee** line |
-| --- | --- | --- | ---: |
-| `standard` | 15+ | 1.0× | 0 $ |
-| `rapide` | 8–14 | 1.8×–2.2× (≈×2) | 149 $ |
-| `prioritaire` | 2–7 | 2.7×–3.3× (≈×3) | 299 $ |
-| `urgence` | 1 | 3.3×–3.7× (≈×3.5) | 449 $ |
-| `extreme` | 0 | 3.7×–4.3× (≈×4) | 549 $ |
+### 5.1 Addressable market and attainable volume
 
-**Two columns, and they answer to two different articles.** The multiplier
-prices the *notary's* own fee — art. 49 4° of the *Code de déontologie* lets a
-notary weigh « le degré d'urgence » in setting fees — and it is not a constant:
-`tunedTierMultipliers` shrinks the observed median premium of retained offers
-toward the published band, so the ladder learns from the market instead of
-asserting a number someone once chose. The right-hand column is what **Nota**
-charges for the date guarantee it sells: sourcing a notary at short notice and
-holding the date. They are never one number doing both jobs.
+The legacy estimate of 60 000 new-financing acts plus 50 000 refinancings per year is retained **only as a planning hypothesis**. It is not a published Québec act count. Mortgage renewals, lender switches, residential transactions and notarial acts cannot be equated one-for-one. Validate the shares requiring each act, eliminate overlap and segment by geography and service before presenting an investor-grade SAM.
 
-Offers are floored at a *prix de départ* per service and hard-capped at **5×**
-it, so the market is a real auction with guardrails rather than a race to the
-bottom or a panic tax. Bids post to a public monthly calendar; notaries retain
-the work that fits.
+At current starting values, that hypothetical 110 000-act financing market implies:
 
-### 4.2 Why only two services, and why financing
+<!-- MODEL:market -->
+<!-- /MODEL:market -->
 
-Nota launches with exactly two acts, both **financing** acts, each with a
-**bounded, client-assemblable intake** — a short checklist a layperson can
-complete alone, in one sitting, without a professional pre-consult:
+The fee opportunity assumes all eligible acts use Nota; it is a theoretical ceiling before competition, willingness to pay and execution constraints. The urgency extension assumes the same date mix as the financial model. It is not observed demand. These figures exclude wills, powers of attorney, sale acts and software subscriptions.
 
-| Service | `serviceId` | Prix de départ (notary) | Nota's price | Why it qualifies |
-| --- | --- | ---: | ---: | --- |
-| Refinancement hypothécaire | `refinancement` | 2 000 $ | 249 $ | Loan act + hypothec publication + title review. Highest value on the platform, and the one act with a lender's deadline attached. |
-| Financement hypothécaire | `financement` | 1 800 $ | 199 $ | The loan act for a **new** hypothec — a purchase or a first loan. Same ladder, no old hypothec to discharge. |
+The proposed Year 3 volume of 11 000 financing acts would require **10% of this assumed provincial volume**, a substantial execution challenge. The plan needs to earn that expansion through local liquidity. At the 30-notary Year 1 target, 244 completions imply 8.1 acts per notary annually before adjusting for recruitment dates and inactive providers. At 700 notaries in Year 3, 11 000 acts imply 15.7 each. Aggregate provider counts alone cannot prove availability for a particular service, region or deadline.
 
-Testament and procuration were **retired**
-([ADR 0010](decisions/0010-financing-first-catalogue.md)). They were the wrong
-first market for a marketplace that sells a date: a will has no external
-deadline, so urgency is a preference rather than a cost, and at a 650 $ or 295 $
-act value Nota's own price would have weighed 30 % or more of the transaction.
-A financing act arrives with a **rate hold that expires**, which is a deadline
-the client did not choose and cannot move — exactly the demand a time-priced
-market can serve.
+**Local bottom-up test.** Count verified participating notaries by service and service area; obtain a weekly estimate of eligible incremental cases they can actually accept; compare that capacity with qualified incoming requests. The model is `active notaries × available suitable cases × realization rate`, checked against demand-side conversion. Do not substitute the entire provincial profession for available launch supply.
 
-*Acte de vente* stays excluded ([ADR 0003](decisions/0003-bounded-intake.md)):
-it requires a coordinated document transfer between broker, surveyor and lender
-before the notary can begin. That is a workflow product, not a web form — and it
-is Phase 3, not Phase 1. **Discipline about what not to launch is why the
-marketplace can be self-serve on day one.**
+CMHC's May 2026 report says renewal activity peaked in 2025 and is expected to ease during 2026. Deadline-driven needs remain relevant, but the previous plan's 2025 renewal-wave claim is not evidence of accelerating demand today. [CMHC, May 12, 2026](https://www.cmhc-schl.gc.ca/media-newsroom/news-releases/2026/renewal-wave-peaks-still-dominates-mortgage-market).
 
-Each service carries a dynamic base price built from criteria collected as part
-of the dossier — the same questions the notary needs anyway. A loan above
-600 000 $ adds 350 $ and above 1 M$ adds 600 $; a private lender adds 300 $; a
-notary travelling to the client adds 150–250 $, and a declared urgency signed
-100 % online adds 400 $. The client gets an accurate price; the notary gets a
-pre-qualified file with a complexity weighting already computed. **Note which
-side of the invoice these move**: they are criteria on the *notary's* fee, not
-on Nota's price, which depends only on the service and the date.
+### 5.2 Competitive position
 
-### 4.3 What is already built and deployed
+Notairo currently advertises online preparation, availability checking and in-person signing for property transactions. Its public starting price for refinancing is 949 $, excluding taxes and disbursements, with possible additional charges for urgency or complexity. That package is not directly comparable with Nota's platform fee alone. The previous 295 $ intake-fee comparison is removed because it was not substantiated by the current homepage. [Notairo, checked September 9](https://notairo.com/).
 
-This is the section that changes the risk profile of the raise.
+| Alternative | Competitive implication | Nota's proposed response |
+| --- | --- | --- |
+| Traditional practice and an existing referral relationship | Trust, continuity and direct access may outweigh switching | Demonstrate incremental availability and simpler qualification |
+| Online closing/intake platforms such as Notairo | Digital intake and advertised prices already exist | Prove the value of a date-specific request and provider response mechanism |
+| Practice software and signing providers | Notaries already depend on established tools | Integrate reviewed work packets rather than require wholesale replacement |
+| General legal-document tools | Some customers primarily want a document, not urgent professional capacity | Qualify the need and avoid acquiring unsuitable demand |
 
-| Component | State |
+Nota's proposed differentiation is explicit deadline-based demand, optional provider response and a transparent Nota fee. Claims of being the only marketplace, having no price-discovery competitors, or being impossible to copy are removed. A competitor's operating model does not establish legal approval of Nota's.
+
+Defensibility must be earned through provider retention, repeat partner distribution, reliable operations and lawful aggregated outcome data. A proposed urgency curve is not an existing proprietary asset. Publish it only with adequate sample sizes, privacy protection and controls for service complexity and selection bias.
+
+## 6. Go-to-market and measurable liquidity
+
+**Supply first.** Concentrate on Québec City financing/refinancing, with named service coverage and a fallback for a declined or unfilled request. Target 30 recruited providers, at least 25 verified and configured, then measure how many respond and complete work. Wills and powers of attorney receive separate validation cohorts and no assumed contribution to the financing targets.
+
+**Demand channels.** Mortgage brokers and real-estate brokers can introduce clients at a real transaction milestone. Organic service pages can build demand over time. Paid search should target demonstrably eligible intent after fulfillment and contribution are understood. Organic content and partnerships consume staff time; neither is zero-cost acquisition.
+
+### 6.1 Referral economics and operating terms
+
+The domain specifies 50 $ for a referred client and 250 $ for an activated referred notary. These rewards come from Nota's acquisition resources, not a deduction from professional fees. However, the current `referralLedger` accrues the client reward when status is retained, and the notary reward when `premierActe` is present. **The code does not demonstrate a settlement-only reward gate.**
+
+Before launch, reconcile eligibility, earning event, payout event, cancellations, refunds, duplicate/self-referrals, disclosure and professional permissions in both terms and implementation. Preserve obligations already incurred. The financial model includes rewards inside acquisition budgets, not as a second expense below those budgets.
+
+With the Year 1 target of 307 retained requests, rewarding every one would consume 15 350 $ of the 40 000 $ client-acquisition envelope even though only 244 complete. Rewarding all 30 recruited notaries would consume 7 500 $ of the 15 000 $ supply-acquisition envelope. These are upper-bound budget illustrations, not expected referral shares. An unimplemented settlement-only policy cannot be assumed to save those costs.
+
+### 6.2 Funnel and measurement definitions
+
+| Metric | Definition and purpose |
 | --- | --- |
-| `packages/domain` | Pure business rules — prices, tiers, cap, validation, dynamic pricing, fixtures. Zero dependencies. Asserted by tests. |
-| `apps/api` | HTTP + persistence. Single-table DynamoDB, Lambda function URL, ports/adapters. Server revalidates every offer; anonymity enforced server-side. |
-| `apps/web` | Public *carnet*, offer flow, dossier intake, Québec map, notary console. Vanilla JS, **zero runtime dependencies**. |
-| `apps/admin` | Operator console with its own auth and test suite. |
-| Payments | Stripe Connect as a platform. The client's card is registered when the offer is posted and the hold placed a few days before the signing, so a ~7-day authorization still reaches the act; at signing Nota captures on its own account and transfers the *honoraires* to the notary. Partial capture funds a late-cancellation fee, which is paid **to the notary**. |
-| Notary side | Authentication, sign-up gate, lead-delivery preferences, ICS/webcal feed, earnings roll-up. |
-| Email | Transactional email + scheduled reminders ([ADR 0007](decisions/0007-email-notifications.md)), CASL-compliant. |
-| Analytics | Rollup statistics with drift reconciliation. |
-| Infrastructure | Terraform: S3 + CloudFront (OAC) + Lambda (IAM-authed) + DynamoDB, live in `ca-central-1`. Idle cost ≈ 0 $. |
-| Quality | Unit tests, jsdom smoke tests, Cucumber BDD suite, CI on every push and PR, `terraform validate`. |
-| Compliance | Law 25: `ca-central-1` residency, anonymity default-on, consent at collection. Déontologie: no client-visible rating on a named notary, no share of a notary's fee anywhere in the code. |
+| Eligible visitor → qualified request | Use a stable cohort and remove test, duplicate and ineligible traffic |
+| Acceptance rate | Requests receiving a confirmed notary acceptance ÷ eligible posted requests |
+| Completion after acceptance | Completed professional acts ÷ accepted requests, after the observation window matures |
+| Paid completion rate | Completed, successfully collected acts ÷ eligible posted requests |
+| Time to first qualified response / acceptance | Median and 90th percentile, separated by service and urgency |
+| On-time fulfillment | Completed by the agreed deadline ÷ matured accepted cases with a deadline |
+| Net contribution per eligible visitor | Revenue less payment, service, acquisition and realized loss costs, divided by eligible visitors |
+| Active supply | Verified notaries with a recent substantive response; completions reported separately |
+| CAC | All attributable acquisition spend, rewards and labor ÷ new paid customers; allocate costs once |
 
-**Architecture.** Hexagonal — a dependency-free domain core with thin adapters
-for HTTP, persistence and UI. Business rules exist in exactly one place and both
-the browser and the server load the *same module*, so the price a client sees and
-the price the server enforces cannot drift. Thirty-seven architecture decision records document why each major choice was
-made — including the four (0027, 0028, 0030, 0031) that record the revenue
-model being taken apart and rebuilt against the *Code de déontologie*.
+The finance model now distinguishes 534 posted, 307 retained and 244 completed requests in Year 1: approximately 57.5% acceptance and 79.5% completion after acceptance. Retention is not the same as revenue. Follow cohorts to maturity and show failures, pending files and refunds explicitly.
 
-This matters commercially, not just aesthetically: **adding a third service, a
-new pricing criterion, a new price grid or a new jurisdiction is a data change in
-the domain package, not a rewrite.** Phase 2 and Phase 3 are cheap because Phase 1 was built
-correctly.
+**Proposed release of acquisition spend.** Start with a 5 000 $ discovery/controlled-acquisition tranche inside the existing 40 000 $ envelope. Release more only after launch gates clear and the first 30 matured eligible requests show a viable acceptance-to-paid-completion path with positive expected contribution. Treat that sample as diagnostic, not proof of PMF or statistical certainty. Review weekly; pause the affected campaign or segment if contribution is negative or deadlines repeatedly fail.
 
----
+## 7. Professional, tax and payment launch gates
 
-## 5. Market
+The separate Nota fee replaces the retired professional-fee share in the current code and later decisions. The repository's AGENTS.md still describes an older commission model. That contradiction needs a separately reviewed governance update; this document does not silently change repository instructions or revive the old arrangement.
 
-### 5.1 Sizing, bottom-up
+Québec's Loi sur le notariat, art. 32.1, regulates specified intermediary arrangements. Keeping a notary's fees whole does not by itself resolve every question under that provision. Art. 46 allows a notary to authorize remote signature exceptionally on a party's request when the circumstances and parties' interests permit. An interface cannot grant that authorization. [Loi sur le notariat](https://www.legisquebec.gouv.qc.ca/fr/document/lc/N-3).
 
-**TAM — the Québec notarial profession.** ~3 900 practising notaries. At an
-order-of-magnitude ~300 000 $ of annual professional fees per notary, the
-profession bills on the order of **1.1–1.2 G$ CAD per year**. This is an
-estimate derived from headcount, not a published figure; it is offered as scale,
-not precision.
+Professional independence, fee sharing, third-party benefits/disclosure, advertising and fee reasonableness require review under the Code de déontologie, including arts. 29.1, 32–34, 49 and 70–72. A published software subscription, separate fee or referral reward is not automatically compliant because of its label. [Code de déontologie des notaires](https://www.legisquebec.gouv.qc.ca/fr/document/rc/N-3,%20r.%202).
 
-**SAM — the two financing acts.** With a fixed price per act, the number that
-matters is **act volume**, not the dollars that change hands. Both are shown, and
-only the right-hand column is Nota's.
+| Gate | Accountable role | Required evidence before the dependent launch |
+| --- | --- | --- |
+| Commercial model and referral program | Founder + retained Québec counsel | Written opinion covering actual contracts, fee flow, rewards, advertising and date promise |
+| Tax and invoicing | Founder + accountant | Correct supplier identities, tax treatment, invoice responsibility, tested quote/capture/refund accounting |
+| Provider eligibility | Notary advisor + operations | Identity and current professional status verified; suspension/removal procedure |
+| Live payments | Founder + payment operations | Correct merchant brand, active configuration, eligible connected account, controlled capture/transfer/payout and recovery evidence |
+| Loss-making offers | Founder + engineering | Supported collection/eligibility policy before commitment; measured costs and explicit exception handling |
+| Signing | Notary advisor + authorized providers | Applicable professional requirements, approved provider arrangements, retention and legally operative ceremony verification |
+| Privacy and security | Named privacy lead + counsel | Data map, rights/access/retention procedures, vendor terms, cross-border assessment, incident and restore exercises |
 
-| Service | Est. annual Québec volume | Typical act value | Nota's price per act |
-| --- | ---: | ---: | ---: |
-| Refinancement hypothécaire | ~50 000 | 2 000 $+ | 249 $ |
-| Financement hypothécaire (new hypothec) | ~60 000 | 1 800 $+ | 199 $ |
-| **Total** | **~110 000 acts** | **~215 M$ of notarial fees** | **~28 M$ of Nota revenue** |
+The payment receipt records operator tax registrations but still identifies collection implementation and the notary-supply model as unresolved. Describing taxes as excluded is disclosure; it is not implemented tax collection. [September 8 readiness](qa/2026-09-08-stripe-production-readiness.md).
 
-Refinancing volume is inferred from the Canadian renewal cycle — ~1.2 million
-fixed-rate mortgages renewing nationally in 2025, Québec at roughly a fifth of
-that, with a meaningful share refinancing to a new lender and therefore
-requiring a notarized hypothec. New-hypothec volume is anchored on the ~90 000
-Québec residential transactions per year, most of which carry a mortgage, plus
-first loans on property already owned. **Both are estimates derived from
-headcount and transaction counts, not published act counts**; they are offered
-as scale, not precision.
+The signing room is an internal rehearsal and does not complete an act, charge the client or establish CNQ approval. Hosting in Canada and passing tests do not establish complete Law 25 compliance or SOC 2 certification. [Rehearsal boundaries](signing-beta-release.md), [privacy and legal materials](legal/README.md), [SOC 2 gap analysis](compliance/soc2-gap-analysis.md).
 
-The honest consequence of the financing-first pivot: the addressable act count
-is roughly a third of the retired three-service plan (~110 000 vs ~300 000),
-because wills were the volume and they are gone. What replaced them is a
-category with a **deadline the client did not set** - which is the only kind of
-demand a time-priced market can charge for.
+## 8. Business model and unit economics
 
-**SOM — Year 3.** 11 000 acts ≈ **10 % of SAM volume**, and ~2,8 M$ of the ~28 M$
-of Nota revenue the category can carry. That is a materially larger share than
-version 1.0 claimed, and the plan says so rather than keeping the old
-denominator.
+### 8.1 Revenue and collection costs
 
-**Phase 3 horizon.** Beyond the two financing acts sits the rest of the
-catalogue - most importantly the *acte de vente* on those same ~90 000
-residential transactions, which arrives on the same lender deadline and through
-the same referral channel. Testaments and mandates remain a real ~200 000-a-year
-category the platform can return to once liquidity exists, on a pricing basis
-that suits a 650 $ act.
+Nota's revenue is its own earned fee. Professional fees passed to notaries, collected tax and other third-party amounts must be tracked separately. The simplified planning model recognizes Nota fees on completed paid acts; an accountant must confirm gross/net presentation, recognition, refunds and any contingent liabilities under the final contracts.
 
-Beyond Québec, Nota can expand in three concentric rings:
+**Future model-enabled monetization.** Once the proprietary models pass a notary-reviewed, held-out validation by act type and the commercial and professional gates are closed, Nota can introduce a separate software subscription or usage fee for the model-enabled preparation layer. The subscription path is intended for notaries who want the product without a direct feedback commitment. A deeper collaboration path may use a potential equity instrument for notaries who contribute structured feedback and evaluation, subject to counsel, professional review and written terms. This future revenue stream and any equity arrangement are intentionally excluded from the base scenario until pricing, support cost, data rights, security, valuation and professional compliance are evidenced. The purpose is to put more capacity in a notary's hands, not to remove the notary: the target is to automate up to 80% of repeatable intake, checks and dossier assembly while the practising notary keeps independent legal judgment. A notary who can safely handle more qualified demand can create more earning capacity and help repair the current supply shortage. Actual income still depends on demand, accepted work, professional fees, operating costs and the final contracts.
 
-1. **Other provinces.** Reuse the hidden-capacity market for urgent legal,
-   closing, commissioning, and professional services, while adapting each
-   province's rules. “Notary” is not a portable legal category across Canada;
-   the demand protocol is.
-2. **Civil-law countries.** Localize the act catalogue, identity rules,
-   signing rails, privacy, and professional-body relationships for UINL
-   jurisdictions. The UINL currently comprises 93 member notariats, and the
-   civil-law system is present in almost 120 countries. This is a large,
-   coherent expansion surface, not a promise that one Quebec workflow can be
-   copied unchanged.
-3. **Other urgent-service industries.** After Nota proves the protocol in
-   notarial work, package it for categories such as emergency home repair,
-   field technicians, legal and translation services, inspections, logistics,
-   and other regulated or specialized services where the customer has a hard
-   deadline and providers have variable hidden capacity.
+The settlement design collects the client's combined amount on the platform and transfers the notary's fee. Published Canadian domestic-card pricing is 2.9% plus 0.30 $ per successful charge. [Stripe Payments](https://stripe.com/en-ca/pricing). The modeled Connect arrangement adds 2 $ per payout-active account-month and 0.25% plus 0.25 $ per bank payout. [Stripe Connect](https://stripe.com/en-ca/connect/pricing).
 
-**That is where a 100× claim actually lives** - not in avoiding a car trip, but
-in turning deadline-driven demand into a new, privacy-preserving market signal.
+These are public-price assumptions, not verified Nota invoices. One act per payout is assumed. Account fees use the monthly Year 1 ramp and all target notaries active each month in Years 2–3. The prior assumption of ten acts per active notary per month was inconsistent with the plan's much lower provider utilization.
 
-### 5.2 The exportable mechanism: a hidden-capacity demand market
+Stripe's comparison also lists a funds-routing feature at 0.25% of payout volume. Confirm whether an additional fee applies under Nota's contract; it is not silently counted twice in the baseline. If incremental, it would cost approximately 6.98 $ per modeled act. Reconcile optional products, international cards, currency conversion, refunds and actual balance transactions before treating this estimate as a forecast.
 
-Nota's novel concept is not “publish every provider's agenda.” It is the
-opposite: preserve provider privacy while exposing just enough demand to let a
-market clear.
+The calculation is: **Nota fee − processing on the entire charge − payout/account costs − service costs − losses**. Acquisition is subtracted once, within operating budgets in the annual model.
 
-| Customer side | Provider side |
-| --- | --- |
-| Posts the need, deadline, constraints, location, language, and budget / bid | Receives only qualified opportunities matching chosen preferences |
-| Can compare responses without cold-calling every provider | Can accept, counter-propose, request more information, or pass |
-| Gets a clear next action and a date-bound path | Never has to reveal the full calendar or commit to every request |
+<!-- MODEL:unit -->
+<!-- /MODEL:unit -->
 
-The flywheel is simple: urgent demand becomes structured data; structured data
-reduces provider effort; lower effort increases participation; more
-participation improves the chance of clearing the next urgent request. Nota
-should own this protocol as a separate layer from the notarial act modules, so
-each new vertical adds its own compliance, intake, and fulfillment rules without
-rebuilding the market mechanism.
+The mix is 40% financing/60% refinancing and 70% standard/18% fast/7% priority/3% urgent/2% same day, at starting bases and recommended multipliers. It is unobserved. The 30 $ service cost and 0.5% of charge loss allowance are planning assumptions covering incremental preparation/support/tooling and net refunds, disputes, cancellation costs or unrecovered funds. Record components separately as data arrives; do not count refunded revenue and the same loss twice.
 
-### 5.3 The three-sided value exchange
+The model treats the service cost as incremental to budgeted founder/advisor/contractor capacity. If their paid time performs the same work, reclassify it rather than double-count it. Conversely, measure abandoned-file work and any professional validation costs not covered by that allowance.
 
-The market is designed to make the normal act economics work harder, not to
-hide a fee inside the notary's fee. A financing act normally represents roughly
-**1 800 $+** of professional value; a refinancing act roughly **2 000 $+**.
-Against an estimated Québec financing SAM of **~110 000 acts / year** and
-**~215 M$** of annual professional-fee value, Nota can create a win-win-win:
+### 8.2 Loss segments and optimization order
 
-| Winner | Value created |
-| --- | --- |
-| Client | A qualified notary inside the client's real deadline, with the normal act price plus a clearly disclosed urgency premium when the date is scarce. |
-| Notary | 100 % of professional fees, plus the ability to accept a better-paid urgent request and monetize an opening without publishing the private calendar. |
-| Nota | Its own service line — 199 $ for financing, 249 $ for refinancing, plus 0–300 $ for date priority — charged only when the act completes. |
+The [margin audit](go-to-market/margin-audit-2026-09-08.md) shows that permitted high-honoraires offers can be unprofitable even on domestic cards. The standard financing fee does not rise when the offered honoraires rise; processing does. A five-times offer cap is not a profit guarantee. The newly included will/procuration services need the same whole-envelope analysis before commercial promotion.
 
-This is not a zero-sum marketplace taking a cut from a professional fee. Nota's
-line pays for demand qualification, matching, document context, scheduling
-rails and — later — the act-specific operating layer. The estimated category
-can support roughly **28 M$ of annual Nota revenue** at the current grid before
-the catalogue expands; the figure is a planning estimate to validate with live
-transaction data and a written déontologie opinion.
+Prioritize actual cost instrumentation and a billing eligibility safeguard, then collection alternatives and pricing experiments. Canadian bank debit may reduce costs for suitably early bookings, but settlement delay, disputes and authorization differences must be reflected in the customer journey and reserves. This plan neither enables a new payment method nor changes prices.
 
-### 5.3.1 Why a notary subscribes
+Test 249/289 against 229/279 only after sufficient qualified volume exists, preserving frozen quotes and measuring contribution per eligible visitor. These are candidate fees from the earlier audit, not optimal prices. Include customer conversion, notary acceptance, completion, support and losses. Set sample size and stopping rules from observed baseline data before declaring a winner.
 
-Nota's supply-side promise is deliberately low-friction: **subscribe once,
-then do nothing until a request is worth accepting**. There is no fee to join,
-no requirement to publish a calendar, no lead quota, and no obligation to
-respond. The notary chooses delivery preferences, receives only relevant
-requests, and can accept, counter-propose, ask for information, or pass. A
-confirmed act can sync to the notary's calendar; the private calendar never
-has to be exposed.
+### 8.3 Acquisition and retention
 
-The incremental earning opportunity is easy to explain and deliberately
-conservative:
+The Year 1 client-acquisition envelope implies approximately 164 $ per completed client. After modeled payment, service and loss costs, roughly **22 $ per act remains after that acquisition allocation and before the rest of overhead**. This is much narrower than the previous 76 $ claim.
 
-| Otherwise-unused opening | Illustrative added professional fees | What Nota changes |
+The supply budget implies 500 $ per recruited notary if all 30 are recruited. Cost per verified, active or retained notary will differ. The prior 29× LTV/CAC claim is withdrawn: three-year provider retention, demand cost and contribution were not demonstrated. Report supply cohorts and repeat participation; do not assign the entire margin stream to both client and provider LTV.
+
+## 9. Operations, service quality and resilience
+
+The founder owns the initial operating queue. The proposed practising notary advisor owns professional workflow review, not every participating notary's independent decision. Define named cover before taking time-sensitive cases; a solo founder cannot promise continuous service without staffing it.
+
+| Operating area | Required routine | Trigger for intervention |
+| --- | --- | --- |
+| Intake and matching | Check eligibility, documents, deadline feasibility and available providers | Missing critical facts, no suitable response, incompatible sale/loan workflow |
+| Client communication | Explain status, next action, quote changes and charge timing in FR/EN | A pending request approaches its deadline or authorization fails |
+| Completion and payment | Reconcile act evidence, capture, transfers, payout status and bank records | Mismatch, duplicate event, failed transfer or unrecovered refund |
+| Complaints and cancellation | Record cause, fee entitlement, remedy and professional escalation | Disputed representation, missed deadline or vulnerable-client concern |
+| Security and continuity | Least privilege, vendor inventory, backups, restore exercise and incident owner | Access anomaly, data incident, unavailable critical provider |
+| Notary supply | Recheck status and watch response/fulfillment concentration | Suspension, repeated failed deadlines or dependence on one practice |
+
+Set response targets by supported business hours and urgency during the pilot; publish only targets the team can staff. Keep a daily financial exception queue, a weekly customer-outcome review and a monthly close. Money due to notaries or tax authorities is excluded from unrestricted runway. Confirm insurance coverage and limits for the actual platform activities; the budget is not proof of coverage.
+
+## 10. AI, signing and expansion roadmap
+
+**Immediate objective:** reduce whole-file preparation time while preserving professional control and evidence quality. Documents, answers and third-party instructions can produce a source-cited checklist and preparation inputs. Capacity, consent, legal conclusions and signing readiness remain decisions of the responsible notary.
+
+The current live financing extraction benchmark is blocked by provider access/payment prerequisites and has no accepted extraction output in the recorded runs. The four-service evaluation uses synthetic cases not reviewed by a notary. Neither demonstrates professional accuracy or time saved. [Bedrock verification](ai/bedrock-verification-2026-09-09.md), [evaluation](ai/notary-ai-evaluation-2026-09-09.md).
+
+Before promotion, obtain lawful data-use permissions and vendor/region approval; establish a notary-reviewed held-out set per act; measure omissions, unsupported facts, conflicts, abstentions, failures and review time. Measure **cost per accepted, reviewed file** including OCR, inference, retries and human correction. A 90% or 99% time-saving ambition is a hypothesis, not a forecast assumption. Cross-region model profiles can process outside Canada even through a Canadian endpoint.
+
+The gate sequence is qualified intake → evidence-backed preparation → notary review → authorized signing provider → publication/funds workflow → reconciliation and retention. Refer to [service coverage](ai/notary-service-coverage-2026-09-09.md), [cost/performance plan](ai/financing-cost-performance-2026-09-09.md) and [learning strategy](ai/notary-learning-strategy-2026-09-09.md).
+
+### 10.1 Controlled learning loop and notary participation
+
+Nota's model layer improves through a controlled learning loop. Aggregated user behavior shows where a client abandons intake, misunderstands a question or needs a clearer next step. Notary feedback supplies the high-confidence signal. A notary can accept, correct or reject a proposed field or preparation step and record the reason. Those signals improve the next qualified model version for simple financing, refinancing and other supported acts.
+
+Dynamic improvement means daily signal collection and monitoring, held-out evaluation, notary review, a small canary release and a reversible rollback. It does not mean that live client behavior silently rewrites a legal field or changes model weights overnight. User behavior can improve question order, explanations and workflow routing. Only authorized, de-identified or synthetic data and separately approved notary feedback can enter an offline training set. Every generated output remains a draft until the responsible notary reviews it.
+
+Notaries choose how they participate:
+
+* **Feedback partner:** an opt-in notary contributes structured reviews, corrections and edge cases under a separate agreement and may receive potential equity or equity options. This is not guaranteed value, is not a referral reward and is subject to corporate, securities, tax, privacy and professional review. It cannot affect ranking, pricing, referrals or the notary's independent judgment.
+* **Paid software user:** a notary may use the AI layer through a monthly subscription or usage plan and decline the model-improvement contribution program. Paid access provides the tool; it does not purchase influence over the marketplace or reduce the notary's professional responsibilities.
+
+The intended win-win is practical. Clients receive clearer intake and faster next steps. Notaries receive a tool that can absorb repeatable preparation and help them serve more qualified requests. Nota receives evidence to improve the product. Contribution remains voluntary, and the model never replaces the responsible notary's advice, decision or signature.
+
+The operating scorecard should track model acceptance and correction rates, abstentions, unsupported-field errors, time per accepted dossier, client friction, feedback contribution, subscription conversion, churn, support burden and gross margin. No model update reaches production without a documented version, a notary-reviewed evaluation result, an approval owner and a rollback path.
+
+The commercial thesis for this layer is capacity expansion. Nota gives participating notaries a tool that absorbs repeatable preparation, so they can respond to more qualified requests, complete more acts and increase their potential professional income while preserving the notary's independent role. This is how the product repairs a market with too little supply for its demand. It is a future monetization path, not a promise of a fixed income uplift or a plan to eliminate notaries.
+
+The learning loop is a managed product process, not automatic clinical or legal decision making. Keep a frozen evaluation set for each supported act, record the model version in the dossier, require a notary review before a model change reaches production, and publish outcome metrics separately for users, participating notaries and subscribed notaries. The contribution choice must remain voluntary, transparent and independent from the notary's professional judgment.
+
+Province-wide matching follows measured local fulfillment and professional readiness. Other provinces and civil-law jurisdictions require local service definitions, qualified professionals, contracts, identity/signing rails and data assessments. Adjacent urgent-service industries reuse parts of the demand mechanism but need their own economics. No revenue from these expansions, model-enabled subscriptions or data products is included in the base financial scenario.
+
+## 11. Milestones and decision rules
+
+Month 1 begins when the operating plan is funded and starts; it is not a claim that September's deployment began a paid trading history. Dates are targets conditional on evidence, not automatic launch permissions.
+
+| Window | Deliverable | Exit evidence / decision |
+| --- | --- | --- |
+| Months 1–2 | Legal, tax, provider and payment gates; discovery interviews | Written decisions and verified collection workflow before paid operation |
+| Months 1–3 | 30 recruited / 25 verified and configured notaries | Service-area coverage, response exercise and named operating cover |
+| Months 4–6 | First controlled financing cohort; 20 cumulative paid completions in the ramp | Mature funnel outcomes and cost ledger; diagnose before scaling |
+| Months 7–9 | Repeatable local fulfillment; 87 cumulative completions | Positive segment contribution, on-time outcomes and repeat supply |
+| Months 7–12 | Invite a notary feedback cohort and test the equity or paid software paths | Written contribution terms, professional review, model-quality evidence and measured software margin |
+| Months 10–12 | Reach 244 cumulative completions in the base scenario | 80 813 $ modeled revenue, reconciled costs and evidence for follow-on funding |
+| Before expansion | New region/service readiness | Local supply, legal/integration requirements, measured acquisition and capacity |
+
+Target more than 60% acceptance and at least 80% completion after acceptance in mature cohorts before broad acquisition expansion. These are proposed management gates, not observed rates. Also require positive contribution and adequate on-time delivery; acceptance alone cannot justify growth. Set an on-time target from the promised service and pilot evidence before marketing a guarantee.
+
+Review the plan monthly. Stop or narrow an unprofitable segment; delay new geography if supply is thin; preserve cash when the launch date slips. Start fundraising or cost reduction when the forecast shows fewer than six months of unrestricted operating cash. A revenue run-rate alone is not a Series A trigger, especially when the prior 700 000 $ threshold was below the plan's annual Year 2 revenue.
+
+## 12. Financial plan and cash requirements
+
+### 12.1 Use of the proposed 250 000 $ raise
+
+| Budget | CAD | Scope / unresolved assumption |
 | --- | ---: | --- |
-| 1 standard financing / month | **21 600 $ / year** | Finds a qualified customer for the opening; the notary keeps the full fee. |
-| 1 standard refinancing / month | **24 000 $ / year** | Same effort-light path, with a higher-value act. |
-| 2 standard openings / month | **43 200–48 000 $ / year** | Turns perishable capacity into optional income without a mandatory workflow. |
-| 1 same-day financing / month at an illustrative ~3.5× urgency multiple | **75 600 $ / year** | Lets the notary decide whether the deadline and fee justify the work. |
+| Founder compensation envelope | 96 000 $ | 8 000 $/month total budget; confirm salary vs employer burden |
+| Legal, contracts and privacy | 20 000 $ | Obtain scope and quote; do not assume it covers every expansion |
+| Practising notary advisor | 25 000 $ | Defined deliverables and professional workflow review |
+| Design/front-end contractor | 25 000 $ | Prioritize observed conversion and accessibility problems |
+| Client acquisition | 40 000 $ | Includes content, partner rewards, acquisition labor and paid tests |
+| Notary acquisition | 15 000 $ | Includes recruitment rewards, outreach and travel |
+| Infrastructure, insurance and tools | 12 000 $ | Validate invoices and coverage; serverless is not zero operating cost |
+| Contingency | 17 000 $ | Explicit draw decisions and monthly tracking |
+| **Total operating envelope** | **250 000 $** | Payment, incremental service and loss costs modeled separately |
 
-These are gross illustrative opportunities before expenses and taxes, based on
-the current starting values and an otherwise unused slot; they are not a
-guarantee and remain subject to the act, client facts, professional judgment
-and applicable déontologie. The core promise is simpler than the upside:
-**more choice, more potential income, zero mandatory activity.**
+Keep compensation costs within the envelope or increase the funding requirement. Founder living needs, existing cash, liabilities, sales tax remittances, employer charges, financing fees and accounts payable have not been verified. Credits, grants, debt and investor commitments are zero in the cash model until documented. Potential SR&ED/Québec credits, IRAP or Investissement Québec programs require current eligibility and timing checks; they are not assumed runway.
 
-### 5.3.2 The Courtiers Immobiliers partner channel
+### 12.2 Base operating scenario
 
-Each real-estate broker partner receives a **unique referral code** to give to
-clients who will need a notarial act. The customer arrives with the code,
-exposes the need for free, and a notary can retain the request. That conversion
-earns the broker a flat **50 $** reward from Nota's acquisition budget when the
-act settles under the program rules. The customer gets the date, the notary
-receives 100 % of professional fees, and Nota earns its own service line.
+<!-- MODEL:annual -->
+<!-- /MODEL:annual -->
 
-The reward is public, fixed and separate from professional fees: it is not added
-to the customer's price and is never deducted from the notary. Disclosure to the
-customer and compliance with the rules applicable to brokers and notarial
-deontology must be cleared before launch.
+All three years use the same financing mix and tariffs; Year 3 does **not** silently assume sale-act economics. The annual operating envelopes remain 250 000 / 720 000 / 1 850 000 $, with client acquisition of 40 000 / 154 000 / 440 000 $ included. The Year 2 and Year 3 cost envelopes are not yet a bottom-up hiring budget. Target staffing remains founder plus contractors in Year 1, four FTE in Year 2 and ten in Year 3, conditional on financing, capacity needs and compensation quotes.
 
-### 5.4 Why now
+Service and loss assumptions are additional; CAC is not subtracted again. All amounts exclude income tax, financing costs, tax/disbursement cash timing and capital expenditures. Taxes collected are not revenue; collecting them would add payment costs that the current model does not quantify. Therefore the operating result is a planning measure, not net income or a funding guarantee.
 
-1. **Bill 34 made the technological act permanent (Oct 2023).** The rails are
-   built and sanctioned. Nota is not betting on a law passing.
-2. **Fees have been deregulated for 35 years with no price discovery.** The
-   market is legally free and structurally blind. That gap does not close on its
-   own — someone has to build the venue.
-3. **The renewal wall.** ~1.2 M Canadian fixed-rate mortgages renewing in 2025
-   drives refinancing volume straight into the whole of the current catalogue —
-   and every one of them arrives with a **rate hold that expires on a date the
-   client did not choose**. That is the demand a time-priced market exists to
-   serve, and it is why the catalogue is financing-first.
-4. **A competitor has already validated the structure.** Notairo has been
-   selling its own client-side intake fee in Québec since late 2025 — the same
-   legal shape Nota uses. The structure is no longer novel to explain; what is
-   still unbuilt is publishing the price of the **date** before the client
-   commits.
-5. **Access-to-justice pressure.** Notary coverage is uneven across Québec's
-   regions, and "distance from an available notary" is a **statutorily
-   recognized** justification for remote signing. The exception categories map
-   precisely onto the under-served.
+### 12.3 Monthly cash and reserve
 
----
+The following base ramp includes no completed revenue in the first three months. It assumes collections, transfers and incremental costs settle in the completion month, and operating cash follows the stated budget. It excludes opening obligations and further financing. Maintain **25 000 $ as a proposed minimum cash reserve**, not an estimate of the processor's required reserve or a complete measure of exposure.
 
-## 6. Phase 1 — The price of time
+<!-- MODEL:cash -->
+<!-- /MODEL:cash -->
 
-**Goal:** prove that a time-priced marketplace for basic, repeatable notarial
-acts clears in one city, with real money and no provider calendar exposure.
+With zero revenue and the full operating budget spent, the raise is exhausted at Month 12 and breaches the proposed reserve in Month 11. The base case ends Year 1 with approximately 45 377 $ total cash, only 20 377 $ above that reserve. Year 2's planned gross operating spend is 60 000 $ per month. Follow-on funding or a slower cost ramp is therefore essential before committing the Year 2 team.
 
-**Geography:** Québec City CMA (~850 000 people, ~400 notaries). Chosen over
-Montréal deliberately — small enough that a solo founder can meet a
-material share of local supply in person, dense enough to reach liquidity.
+### 12.4 Sensitivities and capital
 
-**Customer loop:** the client submits a deadline-driven request for financing or
-refinancing. A notary sees a qualified opportunity, not another calendar to
-manage, and can **retain it, propose a different amount, ask for documents, or
-pass**. Joining and browsing are free for the notary; the confirmed act can be
-added to their own calendar through ICS or a calendar feed.
+<!-- MODEL:scenarios -->
+<!-- /MODEL:scenarios -->
 
-**Sequence.**
+Downside halves completions, doubles service cost to 60 $ and raises loss allowance to 1% of collected charges. Upside increases completions by 50%, lowers service cost to 20 $ and losses to 0.25%. All retain the same price/mix and operating envelopes so the assumptions are comparable. These are mechanical stress cases, not probabilities. Downside hiring/spend should be reduced in practice; upside capacity may require more expense.
 
-| Months | Focus | Exit criteria |
+Capital figures use the worst cumulative **year-end** operating deficit plus the proposed 25 000 $ reserve. They omit within-year troughs after Year 1, settlement delays, restricted balances and unmodeled obligations. The base therefore indicates **at least approximately 180 119 $ beyond the proposed raise**, before those items; it does not establish that 430 119 $ is sufficient in all circumstances.
+
+Other required sensitivities: an all-standard date mix; higher-complexity honoraires; actual tax collection; additional Connect fees; foreign cards; slower acceptance/completion; and failed/refunded cases. Calculate them using observed cohorts before expanding. Preserve a weekly 13-week cash forecast and a rolling 24-month funding model once actual opening balances and hiring terms are known.
+
+## 13. Team, governance and financing readiness
+
+Anthony Paquet is the founder and principal builder represented in the repository. Delivery history supports execution capability; this review does not verify a résumé, ownership structure or employment status. The initial team needs a retained practising notary advisor, Québec counsel, an accountant and documented operating cover. Future engineering, provider-relations and growth hires follow measured workload and available funding.
+
+Before circulating as a financing package, assemble incorporation and trade-name records, current cap table and beneficial ownership, IP assignments, contractor agreements, tax registrations, bank balances, liabilities, insurance quotes/policies, customer/provider contract versions and the regulatory opinion. The September 8 record identifies the tax registrant as GESTION A. PAQUET INC.; confirm the relationship between that entity, Nota's trade name, payment descriptor and the entity raising funds.
+
+The learning-loop proposal also needs counsel and a practising notary advisor to approve the feedback agreement, data permissions, equity or option mechanics, tax treatment, privacy boundaries and professional-independence safeguards before any invitation is made.
+
+The proposed instrument remains a SAFE or convertible note, subject to counsel and negotiation. Valuation/cap, discount, conversion terms, governance rights and dilution are not specified and no investor commitment is claimed. Report funds secured separately from the fundraising target. The investment case should rest on a credible local experiment and its evidence, not unsupported precision about later rounds.
+
+## 14. Risk register and owner decisions
+
+| Risk | Priority | Response and accountable role |
 | --- | --- | --- |
-| 1–2 | Déontologie. The client-side price is **already shipped** (ADR 0031/0034); what remains is the written legal opinion, Chambre engagement, and the taxes/disbursements line the product does not yet carry. | Opinion on file. Taxes and débours priced and displayed. |
-| 1–3 | Supply. Recruit 30 Québec City notaries. Free to join, free to browse — zero friction, no card. | 25+ notaries with lead preferences configured. |
-| 3–6 | Demand. SEO on real posted prices, **mortgage-broker referral partnerships first** — the broker sits on the rate hold that creates the deadline — paid search on high-intent urgency queries. | 25+ bids/month, fill rate > 45 %. |
-| 6–12 | Liquidity. Tighten time-to-retain, publish the urgency curve, expand to Lévis / Saguenay / Trois-Rivières. | 90+ bids/month, fill rate > 60 %, 244 acts cumulative. |
+| Commercial or referral model not professionally cleared | Critical | Founder/counsel close §7 before the dependent launch; do not assume a fallback is automatically legal |
+| Tax or supplier identity wrong | Critical | Accountant maps each supply and verifies quote-to-remittance accounting |
+| Principal loss after paying a notary | High | Payment operations control exposure, recovery, reconciliation and reserves |
+| Allowed offers have negative contribution | High | Engineering implements approved eligibility/collection handling; finance monitors by segment |
+| Demand or provider liquidity insufficient | High | Founder narrows service/geography and releases acquisition budget in tranches |
+| Complete price deters customers | High | Measure quote abandonment and alternatives; test eligible pricing with valid cohorts |
+| Signing/AI capability overstated | High | Notary advisor enforces rehearsal and review boundaries; use measured evidence |
+| Equity for professional feedback or use of client data not cleared | Critical | Counsel and notary advisor approve contribution terms, consent, securities, tax, privacy and deontology; default to the paid path |
+| Privacy breach or provider outage | High | Privacy/technical owners validate vendors, incident response, backups and recovery |
+| Cash shortfall or launch delay | High | Founder maintains weekly cash forecast; defer hiring and start funding early |
+| Dependence on one founder or few notaries | High | Operating cover, documentation and diversified verified supply |
+| Competitors match the mechanism | Medium | Win through fulfillment and distribution; measure retention rather than assert a moat |
+| Plan drifts from code or deployment | Medium | Regenerate tables, compare live tariff evidence and label current-code versus production status |
 
-**The one metric that matters: fill rate** — the share of posted bids a notary
-retains. Below ~40 % the market is not clearing and the answer is more supply or
-better floors. Above ~60 % the flywheel is real and the constraint moves to
-demand. Everything else is secondary.
+**Owner decisions still needed:** confirm the fundraising entity and actual cash/liabilities; approve the fully costed compensation and operating envelopes; retain accountable professional/tax reviewers; resolve reward eligibility and payout terms; choose a supported policy for loss-making collections; and set acceptable fulfillment targets before a date guarantee is promoted. None of these decisions is fabricated by this revision.
 
-**The asset Phase 1 produces is not revenue — it is data.** At the end of Year 1
-Nota holds the only dataset in existence of *realized price × days-to-date ×
-act type* in the Québec notarial market. That curve is what makes the pricing
-engine defensible, and nobody can reconstruct it without running the same
-marketplace for the same year.
+## 15. Document control and supporting material
 
----
+The Markdown plan is the content source for the formatted HTML. Financial tables in both language documents are generated from the same current-domain model. Rebuild with:
 
-## 7. Phase 2 — The notary operating layer
-
-**Goal:** save the notary's preparation effort by turning the retained demand
-into an act-specific, reviewable work packet, then remove geography as a
-matching constraint where the law permits.
-
-Today a client in Québec City is matched against ~400 notaries. If the signature
-does not require the parties to be in the same room, that client is matched
-against **~3 900** — and a notary in Rimouski with an empty Thursday can sell it
-to a client in Gatineau. **The market does not get 10× bigger because the client
-saves a car trip. It gets 10× more liquid because supply and demand stop being
-partitioned by postal code.** In a marketplace, liquidity *is* the product.
-
-### 7.1 What Nota actually builds
-
-**(a) Act-specific context and AI.** The customer's documents, answers,
-preferences, deadline, and requested outcome become a structured context for a
-model trained and evaluated for that act. The model prepares the checklist,
-missing-document requests, draft inputs, explanations, and third-party
-integration payloads. The notary validates every output. “99% effort saved” is a
-North Star to measure against baseline preparation time, not a claim to make
-before the pilot proves it.
-
-**(b) The exception layer - the wedge.** Under art. 46 remote signing requires a
-party-originated request and a party-specific justifying circumstance. Today
-that burden and its disciplinary risk sit on the individual notary, so the
-default is "come in." Nota productizes it: capture the party's request in their
-own words at intake, classify the qualifying circumstance, collect the
-supporting evidence, and attach a timestamped, auditable justification record to
-the dossier. The notary receives a file that is already defensible. **This
-converts a risky judgment call into a standard workflow — and it makes Nota
-valuable to a notary independent of the marketplace.**
-
-**(c) Dossier automation.** Presigned document upload, automated identity and
-completeness checks, structured hand-off into the notary's existing practice
-tooling. The dossier arrives complete or it does not arrive. This is the
-difference between selling a lead and selling a *file*, and it is what Nota's
-own price is charged for.
-
-**(d) Signing rails.** Integration with the CNQ-sanctioned videoconference
-channel and the notary's official digital signature, so the act is executed and
-the technological minute closed without leaving the workflow.
-
-**(e) Province-wide matching.** Once (a)-(d) hold, the carnet stops being a
-Québec City calendar and becomes a Québec calendar.
-
-**(f) Cross-border corridor (late Phase 2 / Phase 3).** The *Loi sur le
-notariat* contemplates a signature received by a notary qualified in a UINL
-member state, within that state's territory. That is a legal path to serving
-**Québécois abroad** — a real, currently badly-served population — and the first
-step onto the civil-law world's rails.
-
-### 7.2 Phase 3 - Chamber-grade online acts and expansion
-
-Phase 3 is the institutional step: prove to the Chambre des notaires that Nota
-can make the online act safer, more auditable, and more accessible without
-removing the notary's judgment. The product surface includes secure live video,
-identity and capacity checks, confidentiality checks, informed consent,
-electronic signature, evidence logs, certified-copy delivery, and a complete
-audit trail. Nota should run this as a controlled pilot with the Chambre, the
-Ministry, the approved signing provider, privacy counsel, and selected notaries.
-
-The sequence after the pilot is **Quebec-wide -> other Canadian provinces ->
-UINL countries -> cross-industry protocol**. Each expansion keeps the same
-market primitive - a customer posts an urgent need and a provider can accept,
-propose, or pass without sharing their agenda - while swapping the legal act,
-professional rules, identity standard, and fulfillment integrations.
-
-### 7.3 Honest framing of the regulatory position
-
-Remote signing is **legal but exceptional** in Québec today. Phase 2 is
-deliberately built to be **fully valuable under the current statute** — the
-exception categories (distance from an available notary, health, functional
-limitation, weather, unforeseen prejudice) are large, real, and systematically
-under-served precisely because nobody has removed the notary's justification
-burden.
-
-Bill 34's pullback remains contested inside the profession, and the direction of
-travel in every comparable jurisdiction has been toward liberalization. **If art.
-46 loosens, Nota is the only operator already holding the compliance layer,
-the supply network and the price data.** That is upside, not the plan. The plan
-works if nothing changes.
-
----
-
-## 8. Business model
-
-### 8.1 Revenue
-
-**Nota charges the client its own published price, per service, for Nota's own
-service.** The notary keeps 100 % of their *honoraires*; Nota deducts nothing
-from a professional fee. Two lines on one quote, both read by the client before
-they commit anything (§2.2):
-
-| Nota's price | `financement` | `refinancement` |
-| --- | ---: | ---: |
-| Service line | **199 $** | **249 $** |
-
-| Date guarantee, added to Nota's line | `standard` | `rapide` | `prioritaire` | `urgence` | `extreme` |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| | 0 $ | **50 $** | **100 $** | **200 $** | **300 $** |
-
-So Nota's revenue on one act runs from **199 $** (a financing act on a calm
-date) to **549 $** (a refinancing signed the same day). The grid lives in
-`packages/domain` and is editable from the admin console without a deploy; the
-two lines are **frozen on the offer** when the client's card is engaged, so a
-later grid change can never rewrite what an act cost.
-
-Charged only on a **completed** act. The card is registered when the offer is
-posted and the hold placed a few days before the signing, so a posted bid is a
-real commitment and the notary is never chasing payment.
-
-**Taxes (GST/QST) and disbursements — registry publication fees, RDPRM,
-discharges — are in neither line and appear nowhere in the product yet.** Until
-they do, no surface may describe the amount as all-inclusive; art. 71 3° of the
-*Code de déontologie* requires saying whether they are included, and art. 68
-forbids incomplete advertising. Fixing this is a Phase 1 exit criterion (§6),
-not a nicety.
-
-**Expansion levers, in order of confidence:**
-
-1. **Raise the grid, per service and per tier.** The most direct lever, and the
-   one the shipped architecture makes free: the grid is data, edited from the
-   console. §8.2 shows that two rungs of the date ladder currently cost Nota
-   money to sell, which is where the first increase belongs.
-2. **Widen the catalogue.** *Acte de vente* rides the same lender deadline and
-   the same referral channel; each new service is a data change plus its own
-   published price.
-3. **Notary practice tooling** — the exception layer, calendar feed and dossier
-   inbox as software sold to the notary. This is a **flat subscription for
-   software**, never a deduction from an act, which is what makes it safe under
-   art. 32; it is the [ADR 0001](decisions/0001-flat-fee-not-commission.md)
-   model reintroduced only where it cannot touch a fee.
-4. **Data products** — the urgency curve, priced regional benchmarks. Later, and
-   only with clean aggregation.
-
-### 8.2 Unit economics — computed from the shipped grid
-
-**The cost of revenue is not small, and version 1.0 understated it badly.** Nota
-is the Stripe **platform**: the client's card is charged the **total** of both
-lines on Nota's own account (`separate charges and transfers`), and the
-*honoraires* are transferred out afterwards. So the card-processing fee is levied
-on the whole amount — **including the notary's fee, which Nota never keeps** —
-and Nota bears all of it. At Stripe's published Canadian domestic-card rate
-(**2.9 % + 0.30 $**; it is not a constant in the code, and the code never books
-it), one refinancing act on a calm date reads:
-
-```
-client pays        2 000 $ (notary)  +  249 $ (Nota)  =  2 249,00 $
-Stripe             2.9 % × 2 249 $   +  0,30 $        =     65,52 $
-Nota keeps         249 $ − 65,52 $                    =    183,48 $   → 73,7 % margin
-notary receives    2 000,00 $ — whole
+```sh
+node docs/planning/business-plan-model.cjs
+python3 docs/planning/render-business-plan.py
 ```
 
-Per service and per tier, at the recommended offer for each tier, on the ladder
-repriced by ADR 0038 and the service lines of ADR 0042 (both 2026-09-05):
-
-| Service · tier | Notary's fee | Nota's price | Client total | Stripe | **Nota's gross profit** | Margin |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `financement` · standard | 1 800 $ | 229 $ | 2 029 $ | 59,14 $ | **169,86 $** | 74,2 % |
-| `financement` · rapide | 3 600 $ | 378 $ | 3 978 $ | 115,66 $ | **262,34 $** | 69,4 % |
-| `financement` · prioritaire | 5 400 $ | 528 $ | 5 928 $ | 172,21 $ | **355,79 $** | 67,4 % |
-| `financement` · urgence | 6 300 $ | 678 $ | 6 978 $ | 202,66 $ | **475,34 $** | 70,1 % |
-| `financement` · extrême | 7 200 $ | 778 $ | 7 978 $ | 231,66 $ | **546,34 $** | 70,2 % |
-| `refinancement` · standard | 2 000 $ | 279 $ | 2 279 $ | 66,39 $ | **212,61 $** | 76,2 % |
-| `refinancement` · rapide | 4 000 $ | 428 $ | 4 428 $ | 128,71 $ | **299,29 $** | 69,9 % |
-| `refinancement` · prioritaire | 6 000 $ | 578 $ | 6 578 $ | 191,06 $ | **386,94 $** | 66,9 % |
-| `refinancement` · urgence | 7 000 $ | 728 $ | 7 728 $ | 224,41 $ | **503,59 $** | 69,2 % |
-| `refinancement` · extrême | 8 000 $ | 828 $ | 8 828 $ | 256,31 $ | **571,69 $** | 69,0 % |
-
-**The date ladder was priced below its own cost until 2026-09-05, and the plan
-says so.** Version 1.1 measured it: moving a refinancing from `standard` to
-`prioritaire` added 100 $ to Nota's line and 118,90 $ to the Stripe fee, so Nota
-was 18,90 $ worse off on the more urgent act, and 9,45 $ worse off at `rapide`.
-ADR 0038 repriced the ladder to 0 · 149 · 299 · 449 · 549 $ under three rules:
-each rung covers the fee it induces at its recommended multiple and at the top
-of its band, gross profit rises with urgency, and the take rate on an urgent act
-stays below the take rate on a calm one. A domain test holds all three.
-
-| Refinancement, vs `standard` | Date line | Extra Stripe fee | Net to Nota | Before |
-| --- | ---: | ---: | ---: | ---: |
-| `rapide` | +149 $ | +62,32 $ | **+86,68 $** | −9,45 $ |
-| `prioritaire` | +299 $ | +124,67 $ | **+174,33 $** | −18,90 $ |
-| `urgence` | +449 $ | +158,02 $ | **+290,98 $** | +49,20 $ |
-| `extrême` | +549 $ | +189,92 $ | **+359,08 $** | +117,30 $ |
-
-The structural cost is untouched: Nota still pays the card fee on the notary's
-fee, money it never keeps. Moving the notary's fee off the platform charge is an
-owner decision, with the written legal opinion still required.
-
-**Blended, on a modelled mix** — 60 % `refinancement` / 40 % `financement`, and
-70 % `standard` · 18 % `rapide` · 7 % `prioritaire` · 3 % `urgence` · 2 %
-`extrême` (the mix is a modelling assumption, stated so it can be argued with;
-the prices are not):
-
-| Per completed act | |
-| --- | ---: |
-| Notary's fee (paid whole to the notary) | 2 794 $ |
-| **Nota's revenue** | **331 $** |
-| Card processing (Stripe) | (91) $ |
-| **Nota's gross profit** | **240 $** |
-| **Gross margin** | **73 %** |
-
-| | Y1 | Y2 | Y3 |
-| --- | ---: | ---: | ---: |
-| Nota revenue per act | 331 $ | 331 $ | 331 $ |
-| Gross profit per act | 240 $ | 240 $ | 240 $ |
-| Blended client CAC | 164 $ | 55 $ | 40 $ |
-| **Contribution per act** | **76 $** | **185 $** | **200 $** |
-| Gross margin | 73 % | 73 % | 73 % |
-
-Version 1.0 claimed 89–91 % gross margin and a (70) $ Year 1 contribution. Both
-were wrong in the same direction: the margin was overstated because the Stripe
-fee was applied to Nota's own line instead of the whole charge, and the
-contribution was understated because revenue per act was pinned to a 10 % cut of
-a 1 056 $ act — a catalogue that no longer exists.
-
-**A structural point worth stating plainly.** Nota's own price is fixed by
-service and date, but payment contribution decreases as the collected
-honoraires increase: Nota pays processing on the entire charge. The figures
-above use starting bases and omit allocated Connect costs, refunds and losses;
-they are not a guarantee for every allowed offer. The
-[2026-09-08 margin audit](go-to-market/margin-audit-2026-09-08.md) estimates
-232.85 CAD payment contribution under this mix after published Connect costs,
-before acquisition and service costs, and identifies allowed loss-making
-offers. Revenue depends on act count and service/date mix; profitability also
-depends on honoraires, collection costs and losses. The break-even calculation
-below remains the historical simplified scenario, not an updated forecast.
-
-**Break-even, from the same numbers.** At 240 $ of gross profit per act:
-
-| | Operating expense | Break-even acts | Per month | Plan volume |
-| --- | ---: | ---: | ---: | ---: |
-| Y1 | 250 000 $ | 1 041 | 87 | 244 |
-| Y2 | 720 000 $ | 2 997 | 250 | 2 800 |
-| Y3 | 1 850 000 $ | 7 700 | 642 | 11 000 |
-
-Year 1 and Year 2 are deliberately below break-even — that is what the raise
-buys. **Year 3's planned volume clears its own cost base by about 3 300 acts**,
-which is a cleaner story than version 1.0's, where Year 3 still lost 390 850 $.
-
-**Notary economics.** Notary CAC ≈ 500 $ (the 15 000 $ field-sales line ÷ 30
-notaries). A notary retaining 20 acts a year generates **4 806 $** of annual
-gross profit, 14 417 $ over a three-year tenure. **LTV/CAC ≈ 29×**, payback
-inside **three acts**. Supply, not demand, is where the compounding is.
-
-### 8.3 The repeat-purchase problem, stated plainly
-
-**A financing act recurs on the renewal cycle, not on a whim** — every five
-years for a typical fixed-rate mortgage, and sooner when rates move. That is
-better than the retired will-and-mandate catalogue, where a client bought once a
-decade, but it is still not a subscription and this plan does not pretend
-otherwise. Three things carry the business instead:
-
-1. **Supply is the durable asset.** Notaries are recurring, not one-time. Every
-   notary recruited compounds; the network is the moat. At payback inside three
-   acts (§8.2), supply spend is the highest-return line in the budget.
-2. **Organic demand capture.** The public carnet is a continuously refreshed,
-   hyper-local, high-intent corpus of *real posted prices* — structurally the
-   best possible answer to "combien coûte un refinancement chez le notaire à
-   Québec ?". No competitor can index what they do not transact.
-3. **Zero-CAC referral channels.** Mortgage brokers above all: the broker sets
-   the rate hold that creates the deadline Nota prices, and currently has
-   nowhere structured to send a client who needs a notary inside it. Real-estate
-   agents and financial planners sit one step further out on the same path.
-
----
-
-## 9. Competition
-
-| | What they do | Where Nota differs |
-| --- | --- | --- |
-| **Notairo** | Montréal legal-tech, launched Oct 2025; digital preparation of real-estate closings and refinancings, signature in person. Sells its own **295 $ « frais de prise en charge de dossier »** on a Shopify storefront, with the notary's fees paid directly to the notary at signing. | Closest analogue, and **external validation of the structure**: Notairo is already selling exactly the shape of ADR 0031 in Québec. It advertises « à partir de 949 $ » while its actual packages list at 1 795–2 225 $, and prices urgency in the fine print. Nota differs on the mechanism: the price of the date is published **before** the client commits, not added afterwards. |
-| **Nolos** | Online notarized wills, ~21 service points in Québec. | A distribution network with set prices — a chain, not a market. No urgency pricing, no notary-side liquidity. Out of the current catalogue since ADR 0010. |
-| **Neolegal / ScriptaLegal** | Online legal services and document generation, notarial add-ons. | Document-first, price-set. Do not sell notary *availability*. |
-| **Traditional practice** | Phone, referral, signage. | The real competitor. Nota wins by pricing time, which the phone cannot do. |
-| **US remote-notarization platforms** | Volume RON for common-law notaries public. | Structurally cannot enter: a Québec *notaire* is a civil-law public officer, not a notary public, and their commission-on-the-professional's-fee model is exactly what art. 32 forbids here. |
-
-**Nota is the only participant selling *when*, not *what*.** Every competitor
-prices a document; several now charge the client their own intake fee, which is
-the same legal structure Nota uses. None of them **publishes the price of the
-date before the client commits** — Notairo's own site chiffres nothing for
-urgency and says only that additional fees may apply. That is a different
-market, and it is the one that has never had a venue.
-
-Two facts worth stating without embellishment: Notairo's published intake fee is
-**295 $**, against Nota's **199 $ / 249 $** grid; and Nota's price is compared
-here to another *platform's* price, never to a notary's fees — art. 32.1 1° of
-the *Loi sur le notariat* reaches an intermediary who claims to charge less than
-a notary, and no Nota surface makes that claim.
-
-**Defensibility, honestly ranked:** (1) the urgency price curve, which requires
-running the marketplace to obtain — and which the domain already *learns* from
-retained offers rather than asserting; (2) the notary network, which is slow and
-in-person to build; (3) the déontologie structure plus a written opinion, which
-an outside entrant will not know to build — Notairo's 295 $ product shows the
-structure is discoverable, but not the four-article reasoning behind the two-line
-quote; (4) the exception-layer compliance product, which requires understanding
-art. 46 well enough to productize it. None of these are patents. All of them are
-years.
-
----
-
-## 10. Go-to-market
-
-**Supply first, and free.** Notaries join and browse at no cost, with no card.
-The only thing a notary risks by signing up is nothing, and the carnet is worth
-looking at from the first week. Recruitment is in-person: Québec City practices,
-Chambre events and congrès, and the regional notary networks. Target 30 in the
-first quarter.
-
-**Demand, three channels ranked by cost:**
-
-1. **Organic (compounding, ~0 $).** The carnet itself. Real posted prices, real
-   dates, refreshed daily, in fr-CA, hyper-local. Plus a per-service price-guide
-   corpus built from actual transaction data.
-2. **Referral partnerships.** Mortgage brokers and **Courtiers Immobiliers** are
-   the first distribution channel: the partner receives a unique code and gives
-   it to clients who need a notarial act. When the referred demand converts — a
-   notary retains it and the act settles — the partner receives a flat **50 $**
-   reward from Nota's acquisition budget. The customer pays no referral fee, the
-   notary's professional fee is untouched, and Nota earns its own service line.
-   The code is private attribution, not a public ranking or a share of the
-   notary's fees. The reward must be disclosed to the client and cleared with
-   the relevant professional and deontology rules before launch.
-
-   Mortgage brokers first and by a wide
-   margin — the broker sets the rate hold whose expiry is the deadline Nota
-   prices, and currently has nowhere structured to send a client who needs a
-   notary inside it. Real-estate agents and financial planners sit one step
-   further out on the same path. Referring professionals earn a flat reward paid
-   from Nota's own funds — **50 $** when a referred client's demand is retained,
-   **250 $** when a referred notary retains their first act — never deducted
-   from the notary's fee and never added to the client's price.
-3. **Paid, urgency-targeted.** Search on high-intent, high-urgency queries where
-   the tier premium makes the economics work — a client who needs a signature in
-   48 hours has a demand curve nothing else on the platform matches.
-
-**Positioning to the profession matters as much as positioning to clients.** Nota
-never touches the act, **takes nothing out of a notary's fees**, and never
-disintermediates the notary-client relationship. It sells demand into empty calendar slots and hands
-over complete files. The message to the Chambre is *demand generation for the
-profession*, and the plan is to have that conversation early and in writing
-rather than be discovered later.
-
----
-
-## 11. Traction plan and milestones
-
-| Milestone | Target | Why it matters |
-| --- | --- | --- |
-| Taxes and disbursements priced and displayed | Month 1 | Art. 71 3° and art. 68. A quote that omits them cannot be shown to a client. |
-| Déontologie opinion on file | Month 2 | Qualifies Nota's own price. Unblocks everything downstream. |
-| 25 notaries live, Québec City | Month 3 | Supply-side liquidity threshold. |
-| First 10 acts completed | Month 5 | The mechanism clears with real money. |
-| Fill rate > 45 % | Month 6 | The market is functioning, not just posting. |
-| Grid re-priced against realized Stripe cost | Month 6 | Closes the negative middle of the date ladder (§8.2) with real data, not an assumption. |
-| Urgency curve published | Month 8 | Proprietary data asset exists and is demonstrable. |
-| Exception layer shipped | Month 9 | Phase 2 wedge live; remote acts become routine. |
-| Fill rate > 60 %, 90 bids/mo | Month 11 | Liquidity proven. Series-A narrative intact. |
-| 244 acts, 62 700 $ of Nota revenue | Month 12 | Bottom of the J-curve, with the curve visible. |
-
-**Month 9–12: follow-on.** Investissement Québec's **Fonds Impulsion** invests
-250 K$–1 M$ at pre-seed/seed but requires a **lead investor and a referral from
-a recognized accelerator or Anges Québec**. Securing an angel lead in this round
-and an accelerator relationship (Le Camp in Québec City, Centech) is therefore
-not optional — it is the bridge to the seed. That sequencing is deliberate.
-
----
-
-## 12. Financial plan
-
-### 12.1 Use of funds — 250 000 $ over 12 months
-
-| Line | Amount | Note |
-| --- | ---: | --- |
-| Founder salary | 96 000 $ | 8 000 $/mo. Below market, deliberately — this raise buys focus, not comfort. |
-| Legal — déontologie opinion, Chambre engagement, incorporation, ToS, Law 25 program | 20 000 $ | The highest-ROI line in the budget. |
-| Notary advisor (part-time, practising) | 25 000 $ | Credibility with supply and correctness on the exception layer. |
-| Design / front-end contractor | 25 000 $ | ~3 months part-time. The one place outside help beats doing it solo. |
-| Client acquisition | 40 000 $ | Paid search, content, partnership build-out. |
-| Notary acquisition | 15 000 $ | Field sales, congrès, travel. |
-| Infrastructure, digital-signature certificates, insurance, tooling | 12 000 $ | Serverless keeps this small — the AWS stack idles at ~0 $. **Card processing is not here**: it is a cost of revenue (§8.2), ~21 700 $ in Year 1 at plan volume. |
-| Contingency | 17 000 $ | ~7 %. |
-| **Total** | **250 000 $** | ~20 800 $/mo average burn |
-
-**Non-dilutive stacking.** As a Québec CCPC with a technical founder doing
-eligible development, refundable SR&ED and Québec R&D wage credits can return a
-meaningful share of the salary line, and IRAP is a live option. Conservatively
-treated as runway extension, not as budgeted revenue — it plausibly buys 2–3
-extra months.
-
-### 12.2 Three-year projection
-
-Recomputed from the shipped grid (§8.2). Volumes and operating expense are the
-same plan as version 1.0; every money line below is new.
-
-| | Y1 (2026-27) | Y2 (2027-28) | Y3 (2028-29) |
-| --- | ---: | ---: | ---: |
-| Notaries on platform | 30 | 220 | 700 |
-| Bids posted | 434 | 4 912 | 17 742 |
-| Fill rate | 56 % | 57 % | 62 % |
-| **Acts completed** | **244** | **2 800** | **11 000** |
-| Notary fees paid through the platform | 682 000 $ | 7 822 000 $ | 30 730 000 $ |
-| Total charged to clients | 762 800 $ | 8 749 400 $ | 34 373 200 $ |
-| **Nota revenue** (331 $ × acts) | **80 800 $** | **927 400 $** | **3 643 200 $** |
-| Card processing | (22 200) $ | (254 600) $ | (1 000 100) $ |
-| **Gross profit** | **58 600 $** | **672 800 $** | **2 643 100 $** |
-| Gross margin | 73 % | 73 % | 73 % |
-| Operating expense | (250 000) $ | (720 000) $ | (1 850 000) $ |
-| **Net** | **(191 400) $** | **(47 200) $** | **+793 100 $** |
-| Headcount (FTE) | 1 + contract | 4 | 10 |
-
-**Cumulative capital required through Y3: ~240 000 $** — down from the
-~1,05 M$ of version 1.0, because Nota's revenue per act is now 331 $ rather than
-a 10 % cut of a 1 056 $ act, and the act values themselves are financing acts.
-Y2 assumes province-wide matching is live; Y3 assumes the catalogue has widened
-toward the *acte de vente*.
-
-**Three sensitivities an investor should press on, all of which the model
-exposes rather than hides:**
-
-- **Volume is the only lever.** Nota's price does not scale with the act, so
-  revenue is act count × ~331 $. Halve the act count and you halve the revenue;
-  double the average act value and nothing changes except the Stripe bill.
-- **The mix moves gross profit far less than it moves GMV.** Across the whole
-  urgency ladder gross profit per act runs from 170 $ on a calm financing to
-  572 $ on a same-day refinancing (§8.2), and the act's value never moves it. A
-  pessimistic all-`standard` mix still yields 196 $ per act.
-- **Card processing is the whole cost of revenue, and it grows with the
-  notary's fee.** Every 1 000 $ added to a typical act adds 29 $ to Nota's cost
-  and nothing to its revenue. This is why the date ladder is held by a domain test
-  (ADR 0038) and re-checked against realized cost at Month 6.
-
-**Series A trigger:** exiting Y2 at a **700 K$ revenue run-rate with province-wide
-liquidity proven and the exception layer in production** — raising ~3 M$ against
-the full act catalogue and the first UINL corridor.
-
-### 12.3 What has to be true
-
-Four assumptions carry the model, and each has a named falsification test:
-
-1. **Clients will pay a premium for a date.** *Test:* the realized premium
-   distribution by tier in Phase 1. If `urgence` and `extreme` bids do not clear
-   above `standard`, the core thesis is wrong and it is visible by month 6 for
-   well under 100 K$.
-2. **Notaries will sell short-notice availability.** *Test:* fill rate on
-   `prioritaire`/`urgence` tiers specifically. Visible by month 5.
-3. **Clients will pay Nota's own price on top of the notary's fee.** *Test:* the
-   abandonment rate at the quote screen, where both lines are shown together
-   before any card is engaged. Visible from the first fifty bids. This is a
-   different question from (1) and version 1.0 never asked it, because a
-   percentage taken out of the notary's fee was invisible to the client.
-4. **Nota's own price is déontologically safe as structured.** *Test:* a written
-   legal opinion, month 2. The direction of the money is already settled and
-   verifiable on the Stripe wire; the qualification is not.
-
-**Every one of these is answered inside this raise.** That is the argument for
-the round size: 250 000 $ is enough to falsify or confirm the whole thesis, and
-not a dollar is spent building something that has not been validated.
-
----
-
-## 13. Team
-
-**Anthony Paquet — founder.**
-
-The case is the repository. Working solo: a hexagonally architected monorepo
-with a dependency-free domain core; an HTTP/DynamoDB API on an IAM-authed Lambda
-behind CloudFront OAC; a zero-runtime-dependency SPA; Stripe Connect payments
-with deferred card holds, partial capture and reconciliation; notary and admin
-authentication with role-based permissions; transactional email with scheduled
-reminders; an ICS feed; analytics rollups with drift healing; Terraform
-infrastructure live in `ca-central-1`; a Cucumber BDD suite and a Playwright
-end-to-end suite; CI running unit, contract, DOM, BDD, E2E and
-`terraform validate` on every push; Law 25 compliance designed in rather than
-bolted on; and **thirty-seven architecture decision records** explaining the
-reasoning — including the sequence that dismantled the platform's own revenue
-model when four articles of Québec notarial law turned out to forbid it.
-
-**Why this de-risks the round.** Most pre-seed capital funds the possibility that
-a team can build the thing. Here the thing is built, deployed and tested. The
-capital is buying **twelve months of undivided attention** on the parts that
-cannot be solved by writing code — meeting notaries, getting the legal structure
-right, and finding out whether the market clears.
-
-**Hiring plan.** Y1: founder plus contract design and a part-time practising
-notary advisor. Y2: notary-relations lead (the bottleneck is in-person supply
-recruitment, not engineering), a second engineer, and a growth hire.
-
-**Key-person risk** is real and acknowledged. It is mitigated by the ADR
-discipline, the BDD suite as executable specification, and a Y2 hiring plan that
-puts a second engineer in the codebase early.
-
----
-
-## 14. Risk register
-
-| Risk | Severity | Mitigation |
-| --- | --- | --- |
-| **Qualification of Nota's own price under art. 32.1 L.N.** | **Critical** | The fee *share* is gone: the notary receives 100 % of their *honoraires* and Nota charges the client its own published price (§2.2, ADR 0031/0034). What remains is qualification, not structure. Written opinion budgeted at 20 K$, month 2; a flat per-act fee billed outside the act is the fallback structure. |
-| **A retired claim survives in a document** | High | The 10 % commission, the 75/25 split, the 5–15 % cote-driven cut and the flat 400 $ price are all retired. They are wrong *and* they describe an arrangement Québec law forbids Nota from having, so every dated audit that cites them carries a retirement banner and this plan states the discipline in §2.2. |
-| **Taxes and disbursements are not in the quote** | High | Art. 71 3° requires saying whether they are included; art. 68 forbids incomplete advertising. Priced and displayed as a Month 1 milestone (§11) before any client-facing claim of completeness. |
-| **Art. 46 keeps remote signing exceptional** | High | Phase 2 is designed to be fully valuable under the current statute. The exception categories are large and under-served. Liberalization is upside, not plan. |
-| **Cold-start liquidity fails** | High | Supply is free and frictionless. One dense city first. Fill rate monitored weekly with an explicit floor-adjustment lever. |
-| **Low client repeat rate** | Medium-High | Supply-side moat, compounding organic capture, zero-CAC referral channels, recurring refinancing (§8.3). |
-| **Chambre opposition** | Medium-High | Early, written, partnership-framed engagement. Nota never touches the act and takes nothing out of a notary's fees. Positioned as demand generation for the profession. |
-| **A rung of the date ladder drifts below its own cost** | Low | Measured on 2026-09-04 (`rapide` −9,45 $, `prioritaire` −18,90 $) and repriced on 2026-09-05 (ADR 0038). A domain test now holds every rung above the fee it induces. The grid stays data, edited from the console without a deploy, and is re-checked against realized cost at Month 6. |
-| **A funded competitor copies the mechanism** | Medium | The price curve requires running the market to obtain; the notary network is slow and in-person; the déontologie structure is non-obvious from outside Québec. |
-| **Solo-founder key-person risk** | Medium | ADRs, BDD specs, early Y2 engineering hire. |
-| **Race to the bottom on price** | Low | Hard floors per service ([ADR 0006](decisions/0006-service-floor-prices.md)) and a **5×** cap, enforced server-side in the domain core. |
-| **No verification against the Tableau de l'Ordre** | Medium-High | The only check today is the URL format of a CNQ fiche. A real status check and an immediate-removal path are prerequisites to the first live act, not Phase 2 work. |
-| **Law 25 / privacy incident** | Low-Medium | `ca-central-1` residency, anonymity default-on, consent at collection, right-to-erasure on the roadmap. |
-
----
-
-## 15. The ask
-
-**250 000 $ CAD pre-seed. 12 months.**
-
-Structure: SAFE or convertible note, with an angel lead. An angel lead and an
-accelerator relationship are explicitly targeted in this round because both are
-prerequisites for Investissement Québec's Fonds Impulsion (250 K$–1 M$) as the
-month-9-to-12 follow-on.
-
-**What the money buys:**
-
-- A written legal opinion on file qualifying Nota's own price — the structure
-  (client-side, per service, nothing out of the notary's fee) is already shipped.
-- 30 notaries and a functioning two-sided market in Québec City.
-- 244 completed acts, ~62 700 $ of Nota revenue, and the first urgency price
-  curve for the Québec notarial market — a dataset that does not otherwise
-  exist, and one the pricing engine already knows how to learn from.
-- The exception layer that makes remote signing routine where the law already
-  permits it, and province-wide matching within reach.
-- Twelve months of a founder who has already built the entire platform doing
-  nothing but this.
-
-**The one-line version:** Québec deregulated notary fees in 1991 and never built
-a market. The market is built. This funds finding out whether it clears.
-
----
-
-## Appendix A — Sources
-
-- Chambre des notaires du Québec — [remote signature of a technological notarial act](https://www.cnq.org/en/your-notary/a-digital-professional/signing-a-technology-based-notarial-act-remotely/)
-- Chambre des notaires du Québec — [what to know about the remote act under the new law](https://www.cnq.org/la-chambre-et-votre-protection/actualites-et-salle-de-presse/acte-a-distance-avec-un-notaire-les-choses-a-savoir/)
-- Chambre des notaires du Québec — [Normes concernant l'acte notarié en minute sur un support technologique (PDF)](https://www.cnq.org/wp-content/uploads/2023/10/978677-2023_10_27_refonte_normes_acte_techno_v1final.pdf)
-- Gascon et associés — [analysis of Bill 34, *Loi visant à moderniser le notariat*](https://gascon.ca/une-nouvelle-loi-qui-fait-jaser-la-loi-visant-a-moderniser-le-notariat-et-a-favoriser-lacces-a-la-justice/)
-- Légis Québec — [*Loi sur le notariat*, RLRQ c. N-3](https://www.legisquebec.gouv.qc.ca/fr/document/lc/N-3)
-- Jurivision — [*L'acte notarié électronique à distance : enjeux et perspectives*](https://jurivision.ca/lacte-notarie-electronique-a-distance/)
-- Chambre des notaires du Québec — [Registre des dispositions testamentaires](https://www.cnq.org/en/the-chambre-and-your-protection/the-chambres-services/search-the-registers/)
-- International Union of Notaries — [about the UINL and its 93 member notariats](https://uinl.org/mission/about-us/)
-- Notairo — [notary fees in Québec, 2026](https://notairo.com/en/blogs/news/frais-de-notaire-au-quebec-en-2026-a-quoi-s-attendre)
-- Notairo — [launch of Québec's first digital real-estate closing platform](https://notairo.com/en/blogs/presse-et-medias/notairo-lance-la-premiere-plateforme-quebecoise-pour-preparer-les-transactions-immobilieres-en-ligne)
-- Nolos — [online notarized wills](https://nolos.ca/en)
-- APCIQ — [Québec residential market statistics](https://apciq.ca/en/quebec-city-and-montreal-real-estate-markets-continue-to-trend-upward/)
-- CMHC — [Residential Mortgage Industry Report](https://www.cmhc-schl.gc.ca/professionals/housing-markets-data-and-research/housing-research/research-reports/housing-finance/residential-mortgage-industry-report)
-- Conseiller — [half of Canadians still have no will](https://conseiller.ca/nouvelles/heritage-la-moitie-des-canadiens-nont-toujours-pas-de-testament/)
-- La Presse — [*De bonnes raisons de faire son testament jeune*](https://www.lapresse.ca/affaires/portfolio/2026-04-15/heritage-et-succession/de-bonnes-raisons-de-faire-son-testament-jeune.php)
-- Investissement Québec — [Fonds Impulsion](https://www.investquebec.com/fr/salle-de-presse/le-gouvernement-du-quebec-investit-dans-les-entreprises-technologiques-innovantes)
-
-## Appendix B — Internal references
-
-Thirty-seven ADRs live in [`docs/decisions/`](decisions/). The ones that carry
-this plan:
-
-**The revenue model, and its dismantling.** Read these four in order — they are
-the record of the platform taking apart its own economics when Québec notarial
-law turned out to forbid them.
-
-- [ADR 0027 — Partage 75/25 selon la cote client](decisions/0027-partage-75-25-cote-client.md) *(retired)*
-- [ADR 0028 — La cote sur 100 décide le partage](decisions/0028-la-cote-sur-100-decide-le-partage.md) *(retired)*
-- [ADR 0030 — La déontologie prime : la cote ne se publie pas](decisions/0030-la-deontologie-prime-la-cote-ne-se-publie-pas.md)
-- **[ADR 0031 — Le prix de Nota est celui de Nota](decisions/0031-le-prix-de-nota-est-celui-de-nota.md)** — the share is removed; the notary keeps 100 %
-- **[ADR 0034 — Le prix de Nota est une grille par service](decisions/0034-le-prix-de-nota-est-une-grille-par-service.md)** — the single price becomes the grid this plan is costed on
-
-**The catalogue and the price of time.**
-
-- [ADR 0003 — Bounded intake](decisions/0003-bounded-intake.md)
-- [ADR 0006 — Service floor prices](decisions/0006-service-floor-prices.md)
-- [ADR 0010 — Financing-first catalogue](decisions/0010-financing-first-catalogue.md) — testament and procuration retired
-- [ADR 0011 — Partner referral rewards](decisions/0011-partner-referral-commission.md)
-
-**Money movement.**
-
-- [ADR 0015 — Paid at signing](decisions/0015-paid-at-signing.md)
-- [ADR 0023 — Late-cancellation fee](decisions/0023-late-cancellation-fee.md)
-- [ADR 0029 — An off-platform settlement is a receivable](decisions/0029-un-reglement-hors-plateforme-est-une-creance.md)
-- [ADR 0033 — La mise en relation est complète](decisions/0033-la-mise-en-relation-est-complete.md) — the cancellation fee goes to the notary
-- [ADR 0035 — La caution tient jusqu'à la signature](decisions/0035-la-caution-tient-jusqua-la-signature.md)
-
-**Platform and architecture.**
-
-- [ADR 0001 — Flat fee, not commission](decisions/0001-flat-fee-not-commission.md) *(superseded — the notary pays nothing at all)*
-- [ADR 0002 — Single-table DynamoDB](decisions/0002-single-table-dynamodb.md)
-- [ADR 0004 — CloudFront OAC + IAM-authed Lambda](decisions/0004-cloudfront-oac-iam-api.md)
-- [ADR 0005 — Stripe](decisions/0005-stripe-flat-subscription.md) *(the flat subscription it names is retired)*
-- [ADR 0007 — Email notifications](decisions/0007-email-notifications.md)
-
-**Compliance dossiers**, which an investor's counsel should read before this
-plan: [`docs/legal/`](legal/) — the déontologie file, the draft client and
-notary terms, the Law 25 policies — and [`docs/compliance/`](compliance/) — the
-claims audit, the transaction audit trail and the SOC 2 gap analysis. Each of
-those carries a banner where it describes the retired revenue share, because
-they are dated records and the history is not rewritten.
+The renderer requires Python Markdown. It preserves the existing Nota brand stylesheet and mark in the formatted version. Model changes are planning changes only; prices and customer terms remain governed by the application and approved contracts.
+
+Supporting research and operating evidence:
+
+- [Market and AI research companion](nota-market-research-2026.md) — broader expansion research; validate dated claims before reuse.
+- [Margin audit](go-to-market/margin-audit-2026-09-08.md) — collection costs, high-value losses and candidate experiments.
+- [Launch activation](go-to-market/launch-evidence/2026-09-08-activation.md) — dated deployment/search evidence.
+- [Payment readiness](qa/2026-09-08-stripe-production-readiness.md) — staged versus activated payment infrastructure.
+- [Professional/legal dossier](legal/README.md) and [claims audit](compliance/audit-des-affirmations.md).
+- [Signing requirements](signing-security-requirements.md) and [working rehearsal boundaries](signing-beta-release.md).
+- [Current four-service coverage](ai/notary-service-coverage-2026-09-09.md), [evaluation](ai/notary-ai-evaluation-2026-09-09.md) and [cost/performance](ai/financing-cost-performance-2026-09-09.md).
+- [Review record](planning/business-plan-review-2026-09-09.md) — changes, verification and unresolved evidence.

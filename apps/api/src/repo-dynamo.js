@@ -6,6 +6,8 @@ const {
   monthPK,
   notaryPK,
   NOTARY_SK,
+  notaryAIPaymentPK,
+  NOTARY_AI_PAYMENT_SK,
   eventPK,
   EVENT_SK,
   sentPK,
@@ -90,6 +92,12 @@ const {
   groupsPK,
   groupSK,
   GROUP_PREFIX,
+  permissionGroupsPK,
+  permissionGroupSK,
+  PERMISSION_GROUP_PREFIX,
+  cabinetsPK,
+  cabinetSK,
+  CABINET_PREFIX,
   adminLoginPK,
   ADMIN_LOGIN_SK,
   adminSessionPK,
@@ -100,6 +108,8 @@ const {
   learningSignalSK,
   adminRlPK,
   ADMIN_RL_SK,
+  crmLeadPK,
+  CRM_LEAD_SK,
   GSI1_PK,
   GSI1_SK,
   OPENBID_GSI1PK,
@@ -322,6 +332,9 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
   }
 
   return {
+    // The public Lambda deliberately omits the admin table. Optional demo
+    // administration records must not make a public-only seed fail.
+    adminTableConfigured: Boolean(adminTableName),
     async getSigningSession(bidId) {
       const out = await doc.send(new GetCommand({ TableName: tableName,
         Key: { PK: `SIGNING_BETA#${bidId}`, SK: 'SESSION' }, ConsistentRead: true }));
@@ -384,7 +397,7 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         throw error;
       }
     },
-    async listByMonth(month) {
+    async listByMonth(month, { consistentRead = false } = {}) {
       // A month partition can exceed DynamoDB's 1MB page, so follow
       // LastEvaluatedKey to exhaustion — same contract as listOpenBids and the
       // memory adapter, which both return every matching item.
@@ -397,6 +410,7 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
             KeyConditionExpression: 'PK = :pk AND begins_with(SK, :b)',
             ExpressionAttributeValues: { ':pk': monthPK(month), ':b': 'BID#' },
             ExclusiveStartKey,
+            ...(consistentRead ? { ConsistentRead: true } : {}),
           })
         );
         (out.Items || []).forEach((i) => bids.push(fromItem(i)));
@@ -689,6 +703,64 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       }
       await doc.send(new PutCommand({ TableName: tableName, Item: item }));
       return notary;
+    },
+    // Revisioned AI entitlement sub-document. The condition is deliberately
+    // on the notary profile, so trial/subscription units cannot be double-spent
+    // by concurrent Lambda invocations.
+    async updateNotaryAI(notaryId, aiAccess, expectedRevision = 0) {
+      try {
+        await doc.send(new UpdateCommand({
+          TableName: tableName,
+          Key: { PK: notaryPK(notaryId), SK: NOTARY_SK },
+          UpdateExpression: 'SET aiAccess = :access',
+          ConditionExpression: 'attribute_exists(PK) AND (attribute_not_exists(aiAccess.revision) OR aiAccess.revision = :expected)',
+          ExpressionAttributeValues: { ':access': aiAccess, ':expected': Number(expectedRevision) },
+        }));
+        return true;
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return false;
+        throw err;
+      }
+    },
+    async applyNotaryAIPayment(notaryId, paymentId, aiAccess, expectedRevision = 0, at = null) {
+      const payment = String(paymentId || '');
+      if (!payment) return { ok: false };
+      try {
+        await doc.send(new TransactWriteCommand({
+          TransactItems: [
+            {
+              Put: {
+                TableName: tableName,
+                Item: { PK: notaryAIPaymentPK(payment), SK: NOTARY_AI_PAYMENT_SK, type: 'notary_ai_payment', paymentId: payment, notaryId, createdAt: at || new Date().toISOString() },
+                ConditionExpression: 'attribute_not_exists(PK)',
+              },
+            },
+            {
+              Update: {
+                TableName: tableName,
+                Key: { PK: notaryPK(notaryId), SK: NOTARY_SK },
+                UpdateExpression: 'SET aiAccess = :access',
+                ConditionExpression: 'attribute_exists(PK) AND (attribute_not_exists(aiAccess.revision) OR aiAccess.revision = :expected)',
+                ExpressionAttributeValues: { ':access': aiAccess, ':expected': Number(expectedRevision) },
+              },
+            },
+          ],
+        }));
+        return { ok: true, applied: true, aiAccess };
+      } catch (err) {
+        // A duplicate payment marker means another worker already committed
+        // both writes. A profile revision conflict means the caller should
+        // reload and retry; do not guess whether the payment was applied.
+        if (err && err.name === 'TransactionCanceledException') {
+          const marker = await doc.send(new GetCommand({ TableName: tableName, Key: { PK: notaryAIPaymentPK(payment), SK: NOTARY_AI_PAYMENT_SK } }));
+          if (marker.Item && marker.Item.notaryId === notaryId) {
+            const profile = await doc.send(new GetCommand({ TableName: tableName, Key: { PK: notaryPK(notaryId), SK: NOTARY_SK } }));
+            return { ok: true, applied: false, aiAccess: profile.Item?.aiAccess || {} };
+          }
+          return { ok: false };
+        }
+        throw err;
+      }
     },
     async getNotary(id) {
       const out = await doc.send(
@@ -1030,9 +1102,9 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     // La base de consentement LCAP d'une adresse. Le registre n'a pas encore de
     // porte d'écriture publique — quand il en aura une, c'est cet item qu'elle
     // écrira, et `segments.js` le préférera d'office à sa déduction.
-    async getEmailConsent(email) {
+    async getEmailConsent(email, { consistentRead = false } = {}) {
       const out = await doc.send(
-        new GetCommand({ TableName: tableName, Key: { PK: emailConsentPK(), SK: emailConsentSK(email) } })
+        new GetCommand({ TableName: tableName, Key: { PK: emailConsentPK(), SK: emailConsentSK(email) }, ...(consistentRead ? { ConsistentRead: true } : {}) })
       );
       if (!out.Item) return null;
       // La forme est recomposée, jamais recopiée : l'item peut ne PAS porter
@@ -1754,9 +1826,9 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         throw err;
       }
     },
-    async getActCompletion(bidId) {
+    async getActCompletion(bidId, { consistentRead = false } = {}) {
       const out = await doc.send(
-        new GetCommand({ TableName: tableName, Key: { PK: actPK(bidId), SK: ACT_SK } })
+        new GetCommand({ TableName: tableName, Key: { PK: actPK(bidId), SK: ACT_SK }, ...(consistentRead ? { ConsistentRead: true } : {}) })
       );
       if (!out.Item) return null;
       const { PK, SK, type, ...rec } = out.Item;
@@ -2065,6 +2137,28 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
       return admin;
     },
 
+    // --- CRM workflow metadata (separate admin table) ----------------------
+    async getCrmLead(bidId) {
+      const out = await doc.send(new GetCommand({
+        TableName: adminTable(),
+        Key: { PK: crmLeadPK(bidId), SK: CRM_LEAD_SK },
+        ConsistentRead: true,
+      }));
+      return out.Item ? sansCles(out.Item) : null;
+    },
+    async putCrmLead(lead, expectedRevision = null) {
+      const item = { PK: crmLeadPK(lead.bidId), SK: CRM_LEAD_SK, type: 'crm_lead', ...lead };
+      await doc.send(new PutCommand({
+        TableName: adminTable(),
+        Item: item,
+        ...(expectedRevision === null ? {} : {
+          ConditionExpression: 'attribute_not_exists(PK) OR revision = :expectedRevision',
+          ExpressionAttributeValues: { ':expectedRevision': Number(expectedRevision) },
+        }),
+      }));
+      return { ...lead };
+    },
+
     // --- Groupes d'administrateurs (RBAC découplé) --------------------------
     // Une seule partition, un item par groupe : la liste se lit par UNE Query,
     // jamais par un Scan — la Lambda admin ne doit pas avoir la permission de
@@ -2109,6 +2203,83 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
         ExclusiveStartKey = out.LastEvaluatedKey;
       } while (ExclusiveStartKey);
       return groupes;
+    },
+
+    // Permission bundles have their own partition. A user group stores only
+    // the bundle ids, so changing one bundle updates every attached group on
+    // the next authorization check.
+    async getPermissionGroup(id) {
+      const out = await doc.send(
+        new GetCommand({ TableName: adminTable(), Key: { PK: permissionGroupsPK(), SK: permissionGroupSK(id) } })
+      );
+      if (!out.Item) return null;
+      const { PK, SK, type, ...groupe } = out.Item;
+      return groupe;
+    },
+    async putPermissionGroup(groupe, updatedAt) {
+      const item = { ...groupe, updatedAt };
+      await doc.send(new PutCommand({
+        TableName: adminTable(),
+        Item: { PK: permissionGroupsPK(), SK: permissionGroupSK(groupe.id), type: 'permission_group', ...item },
+      }));
+      return item;
+    },
+    async deletePermissionGroup(id) {
+      await doc.send(new DeleteCommand({ TableName: adminTable(), Key: { PK: permissionGroupsPK(), SK: permissionGroupSK(id) } }));
+    },
+    async listPermissionGroups() {
+      const groupes = [];
+      let ExclusiveStartKey;
+      do {
+        const out = await doc.send(new QueryCommand({
+          TableName: adminTable(),
+          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :b)',
+          ExpressionAttributeValues: { ':pk': permissionGroupsPK(), ':b': PERMISSION_GROUP_PREFIX },
+          ExclusiveStartKey,
+        }));
+        (out.Items || []).forEach((i) => {
+          const { PK, SK, type, ...rec } = i;
+          groupes.push(rec);
+        });
+        ExclusiveStartKey = out.LastEvaluatedKey;
+      } while (ExclusiveStartKey);
+      return groupes;
+    },
+
+    // Cabinet records are commercial tenant metadata on the admin table. The
+    // notary profile remains in the main table; membership is an explicit list
+    // here so commercial access never leaks into the public marketplace model.
+    async getCabinet(id) {
+      const out = await doc.send(new GetCommand({ TableName: adminTable(), Key: { PK: cabinetsPK(), SK: cabinetSK(id) } }));
+      if (!out.Item) return null;
+      const { PK, SK, type, ...cabinet } = out.Item;
+      return cabinet;
+    },
+    async putCabinet(cabinet, updatedAt) {
+      const item = { ...cabinet, notaires: [...(cabinet.notaires || [])], updatedAt };
+      await doc.send(new PutCommand({ TableName: adminTable(), Item: { PK: cabinetsPK(), SK: cabinetSK(cabinet.id), type: 'cabinet', ...item } }));
+      return item;
+    },
+    async deleteCabinet(id) {
+      await doc.send(new DeleteCommand({ TableName: adminTable(), Key: { PK: cabinetsPK(), SK: cabinetSK(id) } }));
+    },
+    async listCabinets() {
+      const cabinets = [];
+      let ExclusiveStartKey;
+      do {
+        const out = await doc.send(new QueryCommand({
+          TableName: adminTable(),
+          KeyConditionExpression: 'PK = :pk AND begins_with(SK, :b)',
+          ExpressionAttributeValues: { ':pk': cabinetsPK(), ':b': CABINET_PREFIX },
+          ExclusiveStartKey,
+        }));
+        (out.Items || []).forEach((i) => {
+          const { PK, SK, type, ...rec } = i;
+          cabinets.push(rec);
+        });
+        ExclusiveStartKey = out.LastEvaluatedKey;
+      } while (ExclusiveStartKey);
+      return cabinets;
     },
 
     // --- Admin login challenges (single-use magic links) --------------------

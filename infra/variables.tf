@@ -35,6 +35,30 @@ variable "hosted_zone_id" {
   default     = null
 }
 
+variable "plan_domain_name" {
+  description = "Optional hostname for the shareable business plan (for example plan.gonata.ca). It is served by the public CloudFront distribution and rewritten to business-plan.html."
+  type        = string
+  default     = ""
+}
+
+variable "plan_hosted_zone_id" {
+  description = "Optional Route 53 zone ID for plan_domain_name when it is not in the public domain zone. When omitted, plan.gonata.ca uses the retained legacy gonata.ca zone."
+  type        = string
+  default     = null
+}
+
+variable "pitch_domain_name" {
+  description = "Optional hostname for the shareable pitch deck (for example pitch.gonota.ca). It is served by the public CloudFront distribution and opens pitch-deck.html."
+  type        = string
+  default     = ""
+}
+
+variable "pitch_hosted_zone_id" {
+  description = "Optional Route 53 zone ID for pitch_domain_name when it is not in the public domain zone. When omitted, the public zone is used."
+  type        = string
+  default     = null
+}
+
 # --- Stripe (flat monthly subscription billing) ----------------------------
 # Values are NEVER hardcoded: supply them at apply time via TF_VAR_stripe_*
 # environment variables or a gitignored terraform.tfvars. Use Stripe TEST-MODE
@@ -50,6 +74,30 @@ variable "stripe_webhook_secret" {
   description = "Stripe webhook signing secret (whsec_...). Set via TF_VAR_stripe_webhook_secret."
   type        = string
   sensitive   = true
+  default     = ""
+}
+
+variable "ai_monetization_enabled" {
+  description = "Explicitly enable the notary AI beta/subscription entitlement gate after Stripe prices and launch review are ready."
+  type        = bool
+  default     = false
+}
+
+variable "ai_price_essentiel" {
+  description = "Stripe Price ID for the Essential notary AI plan."
+  type        = string
+  default     = ""
+}
+
+variable "ai_price_cabinet" {
+  description = "Stripe Price ID for the Practice notary AI plan."
+  type        = string
+  default     = ""
+}
+
+variable "ai_price_equipe" {
+  description = "Stripe Price ID for the Team notary AI plan."
+  type        = string
   default     = ""
 }
 

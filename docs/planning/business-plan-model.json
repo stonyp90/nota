@@ -1,0 +1,715 @@
+{
+  "version": "1.6",
+  "date": "2026-09-09",
+  "scope": "financing-only planning scenarios; four-service code catalogue",
+  "assumptions": {
+    "serviceMix": {
+      "financement": 0.4,
+      "refinancement": 0.6
+    },
+    "tierMix": {
+      "standard": 0.7,
+      "rapide": 0.18,
+      "prioritaire": 0.07,
+      "urgence": 0.03,
+      "extreme": 0.02
+    },
+    "cardRate": 0.029,
+    "cardFixed": 0.3,
+    "payoutRate": 0.0025,
+    "payoutFixed": 0.25,
+    "activeAccountMonthly": 2,
+    "supportPerAct": 30,
+    "lossRateOnCharge": 0.005,
+    "openingCapital": 250000,
+    "protectedCash": 25000,
+    "annualOperatingBudget": [
+      250000,
+      720000,
+      1850000
+    ],
+    "demandBudgetIncluded": [
+      40000,
+      154000,
+      440000
+    ],
+    "notaries": [
+      30,
+      220,
+      700
+    ],
+    "bids": [
+      534,
+      6000,
+      22000
+    ],
+    "retained": [
+      307,
+      3500,
+      13750
+    ],
+    "completed": [
+      244,
+      2800,
+      11000
+    ],
+    "monthlyCompleted": [
+      0,
+      0,
+      0,
+      4,
+      6,
+      10,
+      15,
+      22,
+      30,
+      40,
+      52,
+      65
+    ],
+    "monthlyOperatingBudget": [
+      20000,
+      28000,
+      24000,
+      22000,
+      20000,
+      20000,
+      20000,
+      20000,
+      19000,
+      19000,
+      19000,
+      19000
+    ]
+  },
+  "catalogue": [
+    {
+      "id": "refinancement",
+      "name": "Refinancement hypothécaire",
+      "base": 2000,
+      "nota": 279
+    },
+    {
+      "id": "financement",
+      "name": "Financement hypothécaire",
+      "base": 1800,
+      "nota": 229
+    },
+    {
+      "id": "testament",
+      "name": "Testament notarié",
+      "base": 1800,
+      "nota": 229
+    },
+    {
+      "id": "procuration",
+      "name": "Procuration notariée",
+      "base": 1500,
+      "nota": 209
+    }
+  ],
+  "rows": [
+    {
+      "service": "refinancement",
+      "tier": "standard",
+      "honoraires": 2000,
+      "nota": 279,
+      "charge": 2279,
+      "card": 66.391,
+      "payout": 5.25,
+      "paymentBeforeAccount": 207.35899999999998
+    },
+    {
+      "service": "refinancement",
+      "tier": "rapide",
+      "honoraires": 4000,
+      "nota": 428,
+      "charge": 4428,
+      "card": 128.71200000000002,
+      "payout": 10.25,
+      "paymentBeforeAccount": 289.038
+    },
+    {
+      "service": "refinancement",
+      "tier": "prioritaire",
+      "honoraires": 6000,
+      "nota": 578,
+      "charge": 6578,
+      "card": 191.062,
+      "payout": 15.25,
+      "paymentBeforeAccount": 371.688
+    },
+    {
+      "service": "refinancement",
+      "tier": "urgence",
+      "honoraires": 7000,
+      "nota": 728,
+      "charge": 7728,
+      "card": 224.41200000000003,
+      "payout": 17.75,
+      "paymentBeforeAccount": 485.83799999999997
+    },
+    {
+      "service": "refinancement",
+      "tier": "extreme",
+      "honoraires": 8000,
+      "nota": 828,
+      "charge": 8828,
+      "card": 256.312,
+      "payout": 20.25,
+      "paymentBeforeAccount": 551.438
+    },
+    {
+      "service": "financement",
+      "tier": "standard",
+      "honoraires": 1800,
+      "nota": 229,
+      "charge": 2029,
+      "card": 59.141,
+      "payout": 4.75,
+      "paymentBeforeAccount": 165.109
+    },
+    {
+      "service": "financement",
+      "tier": "rapide",
+      "honoraires": 3600,
+      "nota": 378,
+      "charge": 3978,
+      "card": 115.662,
+      "payout": 9.25,
+      "paymentBeforeAccount": 253.08799999999997
+    },
+    {
+      "service": "financement",
+      "tier": "prioritaire",
+      "honoraires": 5400,
+      "nota": 528,
+      "charge": 5928,
+      "card": 172.21200000000002,
+      "payout": 13.75,
+      "paymentBeforeAccount": 342.038
+    },
+    {
+      "service": "financement",
+      "tier": "urgence",
+      "honoraires": 6300,
+      "nota": 678,
+      "charge": 6978,
+      "card": 202.66200000000003,
+      "payout": 16,
+      "paymentBeforeAccount": 459.33799999999997
+    },
+    {
+      "service": "financement",
+      "tier": "extreme",
+      "honoraires": 7200,
+      "nota": 778,
+      "charge": 7978,
+      "card": 231.66200000000003,
+      "payout": 18.25,
+      "paymentBeforeAccount": 528.088
+    },
+    {
+      "service": "testament",
+      "tier": "standard",
+      "honoraires": 1800,
+      "nota": 229,
+      "charge": 2029,
+      "card": 59.141,
+      "payout": 4.75,
+      "paymentBeforeAccount": 165.109
+    },
+    {
+      "service": "testament",
+      "tier": "rapide",
+      "honoraires": 3600,
+      "nota": 378,
+      "charge": 3978,
+      "card": 115.662,
+      "payout": 9.25,
+      "paymentBeforeAccount": 253.08799999999997
+    },
+    {
+      "service": "testament",
+      "tier": "prioritaire",
+      "honoraires": 5400,
+      "nota": 528,
+      "charge": 5928,
+      "card": 172.21200000000002,
+      "payout": 13.75,
+      "paymentBeforeAccount": 342.038
+    },
+    {
+      "service": "testament",
+      "tier": "urgence",
+      "honoraires": 6300,
+      "nota": 678,
+      "charge": 6978,
+      "card": 202.66200000000003,
+      "payout": 16,
+      "paymentBeforeAccount": 459.33799999999997
+    },
+    {
+      "service": "testament",
+      "tier": "extreme",
+      "honoraires": 7200,
+      "nota": 778,
+      "charge": 7978,
+      "card": 231.66200000000003,
+      "payout": 18.25,
+      "paymentBeforeAccount": 528.088
+    },
+    {
+      "service": "procuration",
+      "tier": "standard",
+      "honoraires": 1500,
+      "nota": 209,
+      "charge": 1709,
+      "card": 49.861,
+      "payout": 4,
+      "paymentBeforeAccount": 155.139
+    },
+    {
+      "service": "procuration",
+      "tier": "rapide",
+      "honoraires": 3000,
+      "nota": 358,
+      "charge": 3358,
+      "card": 97.682,
+      "payout": 7.75,
+      "paymentBeforeAccount": 252.56799999999998
+    },
+    {
+      "service": "procuration",
+      "tier": "prioritaire",
+      "honoraires": 4500,
+      "nota": 508,
+      "charge": 5008,
+      "card": 145.532,
+      "payout": 11.5,
+      "paymentBeforeAccount": 350.96799999999996
+    },
+    {
+      "service": "procuration",
+      "tier": "urgence",
+      "honoraires": 5250,
+      "nota": 658,
+      "charge": 5908,
+      "card": 171.63200000000003,
+      "payout": 13.375,
+      "paymentBeforeAccount": 472.99299999999994
+    },
+    {
+      "service": "procuration",
+      "tier": "extreme",
+      "honoraires": 6000,
+      "nota": 758,
+      "charge": 6758,
+      "card": 196.282,
+      "payout": 15.25,
+      "paymentBeforeAccount": 546.468
+    }
+  ],
+  "baseline": {
+    "honoraires": 2793.5999999999995,
+    "nota": 331.2,
+    "charge": 3124.8,
+    "card": 90.9192,
+    "payout": 7.234000000000001,
+    "paymentBeforeAccount": 233.04679999999996
+  },
+  "market": {
+    "financingActs": 60000,
+    "refinancingActs": 50000,
+    "baseFeeOpportunity": 27690000,
+    "withAssumedDateMix": 35632000,
+    "startingHonoraires": 208000000
+  },
+  "months": [
+    {
+      "month": 1,
+      "completed": 0,
+      "activeAccounts": 0,
+      "account": 0,
+      "opening": 250000,
+      "notaRevenue": 0,
+      "contribution": 0,
+      "operatingBudget": 20000,
+      "closing": 230000,
+      "freeAboveReserve": 205000
+    },
+    {
+      "month": 2,
+      "completed": 0,
+      "activeAccounts": 0,
+      "account": 0,
+      "opening": 230000,
+      "notaRevenue": 0,
+      "contribution": 0,
+      "operatingBudget": 28000,
+      "closing": 202000,
+      "freeAboveReserve": 177000
+    },
+    {
+      "month": 3,
+      "completed": 0,
+      "activeAccounts": 0,
+      "account": 0,
+      "opening": 202000,
+      "notaRevenue": 0,
+      "contribution": 0,
+      "operatingBudget": 24000,
+      "closing": 178000,
+      "freeAboveReserve": 153000
+    },
+    {
+      "month": 4,
+      "completed": 4,
+      "activeAccounts": 4,
+      "account": 8,
+      "opening": 178000,
+      "notaRevenue": 1324.8,
+      "contribution": 741.6911999999999,
+      "operatingBudget": 22000,
+      "closing": 156741.6912,
+      "freeAboveReserve": 131741.6912
+    },
+    {
+      "month": 5,
+      "completed": 6,
+      "activeAccounts": 6,
+      "account": 12,
+      "opening": 156741.6912,
+      "notaRevenue": 1987.1999999999998,
+      "contribution": 1112.5367999999999,
+      "operatingBudget": 20000,
+      "closing": 137854.228,
+      "freeAboveReserve": 112854.228
+    },
+    {
+      "month": 6,
+      "completed": 10,
+      "activeAccounts": 10,
+      "account": 20,
+      "opening": 137854.228,
+      "notaRevenue": 3312,
+      "contribution": 1854.2279999999996,
+      "operatingBudget": 20000,
+      "closing": 119708.456,
+      "freeAboveReserve": 94708.456
+    },
+    {
+      "month": 7,
+      "completed": 15,
+      "activeAccounts": 15,
+      "account": 30,
+      "opening": 119708.456,
+      "notaRevenue": 4968,
+      "contribution": 2781.3419999999996,
+      "operatingBudget": 20000,
+      "closing": 102489.79800000001,
+      "freeAboveReserve": 77489.79800000001
+    },
+    {
+      "month": 8,
+      "completed": 22,
+      "activeAccounts": 22,
+      "account": 44,
+      "opening": 102489.79800000001,
+      "notaRevenue": 7286.4,
+      "contribution": 4079.301599999999,
+      "operatingBudget": 20000,
+      "closing": 86569.09960000002,
+      "freeAboveReserve": 61569.099600000016
+    },
+    {
+      "month": 9,
+      "completed": 30,
+      "activeAccounts": 30,
+      "account": 60,
+      "opening": 86569.09960000002,
+      "notaRevenue": 9936,
+      "contribution": 5562.683999999999,
+      "operatingBudget": 19000,
+      "closing": 73131.78360000001,
+      "freeAboveReserve": 48131.78360000001
+    },
+    {
+      "month": 10,
+      "completed": 40,
+      "activeAccounts": 30,
+      "account": 60,
+      "opening": 73131.78360000001,
+      "notaRevenue": 13248,
+      "contribution": 7436.911999999998,
+      "operatingBudget": 19000,
+      "closing": 61568.69560000001,
+      "freeAboveReserve": 36568.69560000001
+    },
+    {
+      "month": 11,
+      "completed": 52,
+      "activeAccounts": 30,
+      "account": 60,
+      "opening": 61568.69560000001,
+      "notaRevenue": 17222.399999999998,
+      "contribution": 9685.985599999998,
+      "operatingBudget": 19000,
+      "closing": 52254.681200000006,
+      "freeAboveReserve": 27254.681200000006
+    },
+    {
+      "month": 12,
+      "completed": 65,
+      "activeAccounts": 30,
+      "account": 60,
+      "opening": 52254.681200000006,
+      "notaRevenue": 21528,
+      "contribution": 12122.481999999998,
+      "operatingBudget": 19000,
+      "closing": 45377.1632,
+      "freeAboveReserve": 20377.163200000003
+    }
+  ],
+  "years": [
+    {
+      "completed": 244,
+      "honoraires": 681638.3999999999,
+      "charges": 762451.2000000001,
+      "revenue": 80812.8,
+      "card": 22184.2848,
+      "payout": 1765.0960000000002,
+      "account": 354,
+      "payment": 56509.41919999999,
+      "service": 7320,
+      "losses": 3812.2560000000003,
+      "contribution": 45377.16319999999,
+      "operating": 250000,
+      "operatingResult": -204622.83680000002,
+      "cac": 163.9344262295082,
+      "breakEvenActs": 1338
+    },
+    {
+      "completed": 2800,
+      "honoraires": 7822079.999999998,
+      "charges": 8749440,
+      "revenue": 927360,
+      "card": 254573.76,
+      "payout": 20255.2,
+      "account": 5280,
+      "payment": 647251.0399999999,
+      "service": 84000,
+      "losses": 43747.200000000004,
+      "contribution": 519503.8399999999,
+      "operating": 720000,
+      "operatingResult": -200496.1600000001,
+      "cac": 55,
+      "breakEvenActs": 3870
+    },
+    {
+      "completed": 11000,
+      "honoraires": 30729599.999999993,
+      "charges": 34372800,
+      "revenue": 3643200,
+      "card": 1000111.2000000001,
+      "payout": 79574.00000000001,
+      "account": 16800,
+      "payment": 2546714.8,
+      "service": 330000,
+      "losses": 171864,
+      "contribution": 2044850.7999999998,
+      "operating": 1850000,
+      "operatingResult": 194850.7999999998,
+      "cac": 40,
+      "breakEvenActs": 9961
+    }
+  ],
+  "scenarios": [
+    {
+      "name": "Downside",
+      "factor": 0.5,
+      "support": 60,
+      "lossRate": 0.01,
+      "years": [
+        {
+          "completed": 122,
+          "honoraires": 340819.19999999995,
+          "charges": 381225.60000000003,
+          "revenue": 40406.4,
+          "card": 11092.1424,
+          "payout": 882.5480000000001,
+          "account": 244,
+          "payment": 28187.709599999995,
+          "service": 7320,
+          "losses": 3812.2560000000003,
+          "contribution": 17055.453599999993,
+          "operating": 250000,
+          "operatingResult": -232944.5464,
+          "cac": 327.8688524590164,
+          "breakEvenActs": 1769
+        },
+        {
+          "completed": 1400,
+          "honoraires": 3911039.999999999,
+          "charges": 4374720,
+          "revenue": 463680,
+          "card": 127286.88,
+          "payout": 10127.6,
+          "account": 2800,
+          "payment": 323465.51999999996,
+          "service": 84000,
+          "losses": 43747.200000000004,
+          "contribution": 195718.31999999995,
+          "operating": 720000,
+          "operatingResult": -524281.68000000005,
+          "cac": 110,
+          "breakEvenActs": 5115
+        },
+        {
+          "completed": 5500,
+          "honoraires": 15364799.999999996,
+          "charges": 17186400,
+          "revenue": 1821600,
+          "card": 500055.60000000003,
+          "payout": 39787.00000000001,
+          "account": 11000,
+          "payment": 1270757.4,
+          "service": 330000,
+          "losses": 171864,
+          "contribution": 768893.3999999999,
+          "operating": 1850000,
+          "operatingResult": -1081106.6,
+          "cac": 80,
+          "breakEvenActs": 13166
+        }
+      ],
+      "peakYearEndDeficit": 1838332.8264000001,
+      "capitalWithReserve": 1863332.8264000001,
+      "extraBeyondRaise": 1613332.8264000001
+    },
+    {
+      "name": "Base",
+      "factor": 1,
+      "support": 30,
+      "lossRate": 0.005,
+      "years": [
+        {
+          "completed": 244,
+          "honoraires": 681638.3999999999,
+          "charges": 762451.2000000001,
+          "revenue": 80812.8,
+          "card": 22184.2848,
+          "payout": 1765.0960000000002,
+          "account": 354,
+          "payment": 56509.41919999999,
+          "service": 7320,
+          "losses": 3812.2560000000003,
+          "contribution": 45377.16319999999,
+          "operating": 250000,
+          "operatingResult": -204622.83680000002,
+          "cac": 163.9344262295082,
+          "breakEvenActs": 1338
+        },
+        {
+          "completed": 2800,
+          "honoraires": 7822079.999999998,
+          "charges": 8749440,
+          "revenue": 927360,
+          "card": 254573.76,
+          "payout": 20255.2,
+          "account": 5280,
+          "payment": 647251.0399999999,
+          "service": 84000,
+          "losses": 43747.200000000004,
+          "contribution": 519503.8399999999,
+          "operating": 720000,
+          "operatingResult": -200496.1600000001,
+          "cac": 55,
+          "breakEvenActs": 3870
+        },
+        {
+          "completed": 11000,
+          "honoraires": 30729599.999999993,
+          "charges": 34372800,
+          "revenue": 3643200,
+          "card": 1000111.2000000001,
+          "payout": 79574.00000000001,
+          "account": 16800,
+          "payment": 2546714.8,
+          "service": 330000,
+          "losses": 171864,
+          "contribution": 2044850.7999999998,
+          "operating": 1850000,
+          "operatingResult": 194850.7999999998,
+          "cac": 40,
+          "breakEvenActs": 9961
+        }
+      ],
+      "peakYearEndDeficit": 405118.9968000001,
+      "capitalWithReserve": 430118.9968000001,
+      "extraBeyondRaise": 180118.99680000008
+    },
+    {
+      "name": "Upside",
+      "factor": 1.5,
+      "support": 20,
+      "lossRate": 0.0025,
+      "years": [
+        {
+          "completed": 366,
+          "honoraires": 1022457.5999999997,
+          "charges": 1143676.8,
+          "revenue": 121219.2,
+          "card": 33276.4272,
+          "payout": 2647.6440000000002,
+          "account": 720,
+          "payment": 84575.12879999999,
+          "service": 7320,
+          "losses": 2859.192,
+          "contribution": 74395.9368,
+          "operating": 250000,
+          "operatingResult": -175604.0632,
+          "cac": 109.2896174863388,
+          "breakEvenActs": 1222
+        },
+        {
+          "completed": 4200,
+          "honoraires": 11733119.999999998,
+          "charges": 13124160,
+          "revenue": 1391040,
+          "card": 381860.64,
+          "payout": 30382.800000000003,
+          "account": 5280,
+          "payment": 973516.5599999998,
+          "service": 84000,
+          "losses": 32810.4,
+          "contribution": 856706.1599999998,
+          "operating": 720000,
+          "operatingResult": 136706.1599999998,
+          "cac": 36.666666666666664,
+          "breakEvenActs": 3534
+        },
+        {
+          "completed": 16500,
+          "honoraires": 46094399.99999999,
+          "charges": 51559200,
+          "revenue": 5464800,
+          "card": 1500166.8,
+          "payout": 119361.00000000001,
+          "account": 16800,
+          "payment": 3828472.1999999993,
+          "service": 330000,
+          "losses": 128898,
+          "contribution": 3369574.1999999993,
+          "operating": 1850000,
+          "operatingResult": 1519574.1999999993,
+          "cac": 26.666666666666668,
+          "breakEvenActs": 9096
+        }
+      ],
+      "peakYearEndDeficit": 175604.0632,
+      "capitalWithReserve": 200604.0632,
+      "extraBeyondRaise": 0
+    }
+  ]
+}

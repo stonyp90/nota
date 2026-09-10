@@ -29,6 +29,7 @@ const cote = require('./cote');
 const cancellationCfg = require('./cancellation-config');
 const rbac = require('./rbac');
 const segments = require('./segments');
+const crm = require('./crm');
 const { statsDeltasForNotaryActive } = require('./stats');
 // Le sujet sous lequel les avis d'un client sont rangés est le HACHÉ de son
 // offre (keys.js) : le dossier d'usager les retrouve offre par offre, sans
@@ -476,14 +477,26 @@ function createAdmin({
   async function effectivePermissions(admin, session) {
     const ids = Array.isArray(admin && admin.groupes) ? admin.groupes : [];
     const groups = [];
+    const permissionGroupIds = new Set();
     for (const id of ids) {
       const g = typeof repo.getGroup === 'function' ? await repo.getGroup(id) : null;
-      if (g) groups.push(g);
+      if (g) {
+        groups.push(g);
+        for (const permissionGroupId of (g.groupesPermissions || g.permissionGroups || [])) {
+          permissionGroupIds.add(String(permissionGroupId));
+        }
+      }
+    }
+    const permissionGroups = [];
+    for (const id of permissionGroupIds) {
+      const g = typeof repo.getPermissionGroup === 'function' ? await repo.getPermissionGroup(id) : null;
+      if (g) permissionGroups.push(g);
     }
     return rbac.resolvePermissions({
       role: (admin && admin.role) || (session && session.role),
       directPermissions: (admin && admin.permissions) || [],
       groups,
+      permissionGroups,
     });
   }
 
@@ -1202,11 +1215,15 @@ function createAdmin({
   // libellé : sans entrée ici, une permission ne s'affiche pas.
   const PERMISSION_LABELS = {
     'analytics:read': ['Lire les tableaux de bord', 'Read the dashboards'],
+    'leads:read': ['Lire le CRM et les leads', 'Read the CRM and leads'],
+    'leads:write': ['Modifier les étapes et relances CRM', 'Edit CRM stages and follow-ups'],
     'pii:read': ['Voir les renseignements personnels', 'See personal information'],
     'moderation:write': ['Modérer les offres et les notaires', 'Moderate offers and notaries'],
     'settings:write': ['Modifier les réglages du produit', 'Change product settings'],
     'users:read': ['Voir les utilisateurs', 'See users'],
     'users:write': ['Attribuer groupes et permissions', 'Assign groups and permissions'],
+    'cabinets:read': ['Voir les cabinets et leurs forfaits', 'See practices and plans'],
+    'cabinets:write': ['Gérer les cabinets, forfaits et membres', 'Manage practices, plans and members'],
     'groups:read': ['Voir les groupes', 'See groups'],
     'groups:write': ['Créer et modifier les groupes', 'Create and edit groups'],
     'permissions:read': ['Lire le catalogue des permissions', 'Read the permission catalog'],
@@ -1259,6 +1276,37 @@ function createAdmin({
 
   const GROUP_ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
   const NAME_MAX = 80;
+  const PERMISSION_GROUP_ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+
+  function validatePermissionGroup(id, payload = {}) {
+    const errors = [];
+    if (!PERMISSION_GROUP_ID.test(String(id || ''))) {
+      errors.push({ code: 'identifiant_invalide', message: 'L’identifiant doit être en minuscules, sans espace (lettres, chiffres, - et _), 40 caractères au plus.' });
+    }
+    const nom = typeof payload.nom === 'string' ? payload.nom.trim() : '';
+    if (!nom || nom.length > NAME_MAX) {
+      errors.push({ code: 'nom_invalide', message: `Le nom du groupe de permissions est obligatoire et fait au plus ${NAME_MAX} caractères.` });
+    }
+    const perms = Array.isArray(payload.permissions) ? payload.permissions : [];
+    for (const p of perms) {
+      if (p === rbac.WILDCARD) {
+        errors.push({ code: 'joker_interdit', message: 'Le joker « * » ne s’accorde pas à un groupe de permissions.' });
+      } else if (!rbac.isKnownPermission(p)) {
+        errors.push({ code: 'permission_inconnue', message: `« ${p} » n’est pas une permission connue.` });
+      }
+    }
+    if (errors.length) return { ok: false, errors };
+    return {
+      ok: true,
+      errors: [],
+      groupe: {
+        id: String(id),
+        nom,
+        description: typeof payload.description === 'string' ? payload.description.trim().slice(0, 240) : '',
+        permissions: [...new Set(perms)],
+      },
+    };
+  }
 
   function validateGroup(id, payload = {}) {
     const errors = [];
@@ -1279,6 +1327,14 @@ function createAdmin({
         errors.push({ code: 'permission_inconnue', message: `« ${p} » n’est pas une permission connue.` });
       }
     }
+    const permissionGroupIds = Array.isArray(payload.groupesPermissions)
+      ? payload.groupesPermissions
+      : (Array.isArray(payload.permissionGroups) ? payload.permissionGroups : []);
+    for (const permissionGroupId of permissionGroupIds) {
+      if (!PERMISSION_GROUP_ID.test(String(permissionGroupId || ''))) {
+        errors.push({ code: 'groupe_permissions_invalide', message: `Le groupe de permissions « ${permissionGroupId} » est invalide.` });
+      }
+    }
     if (errors.length) return { ok: false, errors };
     return {
       ok: true,
@@ -1288,19 +1344,69 @@ function createAdmin({
         nom,
         description: typeof payload.description === 'string' ? payload.description.trim().slice(0, 240) : '',
         permissions: [...new Set(perms)],
+        groupesPermissions: [...new Set(permissionGroupIds.map((id) => String(id)))],
       },
     };
   }
 
-  async function listGroups() {
-    const groupes = typeof repo.listGroups === 'function' ? await repo.listGroups() : [];
+  async function listPermissionGroups() {
+    const groupes = typeof repo.listPermissionGroups === 'function' ? await repo.listPermissionGroups() : [];
     return { ok: true, groupes };
   }
 
-  async function putGroup(id, payload, { actor } = {}) {
-    const v = validateGroup(id, payload);
+  async function putPermissionGroup(id, payload, { actor } = {}) {
+    const v = validatePermissionGroup(id, payload);
     if (!v.ok) return v;
+    const avant = typeof repo.getPermissionGroup === 'function' ? await repo.getPermissionGroup(id) : null;
+    const groupe = await repo.putPermissionGroup(v.groupe, clockIso());
+    await appendAudit('groupe_permissions_modifie', { email: actor || null, meta: { groupeId: String(id), avant, apres: groupe } });
+    return { ok: true, errors: [], groupe };
+  }
+
+  async function deletePermissionGroup(id, { actor } = {}) {
+    const avant = typeof repo.getPermissionGroup === 'function' ? await repo.getPermissionGroup(id) : null;
+    if (!avant) return { ok: false, errors: [{ code: 'groupe_permissions_introuvable', message: 'Ce groupe de permissions n’existe pas.' }] };
+    const groupes = typeof repo.listGroups === 'function' ? await repo.listGroups() : [];
+    const utilisePar = groupes.filter((g) => (g.groupesPermissions || g.permissionGroups || []).includes(String(id)));
+    if (utilisePar.length) {
+      return {
+        ok: false,
+        code: 'groupe_permissions_utilise',
+        errors: [{ code: 'groupe_permissions_utilise', message: `Retirez d’abord ce groupe de permissions de ${utilisePar.length} groupe(s) d’utilisateurs.` }],
+      };
+    }
+    await repo.deletePermissionGroup(id);
+    await appendAudit('groupe_permissions_supprime', { email: actor || null, meta: { groupeId: String(id), avant, apres: null } });
+    return { ok: true, errors: [] };
+  }
+
+  async function listGroups() {
+    const groupes = typeof repo.listGroups === 'function' ? await repo.listGroups() : [];
+    return { ok: true, groupes: groupes.map((g) => ({ ...g, groupesPermissions: g.groupesPermissions || g.permissionGroups || [] })) };
+  }
+
+  async function putGroup(id, payload, { actor } = {}) {
     const avant = typeof repo.getGroup === 'function' ? await repo.getGroup(id) : null;
+    const incoming = {
+      ...(avant || {}),
+      ...(payload || {}),
+      ...(payload && payload.groupesPermissions === undefined && payload.permissionGroups === undefined && avant
+        ? { groupesPermissions: avant.groupesPermissions || avant.permissionGroups || [] }
+        : {}),
+    };
+    const v = validateGroup(id, incoming);
+    if (!v.ok) return v;
+    if (typeof repo.getPermissionGroup === 'function') {
+      for (const permissionGroupId of v.groupe.groupesPermissions) {
+        const permissionGroup = await repo.getPermissionGroup(permissionGroupId);
+        if (!permissionGroup) {
+          return {
+            ok: false,
+            errors: [{ code: 'groupe_permissions_introuvable', message: `Le groupe de permissions « ${permissionGroupId} » n’existe pas.` }],
+          };
+        }
+      }
+    }
     const groupe = await repo.putGroup(v.groupe, clockIso());
     await appendAudit('groupe_modifie', { email: actor || null, meta: { groupeId: String(id), avant, apres: groupe } });
     return { ok: true, errors: [], groupe };
@@ -1312,6 +1418,114 @@ function createAdmin({
     await repo.deleteGroup(id);
     await appendAudit('groupe_supprime', { email: actor || null, meta: { groupeId: String(id), avant, apres: null } });
     return { ok: true, errors: [] };
+  }
+
+  // ---------------------------------------------------------------------------
+  // CABINETS — organisations commerciales distinctes des groupes RBAC.
+  // Un cabinet possède plusieurs profils de notaires et un forfait commercial;
+  // cela ne donne par lui-même aucun droit dans la console d'administration.
+  // ---------------------------------------------------------------------------
+  const CABINET_ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;
+  const CABINET_STATUSES = new Set(['prospect', 'actif', 'suspendu']);
+
+  function cabinetView(cabinet) {
+    const plan = domain.cabinetPlan(cabinet.planId);
+    return {
+      ...cabinet,
+      notaires: [...(cabinet.notaires || [])],
+      plan: plan ? domain.cabinetPlanPublic(plan) : null,
+    };
+  }
+
+  async function cabinetMembers(ids) {
+    const out = [];
+    for (const id of ids || []) {
+      const n = typeof repo.getNotary === 'function' ? await repo.getNotary(id) : null;
+      out.push({ id: String(id), email: n && n.email ? n.email : null, etude: n ? domain.notaryEtude(n) : null, statut: n ? (n.status || null) : null });
+    }
+    return out;
+  }
+
+  function validateCabinet(id, payload = {}, existing = null) {
+    const errors = [];
+    if (!CABINET_ID.test(String(id || ''))) errors.push({ code: 'identifiant_invalide', message: 'L’identifiant du cabinet doit être en minuscules, sans espace (40 caractères au plus).' });
+    const nom = typeof payload.nom === 'string' ? payload.nom.trim() : '';
+    if (!nom || nom.length > NAME_MAX) errors.push({ code: 'nom_invalide', message: `Le nom du cabinet est obligatoire et fait au plus ${NAME_MAX} caractères.` });
+    const planId = payload.planId === undefined ? (existing && existing.planId) : String(payload.planId || '');
+    if (!domain.cabinetPlan(planId)) errors.push({ code: 'forfait_invalide', message: 'Le forfait du cabinet est inconnu.' });
+    const statut = payload.statut === undefined ? ((existing && existing.statut) || 'prospect') : String(payload.statut || '');
+    if (!CABINET_STATUSES.has(statut)) errors.push({ code: 'statut_invalide', message: 'Le statut doit être prospect, actif ou suspendu.' });
+    const contact = payload.contactEmail === undefined ? ((existing && existing.contactEmail) || '') : String(payload.contactEmail || '').trim().toLowerCase();
+    if (contact && !domain.isEmail(contact)) errors.push({ code: 'courriel_invalide', message: 'Le courriel de contact du cabinet est invalide.' });
+    const prix = payload.prixMensuelCents === undefined ? ((existing && existing.prixMensuelCents) ?? null) : payload.prixMensuelCents;
+    if (prix !== null && (!Number.isSafeInteger(Number(prix)) || Number(prix) < 0)) errors.push({ code: 'prix_invalide', message: 'Le prix mensuel doit être un nombre entier de cents positif ou nul.' });
+    const sieges = payload.siegesInclus === undefined ? ((existing && existing.siegesInclus) ?? null) : payload.siegesInclus;
+    if (sieges !== null && (!Number.isSafeInteger(Number(sieges)) || Number(sieges) < 1)) errors.push({ code: 'sieges_invalides', message: 'Le nombre de sièges inclus doit être un entier positif ou nul.' });
+    const notaires = payload.notaires === undefined ? ((existing && existing.notaires) || []) : payload.notaires;
+    if (!Array.isArray(notaires)) errors.push({ code: 'notaires_invalides', message: 'Les membres du cabinet doivent être une liste de notaires.' });
+    const membres = [...new Set((notaires || []).map((id) => String(id || '').trim()).filter(Boolean))];
+    if (membres.some((id) => id.length > 120)) errors.push({ code: 'notaire_invalide', message: 'Un identifiant de notaire est trop long.' });
+    if (domain.cabinetPlan(planId) && !domain.cabinetPlan(planId).multiNotaires && membres.length > 1) {
+      errors.push({ code: 'forfait_sans_equipe', message: 'Le forfait Indépendant ne peut contenir qu’un notaire.' });
+    }
+    if (errors.length) return { ok: false, errors };
+    return {
+      ok: true,
+      errors: [],
+      cabinet: {
+        id: String(id), nom, planId, statut, contactEmail: contact || null,
+        prixMensuelCents: prix === null ? null : Number(prix),
+        siegesInclus: sieges === null ? null : Number(sieges),
+        notaires: membres,
+        notes: typeof payload.notes === 'string' ? payload.notes.trim().slice(0, 500) : ((existing && existing.notes) || ''),
+      },
+    };
+  }
+
+  async function listCabinets(token, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!rbac.can(p.permissions, 'cabinets:read')) return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture des cabinets non autorisée.' }] };
+    const records = typeof repo.listCabinets === 'function' ? await repo.listCabinets() : [];
+    const plans = domain.CABINET_PLANS.map(domain.cabinetPlanPublic);
+    const cabinets = [];
+    for (const cabinet of records) cabinets.push({ ...cabinetView(cabinet), membres: await cabinetMembers(cabinet.notaires || []) });
+    return { ok: true, cabinets, plans };
+  }
+
+  async function putCabinet(token, id, payload = {}, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!rbac.can(p.permissions, 'cabinets:write')) return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Modification des cabinets non autorisée.' }] };
+    const avant = typeof repo.getCabinet === 'function' ? await repo.getCabinet(id) : null;
+    const v = validateCabinet(id, payload, avant);
+    if (!v.ok) return { ok: false, status: 422, errors: v.errors };
+    for (const notaryId of v.cabinet.notaires) {
+      if (typeof repo.getNotary === 'function' && !(await repo.getNotary(notaryId))) {
+        return { ok: false, status: 422, errors: [{ code: 'notaire_introuvable', message: `Le notaire « ${notaryId} » n’existe pas.` }] };
+      }
+    }
+    const cabinets = typeof repo.listCabinets === 'function' ? await repo.listCabinets() : [];
+    for (const other of cabinets) {
+      if (other.id === String(id)) continue;
+      const overlap = v.cabinet.notaires.filter((notaryId) => (other.notaires || []).includes(notaryId));
+      if (overlap.length) return { ok: false, status: 409, errors: [{ code: 'notaire_deja_dans_cabinet', message: `Un notaire est déjà rattaché au cabinet « ${other.nom} ».` }] };
+    }
+    const cabinet = await repo.putCabinet(v.cabinet, clockIso());
+    await appendAudit('cabinet_modifie', { adminId: p.adminId, email: p.email, ip, meta: { cabinetId: String(id), avant, apres: cabinet } });
+    return { ok: true, cabinet: { ...cabinetView(cabinet), membres: await cabinetMembers(cabinet.notaires) } };
+  }
+
+  async function deleteCabinet(token, id, { ip } = {}) {
+    const p = await requireAdmin(token, { ip });
+    if (!p) return { ok: false, status: 401 };
+    if (!rbac.can(p.permissions, 'cabinets:write')) return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Modification des cabinets non autorisée.' }] };
+    const avant = typeof repo.getCabinet === 'function' ? await repo.getCabinet(id) : null;
+    if (!avant) return { ok: false, status: 404, errors: [{ code: 'cabinet_introuvable', message: 'Ce cabinet n’existe pas.' }] };
+    if ((avant.notaires || []).length) return { ok: false, status: 409, errors: [{ code: 'cabinet_non_vide', message: 'Retirez d’abord les notaires avant de supprimer le cabinet.' }] };
+    await repo.deleteCabinet(id);
+    await appendAudit('cabinet_supprime', { adminId: p.adminId, email: p.email, ip, meta: { cabinetId: String(id), avant, apres: null } });
+    return { ok: true };
   }
 
   // ---------------------------------------------------------------------------
@@ -1491,11 +1705,8 @@ function createAdmin({
         disabled: !!(rec && rec.disabled),
         groupes,
         permissions: (rec && rec.permissions) || [],
-        effectives: rbac.resolvePermissions({
-          role: rec && rec.role,
-          directPermissions: (rec && rec.permissions) || [],
-          groups: charges,
-        }),
+        groupesPermissions: [...new Set(charges.flatMap((g) => g.groupesPermissions || g.permissionGroups || []))],
+        effectives: await effectivePermissions(rec || { role: null, permissions: [], groupes: [] }, null),
         derniereConnexion: (rec && rec.lastLoginAt) || null,
       });
     }
@@ -2540,6 +2751,186 @@ function createAdmin({
     return { ok: true, execute: true, courriel: adresse, plan, effacees, enAttente, marque, avertissement };
   }
 
+  // --- CRM : faits first-party + état de travail opérateur ------------------
+  // The source of truth for counts is the customer table's bounded MONTH#
+  // partitions, joined to the write-once act ledger. CRM metadata is kept in
+  // the admin table and is never allowed to change those customer facts.
+  const crmUnavailable = () => ({
+    ok: false,
+    status: 503,
+    errors: [{ code: 'crm_indisponible', message: 'Le CRM est momentanément indisponible.' }],
+  });
+  const maskEmail = (value) => value ? '••••@••••' : null;
+  const maskName = (value) => value ? '••••' : null;
+  const maskPhone = (value) => value ? '••••••' : null;
+
+  function crmBidView(bid, workflow, completion, consent, enClair, todayISO) {
+    const service = domain.serviceById(bid.serviceId);
+    const readiness = domain.leadReadiness(bid.serviceId, bid.dossier || {}, bid.pricing);
+    const manual = workflow && typeof workflow === 'object';
+    const stageId = manual ? workflow.stage : crm.defaultStage({ bid, completed: completion !== null && !!completion });
+    const stage = crm.stage(stageId) || crm.stage('nouveau');
+    const followUp = manual ? workflow.nextFollowUpAt || null : null;
+    const completedAt = completion && (completion.completedAt || completion.at || completion.regleLe) || null;
+    return {
+      bidId: bid.id,
+      serviceId: bid.serviceId,
+      serviceNom: service ? service.nom : bid.serviceId,
+      serviceNomEn: service ? service.nomEn : bid.serviceId,
+      dateISO: bid.dateISO,
+      createdAt: bid.createdAt || null,
+      bidStatus: bid.status || null,
+      stage: stage.id,
+      stageNom: stage.nom,
+      stageNomEn: stage.nomEn,
+      stageSource: manual ? 'manual' : 'derived',
+      nom: enClair ? bid.nom || null : maskName(bid.nom),
+      courriel: enClair ? bid.courriel || null : maskEmail(bid.courriel),
+      telephone: enClair ? bid.telephone || null : maskPhone(bid.telephone),
+      hasEmail: !!bid.courriel,
+      hasTelephone: !!bid.telephone,
+      consentement: consent ? { base: consent.base == null ? null : !!consent.base, at: consent.at || null } : null,
+      acquisition: bid.acquisition || { version: 1, first: { source: 'unknown' }, last: { source: 'unknown' } },
+      readiness: { ready: !!readiness.ready, done: readiness.done || 0, total: readiness.total || 0, missing: (readiness.missing || []).length },
+      retainedAt: bid.retainedAt || null,
+      completedAt,
+      completionAvailable: completion !== null,
+      note: enClair ? (manual ? workflow.note || '' : '') : null,
+      nextFollowUpAt: followUp,
+      revision: manual ? Number(workflow.revision) || 0 : 0,
+      followUpOverdue: !!followUp && followUp <= todayISO && stage.id !== 'converti' && stage.id !== 'perdu',
+    };
+  }
+
+  async function listCrmLeads(token, { from, to, stage, source, limit, ip } = {}) {
+    const principal = await requireAdmin(token, { ip });
+    if (!principal) return { ok: false, status: 401 };
+    if (!rbac.can(principal.permissions, 'leads:read')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture du CRM non autorisée.' }] };
+    }
+    if (stage && !crm.stage(stage)) {
+      return { ok: false, status: 422, errors: [{ code: 'etape_invalide', message: 'L’étape CRM est invalide.' }] };
+    }
+    const todayISO = clockIso().slice(0, 10);
+    const requestedTo = domain.isISODate(to) ? to : todayISO;
+    if ((from != null && !domain.isISODate(from)) || (to != null && !domain.isISODate(to)) || (from && from > requestedTo)) {
+      return { ok: false, status: 422, errors: [{ code: 'periode_invalide', message: 'La période CRM est invalide.' }] };
+    }
+    const window = crm.dateWindow({ from, to, today: todayISO });
+    if (domain.daysBetween(window.from, window.to) >= crm.RANGE_MAX_DAYS) {
+      return { ok: false, status: 422, errors: [{ code: 'periode_trop_longue', message: `La période CRM doit couvrir au plus ${crm.RANGE_MAX_DAYS} jours.` }] };
+    }
+    const months = crm.monthsBetween(window.from, window.to);
+    const max = Math.max(1, Math.min(500, Number(limit) || 100));
+    let bids;
+    try {
+      if (typeof repo.listByMonth !== 'function') return crmUnavailable();
+      const pages = await Promise.all(months.map((month) => repo.listByMonth(month, { consistentRead: true })));
+      const seen = new Set();
+      bids = pages.flat().filter((bid) => {
+        if (!bid || !bid.id || seen.has(bid.id)) return false;
+        seen.add(bid.id);
+        return domain.isISODate(bid.dateISO) && bid.dateISO >= window.from && bid.dateISO <= window.to;
+      });
+      bids.sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')) || String(b.dateISO).localeCompare(String(a.dateISO)) || String(b.id).localeCompare(String(a.id)));
+      const rows = await Promise.all(bids.map(async (bid) => {
+        const workflow = typeof repo.getCrmLead === 'function' ? await repo.getCrmLead(bid.id) : null;
+        const completion = typeof repo.getActCompletion === 'function' ? await repo.getActCompletion(bid.id, { consistentRead: true }) : null;
+        const consent = typeof repo.getEmailConsent === 'function' && bid.courriel ? await repo.getEmailConsent(bid.courriel, { consistentRead: true }) : null;
+        return crmBidView(bid, workflow, completion, consent, rbac.can(principal.permissions, 'pii:read'), todayISO);
+      }));
+      const filtered = rows.filter((row) => (!stage || row.stage === stage) && (!source || ((row.acquisition.last || {}).source || 'unknown') === source));
+      const completedKnown = filtered.filter((row) => row.completedAt).length;
+      const byStage = crm.STAGES.map((item) => {
+        const inStage = filtered.filter((row) => row.stage === item.id);
+        return { ...item, total: inStage.length, retained: inStage.filter((row) => row.retainedAt || row.bidStatus === domain.STATUS.RETENUE).length, completed: inStage.filter((row) => row.completedAt).length };
+      });
+      const sources = [...new Set(filtered.map((row) => ((row.acquisition.last || {}).source || 'unknown')))].sort();
+      const bySource = sources.map((item) => {
+        const inSource = filtered.filter((row) => ((row.acquisition.last || {}).source || 'unknown') === item);
+        return { source: item, total: inSource.length, retained: inSource.filter((row) => row.retainedAt || row.bidStatus === domain.STATUS.RETENUE).length, completed: inSource.filter((row) => row.completedAt).length };
+      });
+      const retained = filtered.filter((row) => row.retainedAt || row.bidStatus === domain.STATUS.RETENUE).length;
+      const summary = {
+        total: filtered.length,
+        contactables: filtered.filter((row) => row.hasEmail || row.hasTelephone).length,
+        email: filtered.filter((row) => row.hasEmail).length,
+        telephone: filtered.filter((row) => row.hasTelephone).length,
+        consented: filtered.filter((row) => row.consentement && row.consentement.base === true).length,
+        ready: filtered.filter((row) => row.readiness.ready).length,
+        retained,
+        completed: completedKnown,
+        overdueFollowUps: filtered.filter((row) => row.followUpOverdue).length,
+        byStage,
+        bySource,
+      };
+      await appendAudit('crm_leads_read', { adminId: principal.adminId, email: principal.email, ip, meta: { from: window.from, to: window.to, stage: stage || null, source: source || null, count: filtered.length } });
+      return {
+        ok: true,
+        leads: filtered.slice(0, max),
+        stages: crm.STAGES,
+        summary,
+        range: { from: window.from, to: window.to, field: 'dateISO', months: months.length },
+        dataQuality: { exact: true, source: 'persisted_bids_and_act_ledger', ga4: 'supplementary_only', completionAvailable: typeof repo.getActCompletion === 'function' },
+      };
+    } catch {
+      return crmUnavailable();
+    }
+  }
+
+  async function updateCrmLead(token, bidId, payload, { ip } = {}) {
+    const principal = await requireAdmin(token, { ip });
+    if (!principal) return { ok: false, status: 401 };
+    if (!rbac.can(principal.permissions, 'leads:write')) {
+      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Écriture du CRM non autorisée.' }] };
+    }
+    const id = String(bidId || '').trim();
+    const dateISO = payload && payload.dateISO;
+    if (!id || !domain.isISODate(dateISO)) return { ok: false, status: 422, errors: [{ code: 'lead_invalide', message: 'Le lead et sa date sont invalides.' }] };
+    if (typeof repo.get !== 'function' || typeof repo.getCrmLead !== 'function' || typeof repo.putCrmLead !== 'function') return crmUnavailable();
+    let bid;
+    try { bid = await repo.get(id, dateISO, { consistentRead: true }); } catch { return crmUnavailable(); }
+    if (!bid) return { ok: false, status: 404, errors: [{ code: 'lead_introuvable', message: 'Le lead est introuvable.' }] };
+    let current;
+    try { current = await repo.getCrmLead(id); } catch { return crmUnavailable(); }
+    let completion = null;
+    try { completion = typeof repo.getActCompletion === 'function' ? await repo.getActCompletion(id, { consistentRead: true }) : null; } catch { return crmUnavailable(); }
+    const canSeePii = rbac.can(principal.permissions, 'pii:read');
+    const workflowPayload = canSeePii ? payload : { ...(payload || {}) };
+    if (!canSeePii) delete workflowPayload.note;
+    const patch = crm.cleanPatch(workflowPayload, current, crm.defaultStage({ bid, completed: completion !== null && !!completion }));
+    if (patch.errors) return { ok: false, status: 422, errors: patch.errors };
+    if (Number(payload.revision) !== patch.currentRevision) {
+      return { ok: false, status: 409, errors: [{ code: 'crm_conflit', message: 'Ce lead a été modifié par une autre personne. Rechargez la fiche avant de sauvegarder.' }] };
+    }
+    const now = clockIso();
+    const next = {
+      bidId: id,
+      stage: patch.value.stage,
+      note: patch.value.note,
+      nextFollowUpAt: patch.value.nextFollowUpAt,
+      revision: patch.currentRevision + 1,
+      createdAt: current && current.createdAt || now,
+      createdBy: current && current.createdBy || principal.email,
+      updatedAt: now,
+      updatedBy: principal.email,
+    };
+    try {
+      await repo.putCrmLead(next, patch.currentRevision);
+    } catch (error) {
+      if (error && error.name === 'ConditionalCheckFailedException') return { ok: false, status: 409, errors: [{ code: 'crm_conflit', message: 'Ce lead a été modifié par une autre personne. Rechargez la fiche avant de sauvegarder.' }] };
+      return crmUnavailable();
+    }
+    await appendAudit('crm_lead_updated', {
+      adminId: principal.adminId, email: principal.email, ip,
+      meta: { bidId: id, stageBefore: current && current.stage || null, stageAfter: next.stage, nextFollowUpBefore: current && current.nextFollowUpAt || null, nextFollowUpAfter: next.nextFollowUpAt, noteChanged: (current && current.note || '') !== next.note },
+    });
+    return {
+      ok: true,
+      lead: canSeePii ? next : { ...next, note: null },
+    };
+  }
+
   async function supportPrincipal(token, permission, ip) {
     const principal = await requireAdmin(token, { ip });
     if (!principal) return { error: { ok: false, status: 401 } };
@@ -2644,6 +3035,12 @@ function createAdmin({
     listPermissions,
     getCatalogue,
     getFeatures,
+    listPermissionGroups,
+    putPermissionGroup,
+    deletePermissionGroup,
+    listCabinets,
+    putCabinet,
+    deleteCabinet,
     listGroups,
     putGroup,
     deleteGroup,
@@ -2665,6 +3062,8 @@ function createAdmin({
     getUserFile,
     exportUserFile,
     eraseUserFile,
+    listCrmLeads,
+    updateCrmLead,
   };
 }
 

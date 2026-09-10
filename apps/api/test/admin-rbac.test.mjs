@@ -37,6 +37,20 @@ test('effective permissions = union of direct grants and every group, de-duplica
   );
 });
 
+test('permission groups are reusable bundles attached independently to user groups', () => {
+  const eff = rbac.resolvePermissions({
+    groups: [
+      { id: 'support', groupesPermissions: ['dossiers', 'audit'] },
+      { id: 'controle', groupesPermissions: ['audit'] },
+    ],
+    permissionGroups: [
+      { id: 'dossiers', permissions: ['subjects:read'] },
+      { id: 'audit', permissions: ['audit:read'] },
+    ],
+  });
+  assert.deepEqual(eff.sort(), ['audit:read', 'subjects:read']);
+});
+
 test('a user with no role, no grants and no groups has nothing', () => {
   const eff = rbac.resolvePermissions({});
   assert.deepEqual(eff, []);

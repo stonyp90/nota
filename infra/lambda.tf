@@ -49,6 +49,7 @@ data "aws_iam_policy_document" "api_dynamodb" {
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:Query",
+      "dynamodb:TransactWriteItems",
       # UpdateItem lets the public API atomically ADD to the STATS# rollup
       # counters (best-effort analytics the admin surface reads). This is the
       # ONLY admin-related grant that is NOT gated behind var.enable_admin — it
@@ -220,6 +221,14 @@ resource "aws_lambda_function" "api" {
       # to a Connect-enabled platform account.
       STRIPE_SECRET_KEY     = var.use_secrets_manager ? "" : var.stripe_secret_key
       STRIPE_WEBHOOK_SECRET = var.use_secrets_manager ? "" : var.stripe_webhook_secret
+
+      # AI preparation is a separate product from marketplace settlement. Keep
+      # its launch explicit; empty Price IDs intentionally leave checkout
+      # closed rather than exposing a broken paid flow.
+      NOTA_AI_MONETIZATION_ENABLED = tostring(var.ai_monetization_enabled)
+      NOTA_AI_PRICE_ESSENTIEL      = var.ai_price_essentiel
+      NOTA_AI_PRICE_CABINET        = var.ai_price_cabinet
+      NOTA_AI_PRICE_EQUIPE         = var.ai_price_equipe
 
       # ADR 0031 — il n'y a plus de commission. Nota ne prélève aucune part des
       # honoraires du notaire : elle vend son service à son PRIX. Les trois

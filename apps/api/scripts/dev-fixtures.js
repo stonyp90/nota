@@ -56,6 +56,87 @@ const DEMO_PARTNERS = [
 // renders on nothing.
 const DEMO_GAUGE = { active: 3, onboarding: 1 };
 
+// Données d'administration de démonstration : les paquets de permissions sont
+// réutilisables, les groupes d'usagers ne copient pas leurs clés, et les
+// cabinets restent un registre commercial séparé du RBAC.
+const DEMO_PERMISSION_GROUPS = [
+  {
+    id: 'lecture-support',
+    nom: 'Lecture support',
+    description: 'Voir les conversations et le journal sans pouvoir modifier les accès.',
+    permissions: ['support:read', 'audit:read'],
+  },
+  {
+    id: 'gestion-cabinets',
+    nom: 'Gestion des cabinets',
+    description: 'Gérer les forfaits, prix négociés et membres notaires.',
+    permissions: ['cabinets:read', 'cabinets:write'],
+  },
+  {
+    id: 'administration-rbac',
+    nom: 'Administration des accès',
+    description: 'Gérer les usagers, groupes d’usagers et paquets de permissions.',
+    permissions: ['users:read', 'users:write', 'groups:read', 'groups:write', 'permissions:read'],
+  },
+];
+
+const DEMO_ADMIN_GROUPS = [
+  {
+    id: 'operations',
+    nom: 'Opérations',
+    description: 'Accès quotidien au support et aux cabinets.',
+    permissions: [],
+    groupesPermissions: ['lecture-support', 'gestion-cabinets'],
+  },
+  {
+    id: 'direction',
+    nom: 'Direction',
+    description: 'Administration des comptes et des droits.',
+    permissions: [],
+    groupesPermissions: ['administration-rbac', 'gestion-cabinets'],
+  },
+];
+
+function devCabinets() {
+  return [
+    {
+      id: 'etude-bourassa',
+      nom: 'Étude Bourassa & Associés',
+      planId: 'cabinet',
+      statut: 'actif',
+      contactEmail: 'direction@bourassa.demo',
+      prixMensuelCents: 249900,
+      siegesInclus: 5,
+      notaires: ['Ndemo-chevronne', 'Ndemo-etabli'],
+      notes: 'Forfait volume de démonstration — prix négocié pour une équipe de cinq sièges.',
+    },
+    {
+      id: 'reseau-nota-demo',
+      nom: 'Réseau Nota démo',
+      planId: 'reseau',
+      statut: 'prospect',
+      contactEmail: 'bonjour@reseau-nota.demo',
+      prixMensuelCents: null,
+      siegesInclus: null,
+      notaires: [],
+      notes: 'Forfait sur mesure à qualifier avec le cabinet.',
+    },
+  ];
+}
+
+async function seedDevAdministration(repo, todayISO, { log = () => {} } = {}) {
+  if (repo && repo.adminTableConfigured === false) return;
+  if (typeof repo.putPermissionGroup === 'function') {
+    for (const group of DEMO_PERMISSION_GROUPS) await repo.putPermissionGroup(group, todayISO);
+    for (const group of DEMO_ADMIN_GROUPS) await repo.putGroup(group, todayISO);
+    log(`  ${DEMO_PERMISSION_GROUPS.length} groupes de permissions + ${DEMO_ADMIN_GROUPS.length} groupes d’usagers`);
+  }
+  if (typeof repo.putCabinet === 'function') {
+    for (const cabinet of devCabinets()) await repo.putCabinet(cabinet, todayISO);
+    log(`  ${devCabinets().length} cabinets de démonstration`);
+  }
+}
+
 /** The business day the whole demo set is drawn around (Québec, never a UTC slice). */
 function devToday(today) {
   return today || domain.businessDay(null, process.env.NOTA_TIMEZONE);
@@ -184,6 +265,8 @@ async function seedInto(repo, { today, force = false, log = () => {} } = {}) {
   for (const n of notaries) await repo.putNotary(n);
   log(`  ${notaries.length} notaires de démonstration`);
 
+  await seedDevAdministration(repo, todayISO, { log });
+
   const marker = statsMarker(todayISO);
   const dejaEcrit = await repo.wasEventProcessed(marker);
   let stats = 0;
@@ -210,6 +293,10 @@ async function seedInto(repo, { today, force = false, log = () => {} } = {}) {
 module.exports = {
   DEMO_PARTNERS,
   DEMO_GAUGE,
+  DEMO_PERMISSION_GROUPS,
+  DEMO_ADMIN_GROUPS,
+  devCabinets,
+  seedDevAdministration,
   devToday,
   devBids,
   devPartners,

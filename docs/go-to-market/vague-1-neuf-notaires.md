@@ -91,7 +91,7 @@ Bien à vous,
 Anthony Paquet
 Fondateur, Nota
 418-564-6162
-anthonypaquet.com
+gonota.ca
 [ADRESSE POSTALE — À FOURNIR, exigée par la LCAP]
 Pour ne plus recevoir de message de ma part, répondez « retrait ».
 ```

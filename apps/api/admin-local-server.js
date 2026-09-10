@@ -24,7 +24,7 @@ const { createAdmin } = require('./src/admin');
 const { createMemoryRepo } = require('./src/repo-memory');
 const { createDynamoRepo } = require('./src/repo-dynamo');
 const domain = require('@nota/domain');
-const { devToday, devBids, devPartners, devNotaries, devStatsDeltas } = require('./scripts/dev-fixtures');
+const { devToday, devBids, devPartners, devNotaries, devStatsDeltas, seedDevAdministration } = require('./scripts/dev-fixtures');
 const { sourceFingerprint } = require('./scripts/source-fingerprint');
 
 const PORT = Number(process.env.PORT || 8790);
@@ -62,8 +62,12 @@ function createLocalAdminApp({ today, repo: sharedRepo, mailer, notifier } = {})
   const useDynamo = !!process.env.TABLE_NAME;
 
   let repo = sharedRepo;
+  let demoAdminReady = Promise.resolve();
   if (repo) {
-    if (!useDynamo) seedDevNotaries(repo, todayISO);
+    if (!useDynamo) {
+      demoAdminReady = seedDevNotaries(repo, todayISO)
+        .then(() => seedDevAdministration(repo, todayISO));
+    }
   } else if (useDynamo) {
     repo = createDynamoRepo({
       tableName: process.env.TABLE_NAME,
@@ -74,7 +78,8 @@ function createLocalAdminApp({ today, repo: sharedRepo, mailer, notifier } = {})
   } else {
     repo = createMemoryRepo(devBids(todayISO));
     for (const p of devPartners(todayISO)) repo.createPartner(p);
-    seedDevNotaries(repo, todayISO);
+    demoAdminReady = seedDevNotaries(repo, todayISO)
+      .then(() => seedDevAdministration(repo, todayISO));
   }
 
   const emails = (process.env.NOTA_ADMIN_EMAILS || '')
@@ -103,7 +108,7 @@ function createLocalAdminApp({ today, repo: sharedRepo, mailer, notifier } = {})
 
   const ready = useDynamo
     ? Promise.resolve()
-    : seedDevStats(repo, devBids(todayISO), todayISO);
+    : Promise.all([demoAdminReady, seedDevStats(repo, devBids(todayISO), todayISO)]);
 
   return { app, repo, email: emails[0], mode: useDynamo ? 'dynamo' : 'memory', ready };
 }

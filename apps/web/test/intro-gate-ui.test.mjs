@@ -11,9 +11,9 @@
  *   • the film is TRULY full screen (owner, 2026-08-27: « full screen ») —
  *     .ig-frame is a fixed, inset-0 viewport layer, and the stage wears no
  *     card chrome (no border, no radius, no shadow, no fixed aspect box);
- *   • the chooser floats over the drifting dice, not a dead sheet: the
- *     gate's backdrop is the theme token and nothing in the gate may paint
- *     a hardcoded color — both themes ride the same rules;
+ *   • the chooser sits on a quiet, plain backdrop: the gate's backdrop is
+ *     the theme token and nothing in the gate may paint a hardcoded color —
+ *     both themes ride the same rules;
  *   • the doors and skip are real, reachable buttons.
  */
 import test from 'node:test';
@@ -116,11 +116,10 @@ test('both films explain the outcome in four scenes, keep Nota visible and offer
     const stage = doc.querySelector('#ig-stage-' + film);
     const scenes = [...stage.querySelectorAll('.ig-scene')];
     assert.equal(scenes.length, 4);
-    assert.match(scenes[0].textContent, /Nota/);
     const masthead = stage.querySelector('.ig-masthead');
     const wordmark = masthead && masthead.querySelector('.ig-wordmark');
-    assert.ok(wordmark && wordmark.querySelector('svg'), 'the persistent wordmark includes the Nota mark');
-    assert.match(wordmark.textContent, /Nota/);
+    assert.ok(wordmark && wordmark.querySelector('svg'), 'the persistent header carries the Nota mark');
+    assert.equal(wordmark.querySelector('.ig-word')?.textContent.trim(), 'OTA', 'the intro uses the complete Nota lockup');
     assert.ok(!masthead.closest('.ig-scene'), 'the brand stays outside the changing scenes');
     assert.equal(stage.querySelector('.ig-dollar, .ig-step'), null, 'each message stands on its own without dollar scenery or repeated step cards');
     for (const scene of scenes) {
@@ -131,7 +130,7 @@ test('both films explain the outcome in four scenes, keep Nota visible and offer
     for (const scene of [scenes[0], scenes.at(-1)]) {
       const signature = scene.querySelector('.ig-signature');
       assert.ok(signature && signature.querySelector('svg'), 'Nota opens and closes each film');
-      assert.match(signature.textContent, /Nota/);
+      assert.equal(signature.querySelector('.ig-word')?.textContent.trim(), 'OTA', 'scene signatures use the complete Nota lockup');
     }
     const next = scenes.at(-1).querySelector('.ig-cta');
     assert.ok(next && next.tagName === 'BUTTON', 'the last scene has a real next-step button');
@@ -140,9 +139,12 @@ test('both films explain the outcome in four scenes, keep Nota visible and offer
     assert.ok(next.textContent.trim(), 'the next step has a readable label');
   }
   assert.match(css, /igBarAnim 14s/);
-  assert.match(appSrc, /igRemaining = 14400/);
+  assert.match(appSrc, /IG_FILM_MS = 14400/);
   assert.ok(doc.querySelector('#ig-pause'));
   assert.equal(doc.querySelectorAll('#intro-gate [data-lang-seg]').length, 2);
+  assert.equal(doc.querySelectorAll('#intro-gate .ig-progress-seek').length, 2,
+    'each film exposes a seekable scene progress control');
+  assert.match(appSrc, /function igSeekScene\(/, 'the progress control can jump between scenes');
 });
 
 test('notary landing: the same three articles sit in the content column, and fold away signed-in', () => {
@@ -172,7 +174,7 @@ test('notary landing: the same three articles sit in the content column, and fol
   }
 });
 
-test('backdrop: the gate floats on theme tokens — no hardcoded paint hides the dice', () => {
+test('backdrop: the gate floats on theme tokens — no hardcoded paint breaks the palette', () => {
   assert.ok(blocks('.ig').some((b) => /background:\s*var\(--bg\)/.test(b)),
     'the gate backdrop is the theme token — both themes follow');
   // The whole ig block set (gate, frame, stage, skip) paints ONLY via var():
@@ -183,4 +185,13 @@ test('backdrop: the gate floats on theme tokens — no hardcoded paint hides the
         sel + ' paints tokens only, no literals: ' + b.trim());
     }
   }
+});
+
+test('arrival chooser stays visually quiet: no second field of moving cubes', () => {
+  assert.equal(doc.querySelector('#intro-gate #ig-bg'), null, 'the onboarding gate has no distracting cube layer');
+});
+
+test('arrival backdrop stays simple with no decorative section layer', () => {
+  assert.equal(doc.querySelector('#intro-gate .ig-depth'), null, 'the onboarding gate has no decorative depth layer');
+  assert.doesNotMatch(css, /\.ig-depth(?:[-\s\.#:{]|$)/, 'the stylesheet has no decorative depth rules');
 });

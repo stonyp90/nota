@@ -94,11 +94,11 @@ test('locale follows the language', () => {
 // intentionally untranslated. Keep this list SHORT — it is an escape hatch,
 // not a dumping ground.
 const ALLOW = new Set([
-  'Nota', 'Québec', '· Québec', 'Québec / Canada', 'Google', 'Outlook',
+  'Nota', 'OTA', 'Québec', '· Québec', 'Québec / Canada', 'Google', 'Outlook',
   'Apple', 'iCal', 'Menu', 'Notifications', 'Standard', 'FR', 'EN',
   'Français', 'English', 'Stripe', 'Interac', 'Couple', 'Urgent',
   // Addresses and sample postal prefixes are not prose.
-  'confidentialite@nota.ca', 'info@nota.ca', 'G1R', 'G1V',
+  'confidentialite@nota.ca', 'info@gonota.ca', 'G1R', 'G1V',
 ]);
 
 function decodeEntities(s) {

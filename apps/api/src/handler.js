@@ -257,6 +257,7 @@ function createApp(repo, opts = {}) {
       timeZone: TIME_ZONE,
       onboardingReturnUrl: process.env.NOTA_ONBOARDING_RETURN_URL,
       onboardingRefreshUrl: process.env.NOTA_ONBOARDING_REFRESH_URL,
+      onEvent: event => aiBilling() ? aiBilling().applyEvent(event) : null,
       // ADR 0031 / 0034 — plus aucun taux à passer. La facturation ne connaît
       // qu'une GRILLE, résolue par `prix-nota-config.resolveGrille` : celle
       // stockée par l'opérateur, sinon celle du déploiement (`NOTA_PRIX_GRILLE`
@@ -296,6 +297,21 @@ function createApp(repo, opts = {}) {
   // n'avait aucun retour, et `handleCheckoutReturn()` ne s'exécutait jamais.
   const env = opts.env || process.env;
   const siteUrl = opts.siteUrl || env.NOTA_SITE_URL || env.NOTA_BASE_URL || '';
+  // The AI assistant has its own entitlement ledger. It never changes the
+  // free marketplace or Connect payout access.
+  const { createNotaryAIAccess, createNotaryAIBilling } = require('./ai-access');
+  const aiAccess = opts.aiAccess || createNotaryAIAccess({ repo, env, nowMs });
+  let aiBillingInstance = opts.aiBilling || null;
+  const aiBillingAvailable = !!opts.aiBilling || !!env.STRIPE_SECRET_KEY;
+  function aiBilling() {
+    if (aiBillingInstance) return aiBillingInstance;
+    if (!aiBillingAvailable) return null;
+    const { createStripeAdapter } = require('./stripe-port');
+    const stripe = createStripeAdapter({ secretKey: env.STRIPE_SECRET_KEY,
+      webhookSecret: env.STRIPE_WEBHOOK_SECRET, connectWebhookSecret: env.STRIPE_CONNECT_WEBHOOK_SECRET });
+    aiBillingInstance = createNotaryAIBilling({ stripe, access: aiAccess, env, siteUrl });
+    return aiBillingInstance;
+  }
   // --- Free notary signup + funnel beacon throttles (2026-09-02) -------------
   // The signup door shares the sign-in request's window and ceiling (it is the
   // same kind of door: public, unauthenticated, one mail per call). The funnel
@@ -1668,6 +1684,7 @@ function createApp(repo, opts = {}) {
     getSecret: name => secrets().get(name),
     audit: (action, meta, owner) => appendAudit(action, meta, acteur(ACTEUR.NOTAIRE, owner)),
     learning: notaryLearning,
+    aiAccess,
   });
   const actAIRoutes = require('./act-ai-routes').createActAIRoutes({
     repo, env, nowMs, newId, json, parseBody, port: opts.actAIPort,
@@ -1675,6 +1692,7 @@ function createApp(repo, opts = {}) {
     getSecret: name => secrets().get(name),
     audit: (action, meta, owner) => appendAudit(action, meta, acteur(ACTEUR.NOTAIRE, owner)),
     learning: notaryLearning,
+    aiAccess,
   });
   const oauth = opts.oauth || require('./oauth').createOAuth({ repo, env, now: nowMs });
   const oauthRoutes = require('./oauth-routes').createOAuthRoutes({
@@ -1714,6 +1732,69 @@ function createApp(repo, opts = {}) {
     }
 
     if (route.startsWith('/signing-beta/')) return signingRoutes(request, route, method, query);
+    // AI preparation is an opt-in product. The normal dossier remains
+    // available to every notary; only these endpoints expose beta/subscription
+    // state or create a paid entitlement.
+    if (route === '/notary/ai-access' && method === 'GET') {
+      const notaryId = requireScope(bearer(request), SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      const access = await aiAccess.get(notaryId);
+      if (!access) return json(404, { errors: [{ code: 'introuvable' }] });
+      return json(200, { ...access, plans: aiAccess.plans(), maxPieceQuantity: aiAccess.maxPieceQuantity });
+    }
+    if (route === '/notary/ai-beta/enroll' && method === 'POST') {
+      const notaryId = requireScope(bearer(request), SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      const result = await aiAccess.enroll(notaryId);
+      if (!result.ok) return json(result.code === 'notaire_introuvable' ? 404 : 409, { errors: [{ code: result.code }] });
+      return json(200, { ok: true, access: result.access });
+    }
+    if (route === '/notary/ai/checkout' && method === 'POST') {
+      const notaryId = requireScope(bearer(request), SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      if (!aiBillingAvailable) return json(503, { errors: [{ code: 'paiement_indisponible', message: 'Le paiement IA est momentanément indisponible.' }] });
+      let payload;
+      try { payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {}; }
+      catch { return json(400, { errors: [{ code: 'json_invalide' }] }); }
+      const notary = await repo.getNotary(notaryId);
+      if (!notary || !domain.isEmail(notary.email)) return json(422, { errors: [{ code: 'courriel_invalide' }] });
+      const kind = payload.kind === 'usage' ? 'usage' : 'subscription';
+      const planId = String(payload.planId || '');
+      const requestId = typeof payload.requestId === 'string' && /^[a-zA-Z0-9_-]{8,100}$/.test(payload.requestId)
+        ? payload.requestId : null;
+      const language = require('./language').requestLanguage(request) || 'fr-CA';
+      try {
+        const result = kind === 'usage'
+          ? await aiBilling().usage({ notaryId, email: notary.email, planId, quantity: payload.quantity, language, requestId })
+          : await aiBilling().subscription({ notaryId, email: notary.email, planId, language });
+        if (!result.ok) return json(422, { errors: [{ code: result.code, message: result.code === 'prix_non_configure' ? 'Cette formule n’est pas encore ouverte à la vente.' : result.code === 'abonnement_deja_actif' ? 'Un abonnement IA est déjà actif pour ce compte.' : 'La requête de paiement est invalide.' }] });
+        return json(200, { ok: true, url: result.url, sessionId: result.sessionId });
+      } catch { return json(503, { errors: [{ code: 'paiement_indisponible', message: 'Le paiement IA est momentanément indisponible.' }] }); }
+    }
+    if (route === '/notary/ai-feedback' && method === 'POST') {
+      const notaryId = requireScope(bearer(request), SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      const parsed = parseBody(request);
+      if (parsed.error) return parsed.error;
+      const payload = parsed.payload;
+      if (!payload || typeof payload.id !== 'string' || !domain.isISODate(payload.dateISO)) {
+        return json(422, { errors: [{ code: 'requete_invalide' }] });
+      }
+      const bid = await repo.get(payload.id, payload.dateISO, { consistentRead: true });
+      if (!bid) return json(404, { errors: [{ code: 'introuvable' }] });
+      if (bid.notaryId !== notaryId) return json(403, { errors: [{ code: 'interdit' }] });
+      if (bid.status !== domain.STATUS.RETENUE || bid.efface) return json(409, { errors: [{ code: 'dossier_indisponible' }] });
+      const analysis = ['financement', 'refinancement'].includes(bid.serviceId) ? bid.financingAnalysis : bid.actAnalysis;
+      const checked = domain.validateNotaryAIUncertaintyResponse(bid.serviceId, analysis?.preparation, payload);
+      if (!checked.ok) return json(422, { errors: checked.errors });
+      const eventId = 'question-' + require('node:crypto').createHash('sha256')
+        .update(JSON.stringify([notaryId, payload.id, payload.dateISO, analysis?.id, checked.value.questionId, checked.value.decision]))
+        .digest('hex').slice(0, 48);
+      const event = await notaryLearning.uncertaintyFeedback({
+        bid, analysis, feedback: checked.value, owner: notaryId, eventId,
+      });
+      return json(200, { ok: true, feedback: checked.value, recorded: !!event });
+    }
     if (route === '/notary/financing/preparation' || route === '/notary/financing/review') {
       return financingAIRoutes(request, route, method, query);
     }

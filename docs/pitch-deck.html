@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#264961" />
+  <meta name="description" content="Nota pitch deck — a market for urgent notarial acts." />
+  <title>Nota · Pitch deck</title>
+  <style>
+    :root{color-scheme:dark;--navy:#122744;--navy-2:#1b3d64;--brand:#386888;--brand-bright:#78a9bf;--orange:#f0a45d;--paper:#f4f6f8;--ink:#f4f6f8;--muted:#aebdca;--rule:#36516a;--panel:#172b43;--display:Inter,"Segoe UI",system-ui,sans-serif}
+    *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:radial-gradient(circle at 8% 0,#244b6d 0,transparent 40%),var(--navy);color:var(--ink);font-family:var(--display)}body{display:flex;flex-direction:column;overflow-x:hidden}
+    .app-bar{display:flex;align-items:center;gap:.75rem;padding:1rem clamp(1rem,4vw,3rem);border-bottom:1px solid #ffffff1c;background:#0c1d32cc;backdrop-filter:blur(14px);position:sticky;top:0;z-index:10}.brand{display:flex;align-items:center;gap:.55rem;font-weight:800;letter-spacing:-.04em;font-size:1.15rem}.brand-mark{width:2rem;height:2rem;display:block}.brand-region{font-size:.55rem;letter-spacing:.12em;color:var(--orange);padding:.35rem .48rem;border:1px solid #f0a45d66;border-radius:999px}.bar-actions{margin-left:auto;display:flex;gap:.5rem;align-items:center}.bar-actions a,.bar-actions button{color:var(--ink);background:#ffffff0c;border:1px solid #ffffff2b;border-radius:999px;padding:.48rem .75rem;text-decoration:none;font:600 .72rem var(--display);cursor:pointer}.bar-actions a:hover,.bar-actions button:hover{border-color:var(--orange);background:#38688855}
+    main{width:min(1500px,100%);margin:0 auto;padding:clamp(1rem,3vw,2.5rem) clamp(1rem,4vw,3rem) 2rem;display:grid;gap:1.2rem;flex:1}.deck-head{display:flex;align-items:end;justify-content:space-between;gap:1rem}.deck-head h1{font-size:clamp(1.5rem,3vw,2.6rem);letter-spacing:-.05em;margin:0}.deck-head p{color:var(--muted);margin:.35rem 0 0;font-size:.85rem}.counter{font:600 .75rem ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--orange);white-space:nowrap}
+    .stage{position:relative;width:100%;aspect-ratio:16/9;border:1px solid #ffffff24;border-radius:14px;background:#09172a;box-shadow:0 32px 80px #0007;overflow:hidden;display:grid;place-items:center}.slide{width:100%;height:100%;object-fit:contain;display:block;opacity:1;transform:none}.stage.is-changing .slide{animation-duration:.55s;animation-fill-mode:both}.stage.motion-rise.is-changing .slide{animation-name:rise}.stage.motion-drift.is-changing .slide{animation-name:drift}.stage.motion-focus.is-changing .slide{animation-name:focus}.stage.motion-sweep.is-changing .slide{animation-name:sweep}.stage.motion-glow.is-changing .slide{animation-name:glow}.stage.motion-fold.is-changing .slide{animation-name:fold}.stage.motion-pulse.is-changing .slide{animation-name:pulse}.stage.motion-tilt.is-changing .slide{animation-name:tilt}
+    .stage button{position:absolute;top:50%;transform:translateY(-50%);width:2.6rem;height:4rem;border:1px solid #ffffff3b;border-radius:9px;background:#0c1d32b8;color:#fff;font-size:1.5rem;cursor:pointer;z-index:2}.stage button:hover{background:#386888dd;border-color:#b8d9e6}.stage button:disabled{opacity:.25;cursor:not-allowed}.stage .prev{left:1rem}.stage .next{right:1rem}
+    .fullscreen-controls{display:none}
+    .controls{display:flex;align-items:center;justify-content:center;gap:.65rem;flex-wrap:wrap;position:relative;min-height:3rem}.controls button{width:2.9rem;height:2.9rem;display:grid;place-items:center;border:1px solid #ffffff36;background:#ffffff0b;color:var(--ink);border-radius:50%;font:600 .72rem var(--display);cursor:pointer;transition:background .2s ease,border-color .2s ease,transform .2s ease}.controls button svg{width:1.05rem;height:1.05rem;fill:currentColor}.controls button .pause-icon{display:none}.controls button[aria-pressed=true] .play-icon{display:none}.controls button[aria-pressed=true] .pause-icon{display:block}.controls button#play{width:3.3rem;height:3.3rem;background:var(--orange);color:#17283a;border-color:var(--orange);box-shadow:0 8px 22px #f0a45d44}.controls button:hover,.controls button[aria-current=true]{border-color:var(--brand-bright);background:#38688866}.controls button#play:hover{background:#ffb86b;border-color:#ffb86b}.controls button:disabled{opacity:.4;cursor:not-allowed}.hint{position:absolute;right:0;color:var(--muted);font-size:.72rem}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+    .thumbs{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:.5rem;padding:.6rem;border:1px solid #ffffff1c;border-radius:10px;background:#0c1d3270}.thumb{position:relative;aspect-ratio:16/9;border:1px solid transparent;border-radius:5px;padding:0;overflow:hidden;background:#09172a;cursor:pointer}.thumb img{width:100%;height:100%;object-fit:cover;display:block}.thumb span{position:absolute;bottom:.2rem;right:.25rem;background:#09172acc;border-radius:3px;padding:.1rem .25rem;font:600 .58rem ui-monospace,SFMono-Regular,Menlo,monospace}.thumb[aria-current=true]{border-color:var(--brand-bright);box-shadow:0 0 0 2px #38688877}.footnote{color:var(--muted);font-size:.7rem;line-height:1.5}.footnote a{color:#c4dfeb}
+    @keyframes rise{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}@keyframes drift{from{opacity:0;transform:translateX(18px)}to{opacity:1;transform:none}}@keyframes focus{from{opacity:0;transform:scale(.97);filter:blur(5px)}to{opacity:1;transform:none;filter:none}}@keyframes sweep{from{opacity:0;clip-path:inset(0 100% 0 0)}to{opacity:1;clip-path:inset(0)}}@keyframes glow{from{opacity:0;filter:brightness(1.7)}to{opacity:1;filter:none}}@keyframes fold{from{opacity:0;transform:perspective(900px) rotateY(-7deg);transform-origin:left}to{opacity:1;transform:none}}@keyframes pulse{from{opacity:0;transform:scale(.985)}50%{opacity:.8}to{opacity:1;transform:none}}@keyframes tilt{from{opacity:0;transform:rotate(-.7deg) scale(.99)}to{opacity:1;transform:none}}
+    .slide.is-hidden{visibility:hidden}.learning-loop{display:none;position:absolute;inset:0;z-index:1;overflow:hidden;background:radial-gradient(circle at 50% 46%,#244b6d 0,transparent 40%),linear-gradient(145deg,#071728,#102d48);padding:clamp(1.25rem,5vw,4.5rem) clamp(1.5rem,7vw,7.5rem) clamp(1rem,4vw,3.25rem)}.learning-loop.is-active{display:block;animation:learning-enter .7s ease both}.learning-loop__brand{position:absolute;left:clamp(1.25rem,5vw,4.5rem);top:clamp(1rem,4vw,3rem);font-size:clamp(.55rem,.75vw,.72rem);font-weight:800;letter-spacing:.16em;color:#dcebf2}.learning-loop__brand span{color:var(--orange)}.learning-loop__kicker{margin:0;color:var(--orange);font-size:clamp(.55rem,.9vw,.75rem);font-weight:800;letter-spacing:.16em;text-transform:uppercase}.learning-loop h2{max-width:56%;margin:.45rem 0 .35rem;font-size:clamp(1.35rem,3.5vw,3.2rem);line-height:.98;letter-spacing:-.06em}.learning-loop__subtitle{max-width:52%;margin:0;color:var(--muted);font-size:clamp(.62rem,1.1vw,.95rem);line-height:1.35}.learning-cycle{position:absolute;left:8%;right:8%;top:29%;height:45%;min-height:8rem}.learning-cycle::before{content:"";position:absolute;inset:8% 13%;border:1px dashed #78a9bf66;border-radius:50%;box-shadow:0 0 34px #78a9bf12}.learning-cycle::after{content:"";position:absolute;inset:4% 9%;border:2px solid transparent;border-top-color:#f0a45d99;border-right-color:#78a9bf88;border-radius:50%;animation:learning-orbit 5s linear infinite}.learning-node{position:absolute;width:min(23%,15rem);min-height:3.3rem;padding:.7rem .85rem;border:1px solid #78a9bf66;border-radius:12px;background:#0b2139e8;box-shadow:0 12px 30px #0004;backdrop-filter:blur(8px);animation:learning-node 3.6s ease-in-out infinite}.learning-node strong{display:block;color:#f0a45d;font-size:clamp(.52rem,.8vw,.7rem);letter-spacing:.13em}.learning-node span{display:block;margin-top:.28rem;color:#e8f1f5;font-size:clamp(.64rem,1.05vw,.9rem);line-height:1.2}.learning-node small{display:block;margin-top:.25rem;color:var(--muted);font-size:clamp(.52rem,.72vw,.67rem);line-height:1.2}.learning-node.user{left:0;top:28%;animation-delay:0s}.learning-node.model{left:38%;top:0;border-color:#f0a45d88;animation-delay:-.9s}.learning-node.notary{right:0;top:28%;animation-delay:-1.8s}.learning-node.release{left:38%;bottom:0;animation-delay:-2.7s}.learning-flow{position:absolute;height:2px;background:linear-gradient(90deg,transparent,#f0a45d,#78a9bf,transparent);background-size:200% 100%;animation:learning-flow 2.6s linear infinite;opacity:.8}.learning-flow.one{left:20%;top:39%;width:22%;transform:rotate(-13deg)}.learning-flow.two{left:59%;top:39%;width:22%;transform:rotate(13deg);animation-delay:-.65s}.learning-flow.three{left:45%;top:63%;width:13%;transform:rotate(90deg);animation-delay:-1.3s}.learning-flow.four{left:28%;top:65%;width:22%;transform:rotate(193deg);animation-delay:-1.95s}.learning-options{position:absolute;left:8%;right:8%;bottom:3%;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.65rem}.learning-option{padding:.55rem .75rem;border:1px solid #ffffff24;border-radius:9px;background:#07192dcc;color:#e8f1f5;font-size:clamp(.55rem,.85vw,.74rem);line-height:1.25}.learning-option strong{display:block;margin-bottom:.2rem;color:var(--orange);font-size:clamp(.5rem,.7vw,.62rem);letter-spacing:.12em}.learning-loop__note{position:absolute;right:clamp(1.25rem,5vw,4.5rem);top:clamp(1rem,4vw,3rem);max-width:27%;color:#c4dfeb;text-align:right;font-size:clamp(.5rem,.7vw,.64rem);line-height:1.3}.learning-loop__note strong{color:#f0a45d}.stage.is-changing[data-theme="learning"]::after{animation:learning-glow .9s ease both}@keyframes learning-enter{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:none}}@keyframes learning-node{0%,100%{transform:translateY(0);box-shadow:0 12px 30px #0004}50%{transform:translateY(-4px);box-shadow:0 17px 34px #0006,0 0 22px #78a9bf15}}@keyframes learning-orbit{to{transform:rotate(360deg)}}@keyframes learning-flow{from{background-position:200% 0}to{background-position:-20% 0}}@keyframes learning-glow{from{box-shadow:inset 0 0 0 #f0a45d00}50%{box-shadow:inset 0 0 150px #f0a45d18}to{box-shadow:inset 0 0 80px #06152766}}
+    @media(max-width:760px){.app-bar{padding:.8rem 1rem}.bar-actions a{font-size:.65rem}.bar-actions button{display:none}.bar-actions .bar-icon{display:grid!important}.deck-head{display:block}.counter{display:block;margin-top:.6rem}.stage button{width:2.2rem;height:3.3rem}.stage .prev{left:.45rem}.stage .next{right:.45rem}.thumbs{grid-template-columns:repeat(4,minmax(0,1fr))}.hint{width:100%;margin:0}}
+    @media(max-width:760px){.learning-loop{padding:2.8rem 1rem 1rem}.learning-loop__brand{left:1rem;top:.75rem}.learning-loop__note{right:1rem;top:.75rem;max-width:36%}.learning-loop h2{max-width:70%;font-size:clamp(1.15rem,5vw,2rem)}.learning-loop__subtitle{max-width:70%;font-size:.58rem}.learning-cycle{left:3%;right:3%;top:31%;height:43%}.learning-node{width:29%;min-height:2.5rem;padding:.45rem .5rem;border-radius:8px}.learning-node span{font-size:.56rem}.learning-node small{font-size:.47rem}.learning-node.model,.learning-node.release{left:35%}.learning-options{left:3%;right:3%;gap:.35rem}.learning-option{padding:.4rem .45rem;font-size:.5rem}.learning-option strong{font-size:.48rem}}
+    @media(prefers-reduced-motion:reduce){.stage.is-changing .slide{animation:none!important}.learning-loop.is-active,.learning-node,.learning-cycle::after,.learning-flow{animation:none!important}}
+    /* Presentation shell: deep Nota blue keeps the deck immersive even when a
+       source slide contains a light card. Controls stay visible and every
+       transition gets a branded sweep without competing with slide content. */
+    .language-toggle{display:inline-flex;align-items:center;gap:.15rem;padding:.16rem;border:1px solid #ffffff30;border-radius:999px;background:#06162a99}.language-toggle button{border:0;border-radius:999px;padding:.37rem .55rem;background:transparent;color:var(--muted);font:700 .64rem var(--display);cursor:pointer}.language-toggle button[aria-pressed=true]{background:var(--orange);color:#17283a}.bar-icon{display:grid!important;place-items:center;width:2.35rem;height:2.35rem;padding:0!important}.bar-icon svg{width:1rem;height:1rem;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.language-toggle button:focus-visible,.bar-actions a:focus-visible,.bar-actions button:focus-visible,.controls button:focus-visible,.stage button:focus-visible,.thumb:focus-visible,.progress:focus-visible{outline:2px solid var(--orange);outline-offset:3px}
+    .deck-kicker{font-size:.63rem;letter-spacing:.14em;text-transform:uppercase;color:var(--orange);font-weight:800;margin:0 0 .4rem}.stage{border-color:#78a9bf55;border-radius:16px;background:linear-gradient(145deg,#071728,#102d48);box-shadow:0 32px 80px #0009,0 0 0 1px #26496155;isolation:isolate}.stage::before{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;background:linear-gradient(118deg,transparent 42%,#f0a45d0e 50%,transparent 58%);opacity:0;transform:translateX(-50%)}.stage::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;border:1px solid #ffffff0a;border-radius:inherit;box-shadow:inset 0 0 80px #06152766}.stage.is-changing::before{animation:stage-sweep .7s ease both}.stage.is-changing .slide{animation-duration:.62s}.stage.motion-zoom.is-changing .slide{animation-name:zoom}.stage.motion-orbit.is-changing .slide{animation-name:orbit}.stage.motion-wipe.is-changing .slide{animation-name:wipe}.stage.motion-drop.is-changing .slide{animation-name:drop}.stage.motion-blur.is-changing .slide{animation-name:blur}.stage.motion-flip.is-changing .slide{animation-name:flip}.stage.motion-slide.is-changing .slide{animation-name:slidein}.stage.motion-shimmer.is-changing .slide{animation-name:shimmer}.stage-tools{position:absolute;right:1rem;top:1rem;z-index:3;display:flex;gap:.4rem}.stage-tool{border:1px solid #ffffff45;border-radius:999px;background:#07192dcc;color:#fff;padding:.45rem .65rem;font:700 .65rem var(--display);cursor:pointer;transition:background .2s ease,border-color .2s ease,transform .2s ease}.stage-tool:hover{background:#386888e8;border-color:#b8d9e6;transform:translateY(-1px)}.slide-label{position:absolute;left:1rem;bottom:1rem;z-index:3;padding:.38rem .62rem;border:1px solid #ffffff30;border-radius:999px;background:#07192dcc;color:#dcebf2;font-size:.65rem;backdrop-filter:blur(8px);opacity:0;transform:translateY(5px);transition:opacity .25s ease,transform .25s ease}.stage:hover .slide-label,.stage:focus-within .slide-label{opacity:1;transform:none}.progress{height:5px;border-radius:999px;background:#ffffff1a;overflow:hidden;cursor:pointer}.progress span{display:block;height:100%;width:5.882%;background:linear-gradient(90deg,var(--brand-bright),var(--orange));transition:width .45s cubic-bezier(.2,.8,.2,1)}.thumb{transition:transform .2s ease,border-color .2s ease,filter .2s ease}.thumb:hover{transform:translateY(-2px);filter:brightness(1.12)}.thumb[aria-current=true]{border-color:var(--orange);box-shadow:0 0 0 2px #f0a45d66}.controls button{transition:background .2s ease,border-color .2s ease,transform .2s ease}.controls button:hover{transform:translateY(-1px)}.stage:fullscreen{width:100vw;height:100vh;aspect-ratio:auto;border:0;border-radius:0;box-shadow:none}.stage:fullscreen .stage-tools{right:2rem;top:2rem}.stage:fullscreen .prev{left:2rem}.stage:fullscreen .next{right:2rem}
+    @keyframes stage-sweep{from{opacity:0;transform:translateX(-50%)}45%{opacity:1}to{opacity:0;transform:translateX(50%)}}
+    /* Semantic choreography gives each story beat its own visual movement while
+       leaving the source slide artwork untouched. */
+    .stage.is-changing[data-theme="intro"]::after{animation:intro-bloom .72s ease both}.stage.is-changing[data-theme="problem"]::after{animation:problem-vignette .72s ease both}.stage.is-changing[data-theme="actors"]::after{animation:actors-pair .72s ease both}.stage.is-changing[data-theme="mechanism"]::before{animation:mechanism-route .85s cubic-bezier(.2,.8,.2,1) both}.stage.is-changing[data-theme="raise"]::after{animation:raise-lift .72s ease both}.stage.is-changing[data-theme="timing"]::before{animation:timing-tick .85s ease both}.stage.is-changing[data-theme="market"]::before{animation:market-scan .9s ease both}.stage.is-changing[data-theme="model"]::after{animation:model-ring .72s ease both}.stage.is-changing[data-theme="phase"]::before{animation:phase-bridge .85s ease both}.stage.is-changing[data-theme="automation"]::before{animation:automation-build .9s cubic-bezier(.2,.8,.2,1) both}.stage.is-changing[data-theme="competition"]::after{animation:competition-split .72s ease both}.stage.is-changing[data-theme="financial"]::before{animation:financial-rise .85s ease both}.stage.is-changing[data-theme="funds"]::after{animation:funds-orbit .78s ease both}.stage.is-changing[data-theme="truth"]::after{animation:truth-focus .72s ease both}.stage.is-changing[data-theme="ask"]::before{animation:ask-spotlight .9s ease both}.stage.is-changing[data-theme="legal"]::after{animation:legal-seal .9s ease both}.stage.is-changing[data-theme="learning"]::after{animation:model-ring .9s ease both}
+    @keyframes intro-bloom{from{opacity:0;box-shadow:inset 0 0 0 #f0a45d00}45%{opacity:1;box-shadow:inset 0 0 160px #f0a45d20}to{opacity:1;box-shadow:inset 0 0 80px #06152766}}@keyframes problem-vignette{from{opacity:.15;box-shadow:inset 0 0 220px #f0a45d22}to{opacity:1;box-shadow:inset 0 0 80px #06152766}}@keyframes actors-pair{from{opacity:.35;box-shadow:inset 32px 0 90px #78a9bf18,inset -32px 0 90px #f0a45d18}to{opacity:1}}@keyframes mechanism-route{from{opacity:0;transform:translateX(-65%)}45%{opacity:1}to{opacity:0;transform:translateX(65%)}}@keyframes raise-lift{from{opacity:.15;box-shadow:inset 0 90px 130px #f0a45d20}to{opacity:1;box-shadow:inset 0 0 80px #06152766}}@keyframes timing-tick{from{opacity:0;transform:translateX(-75%)}50%{opacity:1}to{opacity:0;transform:translateX(75%)}}@keyframes market-scan{from{opacity:0;transform:translateX(-70%)}50%{opacity:1}to{opacity:0;transform:translateX(70%)}}@keyframes model-ring{from{opacity:.2;box-shadow:inset 0 0 0 0 #78a9bf00}50%{opacity:1;box-shadow:inset 0 0 0 12px #78a9bf12}to{opacity:1;box-shadow:inset 0 0 80px #06152766}}@keyframes phase-bridge{from{opacity:0;transform:translateX(-45%)}50%{opacity:1}to{opacity:0;transform:translateX(45%)}}@keyframes automation-build{from{opacity:0;transform:translateY(28%) scale(.97);filter:saturate(.7)}45%{opacity:1;transform:translateY(-2%) scale(1.01);filter:saturate(1.25)}to{opacity:1;transform:none;filter:none}}@keyframes competition-split{from{opacity:.25;box-shadow:inset 42px 0 70px #38688820,inset -42px 0 70px #f0a45d20}to{opacity:1}}@keyframes financial-rise{from{opacity:0;transform:translateY(32%)}48%{opacity:1}to{opacity:0;transform:translateY(-12%)}}@keyframes funds-orbit{from{opacity:.3;transform:rotate(-2deg) scale(.96)}55%{opacity:1;transform:rotate(1deg) scale(1.01)}to{opacity:1;transform:none}}@keyframes truth-focus{from{opacity:.3;box-shadow:inset 0 0 180px #78a9bf22}to{opacity:1;box-shadow:inset 0 0 80px #06152766}}@keyframes ask-spotlight{from{opacity:0;transform:translateX(-72%)}52%{opacity:1}to{opacity:0;transform:translateX(72%)}}@keyframes legal-seal{from{opacity:.25;box-shadow:inset 0 0 0 #f0a45d00}45%{opacity:1;box-shadow:inset 0 0 180px #f0a45d1c}to{opacity:1;box-shadow:inset 0 0 80px #06152766}}
+    @keyframes zoom{from{opacity:0;transform:scale(.9)}to{opacity:1;transform:scale(1)}}@keyframes orbit{from{opacity:0;transform:translateX(22px) rotate(1deg)}to{opacity:1;transform:none}}@keyframes wipe{from{opacity:0;clip-path:inset(0 0 0 100%)}to{opacity:1;clip-path:inset(0)}}@keyframes drop{from{opacity:0;transform:translateY(-18px)}to{opacity:1;transform:none}}@keyframes blur{from{opacity:0;filter:blur(10px);transform:scale(1.02)}to{opacity:1;filter:none;transform:none}}@keyframes flip{from{opacity:0;transform:perspective(900px) rotateX(10deg)}to{opacity:1;transform:none}}@keyframes slidein{from{opacity:0;transform:translateX(-26px)}to{opacity:1;transform:none}}@keyframes shimmer{from{opacity:0;filter:saturate(.5) brightness(1.5)}to{opacity:1;filter:none}}
+    .stage:fullscreen .fullscreen-controls{display:block;position:absolute;left:clamp(1rem,4vw,3rem);right:clamp(1rem,4vw,3rem);bottom:clamp(1rem,4vw,3rem);z-index:4;padding:.8rem 1rem;border:1px solid #ffffff35;border-radius:16px;background:#07192dcc;backdrop-filter:blur(14px);box-shadow:0 14px 42px #0008}
+    .fullscreen-progress{height:5px;border-radius:999px;background:#ffffff24;overflow:hidden;cursor:pointer}.fullscreen-progress span{display:block;height:100%;width:5.882%;background:linear-gradient(90deg,var(--brand-bright),var(--orange));transition:width .35s ease}.fullscreen-nav{display:flex;align-items:center;justify-content:center;gap:.65rem;margin-top:.65rem}.fullscreen-nav button{position:static;transform:none;width:2.85rem;height:2.85rem;border-radius:50%;font-size:0;background:#ffffff12;border-color:#ffffff45}.fullscreen-nav button svg{width:1.05rem;height:1.05rem;fill:currentColor}.fullscreen-nav button[data-fs-action="play"]{width:3.35rem;height:3.35rem;background:var(--orange);color:#17283a;border-color:var(--orange)}.fullscreen-nav button:disabled{opacity:.35}.fullscreen-nav button:hover{background:#386888dd;border-color:#b8d9e6}.fullscreen-nav button[data-fs-action="play"]:hover{background:#ffb86b;border-color:#ffb86b}
+    @media(max-width:760px){.stage-tools{right:.5rem;top:.5rem}.slide-label{left:.5rem;bottom:.5rem;max-width:65%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.language-toggle{margin-left:auto}.language-toggle button{display:inline-flex}.bar-actions{gap:.3rem}.hint{position:static;width:100%;text-align:center}.stage:fullscreen .fullscreen-controls{left:.5rem;right:.5rem;bottom:.5rem;padding:.6rem}.fullscreen-nav button{width:2.55rem;height:2.55rem}.fullscreen-nav button[data-fs-action="play"]{width:3rem;height:3rem}}
+    @media(max-width:560px){.bar-actions a{display:none}.app-bar{padding-inline:.7rem}.brand-region{display:none}.brand{gap:.45rem}.bar-actions{gap:.25rem}}
+    @media(prefers-reduced-motion:reduce){.stage.is-changing::before,.stage.is-changing .slide{animation:none!important}.thumb,.controls button,.stage-tool{transition:none}}
+    .learning-overlay{position:absolute;inset:4.5% 5.2%;z-index:2;display:grid;grid-template-rows:auto 1fr auto;gap:.7rem;padding:1.15rem 1.35rem;border:1px solid #78a9bf99;border-radius:14px;background:linear-gradient(135deg,#102d48f2,#071728f0 72%);box-shadow:0 18px 52px #0009,0 0 0 1px #26496155;opacity:0;pointer-events:none;transform:translateY(10px) scale(.985);transition:opacity .34s ease,transform .34s ease;overflow:hidden}.stage.learning-visible .learning-overlay{opacity:1;transform:none}.learning-overlay::before{content:"";position:absolute;inset:-40% 28% auto;width:45%;height:180%;background:linear-gradient(110deg,transparent,#78a9bf14,transparent);transform:rotate(18deg) translateX(-160%);animation:learningSweep 8s ease-in-out infinite;pointer-events:none}.learning-overlay-head,.learning-overlay-map,.learning-overlay-choices{position:relative;z-index:1}.learning-overlay-head{display:flex;align-items:baseline;justify-content:space-between;gap:1rem}.learning-overlay-head span{font-size:.59rem;letter-spacing:.2em;color:var(--orange);font-weight:800}.learning-overlay-head strong{font-size:1.15rem;letter-spacing:-.02em;color:#f4f6f8}.learning-overlay-map{min-height:12.4rem;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:.62rem;max-width:760px;width:100%;margin:0 auto}.learning-point{position:relative;display:grid;align-content:center;gap:.18rem;padding:.68rem .78rem;border:1px solid #78a9bf77;border-radius:9px;background:#122744d9;box-shadow:0 10px 24px #0004}.learning-point::after{content:"";position:absolute;right:.7rem;top:.7rem;width:5px;height:5px;border-radius:50%;background:#9cc7d8;box-shadow:0 0 0 0 #78a9bf66;animation:learningPulseDeck 2.6s ease-in-out infinite}.learning-point strong{font-size:.78rem;color:#f4f6f8}.learning-point span{font-size:.61rem;line-height:1.3;color:#afbdca}.learning-point--notary{border-color:#f0a45d88}.learning-point--notary::after{background:var(--orange);box-shadow:0 0 0 0 #f0a45d66}.learning-point--outcome{border-color:#386888}.learning-core{position:absolute;left:50%;top:50%;z-index:3;display:grid;place-items:center;width:8.7rem;height:4.6rem;padding:.45rem;border:1px solid #9cc7d8;border-radius:50%;background:#1b3d64f2;box-shadow:0 0 0 7px #38688824,0 12px 28px #0008;transform:translate(-50%,-50%);text-align:center}.learning-core strong{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:#9cc7d8}.learning-core span{font-size:.61rem;color:#d9e4ec}.learning-orbit{position:absolute;left:50%;top:50%;width:69%;height:86%;border:1px dashed #78a9bf99;border-radius:50%;transform:translate(-50%,-50%);animation:learningOrbitDeck 12s linear infinite}.learning-orbit::after{content:"";position:absolute;left:50%;top:-4px;width:7px;height:7px;border-radius:50%;background:var(--orange);box-shadow:0 0 0 5px #f0a45d22}.learning-overlay-choices{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}.learning-choice{padding:.55rem .72rem;border-top:2px solid var(--orange);border-radius:7px;background:#0c1d32d9}.learning-choice--subscription{border-color:#78a9bf}.learning-choice strong{display:block;font-size:.7rem;color:#f4f6f8}.learning-choice span{display:block;margin-top:.15rem;font-size:.59rem;line-height:1.3;color:#afbdca}.stage.learning-visible .prev,.stage.learning-visible .next{z-index:4}.stage.learning-visible .stage-tools{z-index:4}@keyframes learningOrbitDeck{to{transform:translate(-50%,-50%) rotate(360deg)}}@keyframes learningPulseDeck{0%,100%{box-shadow:0 0 0 0 #78a9bf00;opacity:.7}50%{box-shadow:0 0 0 6px #78a9bf22;opacity:1}}@keyframes learningSweep{0%,55%,100%{transform:rotate(18deg) translateX(-160%);opacity:0}68%{opacity:1}82%{transform:rotate(18deg) translateX(160%);opacity:0}}
+    @media(max-width:760px){.learning-overlay{inset:3%;padding:.7rem;gap:.45rem}.learning-overlay-head{display:block}.learning-overlay-head strong{display:block;margin-top:.2rem;font-size:.82rem}.learning-overlay-map{min-height:11rem;gap:.35rem}.learning-point{padding:.45rem}.learning-point strong{font-size:.62rem}.learning-point span{font-size:.5rem}.learning-core{width:6.3rem;height:3.5rem}.learning-core strong,.learning-core span{font-size:.48rem}.learning-overlay-choices{gap:.35rem}.learning-choice{padding:.42rem}.learning-choice strong{font-size:.55rem}.learning-choice span{font-size:.48rem}}
+    @media(prefers-reduced-motion:reduce){.learning-overlay,.learning-orbit,.learning-point::after,.learning-overlay::before{animation:none!important;transition:none}}
+  </style>
+</head>
+<body>
+  <header class="app-bar">
+    <div class="brand" aria-label="Nota Québec">
+      <img class="brand-mark" src="/pitch-deck/nota-mark.svg" width="32" height="32" alt="Nota mark" />
+      <span>Nota</span><span class="brand-region">QUÉBEC</span>
+    </div>
+    <nav class="bar-actions" aria-label="Application links"><a id="businessPlanLink" href="/business-plan.html">Business plan</a><a id="summaryLink" href="/plan-affaires-sommaire.md">French summary</a><button class="bar-icon" id="fullscreenTop" type="button" aria-label="Open full screen" title="Open full screen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M21 16v5h-5"/></svg></button><div class="language-toggle" role="group" aria-label="Language"><button type="button" data-lang="en" aria-pressed="true">EN</button><button type="button" data-lang="fr" aria-pressed="false">FR</button></div></nav>
+  </header>
+  <main>
+    <div class="deck-head"><div><p class="deck-kicker" id="deckKicker">Nota Québec</p><h1 id="deckTitle">Pitch deck</h1><p id="deckSubtitle">A date-priced network that compounds supply, demand and trust.</p></div><span class="counter" id="counter" aria-live="polite">Slide 1 of 16</span></div>
+    <section class="stage" id="stage" aria-label="Pitch deck presentation">
+      <button class="prev" id="prev" type="button" aria-label="Previous slide">‹</button>
+      <img class="slide" id="slide" src="/pitch-deck/dark-slide-1.png" alt="Nota pitch deck, slide 1" />
+      <div class="learning-loop" id="learningLoop" aria-label="Controlled learning loop" aria-hidden="true">
+        <div class="learning-loop__brand">NOTA <span>QUÉBEC</span></div>
+        <p class="learning-loop__kicker" data-learning-copy="kicker">PHASE 2</p>
+        <h2 data-learning-copy="title">Models improve with users and notaries</h2>
+        <p class="learning-loop__subtitle" data-learning-copy="subtitle">User behavior reveals friction… notary feedback qualifies the next model version.</p>
+        <p class="learning-loop__note"><strong data-learning-copy="noteLead">CONTROLLED LOOP</strong><br /><span data-learning-copy="note">Usage improves the experience. Notary review qualifies model updates.</span></p>
+        <div class="learning-cycle" aria-hidden="true">
+          <div class="learning-flow one"></div><div class="learning-flow two"></div><div class="learning-flow three"></div><div class="learning-flow four"></div>
+          <div class="learning-node user"><strong data-learning-copy="userLabel">USER</strong><span data-learning-copy="userTitle">Observed behavior</span><small data-learning-copy="userDetail">questions… friction… outcome</small></div>
+          <div class="learning-node model"><strong data-learning-copy="modelLabel">NOTA MODEL</strong><span data-learning-copy="modelTitle">Version tested</span><small data-learning-copy="modelDetail">intake… checks… dossier</small></div>
+          <div class="learning-node notary"><strong data-learning-copy="notaryLabel">NOTARY</strong><span data-learning-copy="notaryTitle">Structured feedback</span><small data-learning-copy="notaryDetail">accept… correct… reject</small></div>
+          <div class="learning-node release"><strong data-learning-copy="releaseLabel">QUALIFIED RELEASE</strong><span data-learning-copy="releaseTitle">Canary… rollback</span><small data-learning-copy="releaseDetail">approved before production</small></div>
+        </div>
+        <div class="learning-options">
+          <div class="learning-option"><strong data-learning-copy="contributeLabel">CONTRIBUTE</strong><span data-learning-copy="contribute">Structured feedback may qualify for potential equity</span></div>
+          <div class="learning-option"><strong data-learning-copy="subscribeLabel">SUBSCRIBE</strong><span data-learning-copy="subscribe">Monthly model access without direct feedback contribution</span></div>
+        </div>
+      </div>
+      <button class="next" id="next" type="button" aria-label="Next slide">›</button>
+      <div class="stage-tools"><button class="stage-tool" id="fullscreen" type="button" aria-label="Open full screen">⛶ <span id="fullscreenLabel">Full screen</span></button></div>
+      <span class="slide-label" id="slideLabel" aria-hidden="true">Nota</span>
+      <div class="fullscreen-controls" id="fullscreenControls" aria-hidden="true" aria-label="Full screen slide controls">
+        <div class="fullscreen-progress" id="fullscreenProgress" role="slider" tabindex="0" aria-label="Slide progress" aria-valuemin="1" aria-valuemax="16" aria-valuenow="1"><span id="fullscreenProgressBar"></span></div>
+        <div class="fullscreen-nav" role="group" aria-label="Slide controls">
+          <button type="button" data-fs-action="prev" aria-label="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 5.3 8 12l6.7 6.7-1.4 1.4L5.2 12l8.1-8.1z"/></svg></button>
+          <button type="button" data-fs-action="play" aria-label="Play" aria-pressed="false"><svg class="fs-play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6c0 .8.9 1.3 1.6.8l10-6.8a1 1 0 0 0 0-1.6l-10-6.8C8.9 3.9 8 4.4 8 5.2z"/></svg><svg class="fs-pause-icon" viewBox="0 0 24 24" aria-hidden="true" style="display:none"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg></button>
+          <button type="button" data-fs-action="next" aria-label="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.3 18.7 6.7-6.7-6.7-6.7 1.4-1.4 8.1 8.1-8.1 8.1z"/></svg></button>
+        </div>
+      </div>
+    </section>
+    <div class="progress" id="progress" role="slider" tabindex="0" aria-label="Slide progress" aria-valuemin="1" aria-valuemax="16" aria-valuenow="1"><span id="progressBar"></span></div>
+    <div class="controls" role="group" aria-label="Slide controls">
+      <button id="prevControl" type="button" aria-label="Previous" title="Previous"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.7 5.3 8 12l6.7 6.7-1.4 1.4L5.2 12l8.1-8.1z"/></svg><span class="sr-only" id="prevText">Previous</span></button>
+      <button id="play" type="button" aria-pressed="false" aria-label="Play" title="Play"><svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6c0 .8.9 1.3 1.6.8l10-6.8a1 1 0 0 0 0-1.6l-10-6.8C8.9 3.9 8 4.4 8 5.2z"/></svg><svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h3v14H7zM14 5h3v14h-3z"/></svg><span class="sr-only">Play</span></button>
+      <button id="nextControl" type="button" aria-label="Next" title="Next"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.3 18.7 6.7-6.7-6.7-6.7 1.4-1.4 8.1 8.1-8.1 8.1z"/></svg><span class="sr-only" id="nextText">Next</span></button>
+      <span class="hint" id="hint">Use ← →, Home and End to navigate</span>
+    </div>
+    <div class="thumbs" id="thumbs" role="list" aria-label="Slides"></div>
+  <p class="footnote"><span id="contactLabel">Contact</span> <a href="mailto:info@gonota.ca">info@gonota.ca</a> · <a id="planLink" href="/business-plan.html">Read the full interactive business plan</a>. <span id="legalNote">The legal slide states operating commitments and launch gates, not a legal opinion or certification.</span></p>
+  </main>
+  <script>
+    (() => {
+      const titlesEn = [
+        'Price the date. Free the capacity.', 'A market without a price signal', 'Two sides. Capacity stays invisible.', 'The date becomes a market signal',
+        'Measure before we expand', 'The legal frame is a gate', 'Québec → Canada → global', 'A model that protects independence',
+        'Phase 1: prove local liquidity', 'Phase 2: models improve with the notary', 'Our difference: the date', 'The financial model remains a hypothesis',
+        '$250,000 for 12 months of proof', 'Milestones open the gates', 'The raise clears the gates', 'The notary remains the decision-maker',
+      ];
+      const titlesFr = [
+        'Valoriser la date. Libérer la capacité.', 'Un marché sans prix repère', 'Deux côtés. Une capacité invisible.', 'La date devient un signal de marché',
+        'Mesurer avant d’élargir', 'Le cadre légal est une porte', 'Québec → Canada → monde', 'Un modèle qui protège l’indépendance',
+        'Phase 1 : prouver la liquidité locale', 'Phase 2 : les modèles s’améliorent avec le notaire', 'Notre différence : la date', 'Le modèle financier reste une hypothèse',
+        '250 000 $ pour 12 mois de preuve', 'Les jalons ouvrent les portes', 'Le financement franchit les jalons', 'Le notaire reste le décideur',
+      ];
+      const copy = {
+        en: { kicker:'Nota Québec', title:'Pitch deck', subtitle:'A date-priced network that compounds supply, demand and trust.', businessPlan:'Business plan', summary:'French summary', contact:'Contact', plan:'Read the full interactive business plan', legal:'The legal slide states operating commitments and launch gates, not a legal opinion or certification.', previous:'Previous', next:'Next', play:'Play', pause:'Pause', full:'Full screen', exit:'Exit full screen', hint:'Use ← →, Home and End to navigate', slide:'Slide', of:'of', language:'Language' },
+        fr: { kicker:'Nota Québec', title:'Présentation', subtitle:'Un réseau qui valorise la date et fait croître l’offre, la demande et la confiance.', businessPlan:'Plan d’affaires', summary:'Résumé français', contact:'Nous joindre', plan:'Lire le plan d’affaires interactif complet', legal:'La slide légale présente nos engagements et nos conditions de lancement, sans constituer un avis juridique ni une certification.', previous:'Précédente', next:'Suivante', play:'Lire', pause:'Pause', full:'Plein écran', exit:'Quitter le plein écran', hint:'Utilisez ← →, Début et Fin pour naviguer', slide:'Diapositive', of:'sur', language:'Langue' },
+      };
+      const learningCopy = {
+        en: { kicker:'PHASE 2', title:'Models improve with users and notaries', subtitle:'For simple notarial acts… user behavior reveals friction… notary feedback qualifies the next model version.', noteLead:'CONTROLLED LOOP', note:'Usage improves the experience. Notary review qualifies each model update.', userLabel:'USER', userTitle:'Observed behavior', userDetail:'questions… friction… outcome', modelLabel:'NOTA MODEL', modelTitle:'Version tested', modelDetail:'intake… checks… dossier', notaryLabel:'NOTARY', notaryTitle:'Structured feedback', notaryDetail:'accept… correct… reject', releaseLabel:'QUALIFIED RELEASE', releaseTitle:'Canary… rollback', releaseDetail:'approved before production', contributeLabel:'CONTRIBUTE', contribute:'Structured feedback may qualify for potential equity', subscribeLabel:'SUBSCRIBE', subscribe:'Monthly model access without direct feedback contribution' },
+        fr: { kicker:'PHASE 2', title:'Les modèles s’améliorent avec l’usage et les notaires', subtitle:'Pour les actes notariaux simples… le comportement révèle les irritants… le feedback notarial qualifie la prochaine version.', noteLead:'BOUCLE CONTRÔLÉE', note:'L’usage améliore l’expérience. La revue notariale qualifie chaque mise à jour.', userLabel:'UTILISATEUR', userTitle:'Comportement observé', userDetail:'questions… irritants… résultat', modelLabel:'MODÈLE NOTA', modelTitle:'Version testée', modelDetail:'accueil… contrôles… dossier', notaryLabel:'NOTAIRE', notaryTitle:'Commentaires structurés', notaryDetail:'accepter… corriger… refuser', releaseLabel:'VERSION QUALIFIÉE', releaseTitle:'Canari… retour arrière', releaseDetail:'approuvée avant production', contributeLabel:'CONTRIBUER', contribute:'Commentaires structurés… equity potentielle selon entente écrite et revue applicable', subscribeLabel:'S’ABONNER', subscribe:'Accès mensuel aux modèles sans contribution directe' },
+      };
+      const motions = ['rise','drift','focus','sweep','glow','fold','pulse','tilt','zoom','orbit','wipe','drop','blur','flip','slide','shimmer'];
+      const themes = ['intro','problem','actors','mechanism','raise','timing','market','model','phase','learning','competition','financial','funds','truth','ask','legal'];
+      const stage = document.querySelector('#stage');
+      const slide = document.querySelector('#slide');
+      const counter = document.querySelector('#counter');
+      const prev = document.querySelector('#prev');
+      const next = document.querySelector('#next');
+      const prevControl = document.querySelector('#prevControl');
+      const nextControl = document.querySelector('#nextControl');
+      const prevText = document.querySelector('#prevText');
+      const nextText = document.querySelector('#nextText');
+      const thumbs = document.querySelector('#thumbs');
+      const progressBar = document.querySelector('#progressBar');
+      const progress = document.querySelector('#progress');
+      const play = document.querySelector('#play');
+      const slideLabel = document.querySelector('#slideLabel');
+      const fullscreen = document.querySelector('#fullscreen');
+      const fullscreenTop = document.querySelector('#fullscreenTop');
+      const fullscreenLabel = document.querySelector('#fullscreenLabel');
+      const fullscreenControls = document.querySelector('#fullscreenControls');
+      const fullscreenProgress = document.querySelector('#fullscreenProgress');
+      const fullscreenProgressBar = document.querySelector('#fullscreenProgressBar');
+      const fullscreenButtons = [...document.querySelectorAll('[data-fs-action]')];
+      const deckKicker = document.querySelector('#deckKicker');
+      const deckTitle = document.querySelector('#deckTitle');
+      const deckSubtitle = document.querySelector('#deckSubtitle');
+      const businessPlanLink = document.querySelector('#businessPlanLink');
+      const summaryLink = document.querySelector('#summaryLink');
+      const contactLabel = document.querySelector('#contactLabel');
+      const planLink = document.querySelector('#planLink');
+      const legalNote = document.querySelector('#legalNote');
+      const hint = document.querySelector('#hint');
+      const learningLoop = document.querySelector('#learningLoop');
+      const languageButtons = [...document.querySelectorAll('[data-lang]')];
+      let language = 'en';
+      let current = 1;
+      let playing = false;
+      let playTimer;
+      const slideAsset = (index) => `/pitch-deck/${language === 'fr' ? 'dark-slide-fr-' : 'dark-slide-'}${index}.png`;
+      const labels = () => language === 'fr' ? titlesFr : titlesEn;
+      const safeNumber = (value) => Math.max(1, Math.min(titlesEn.length, Number(value) || 1));
+      const updateLearningLoopCopy = () => {
+        const selected = learningCopy[language];
+        learningLoop.querySelectorAll('[data-learning-copy]').forEach((element) => { element.textContent = selected[element.dataset.learningCopy]; });
+      };
+      const setSlide = (value, push = true, direction = 0) => {
+        current = safeNumber(value);
+        const learningActive = current === 10;
+        slide.src = slideAsset(current);
+        slide.classList.toggle('is-hidden', learningActive);
+        learningLoop.classList.toggle('is-active', learningActive);
+        learningLoop.setAttribute('aria-hidden', learningActive ? 'false' : 'true');
+        slide.alt = `Nota pitch deck, ${copy[language].slide.toLowerCase()} ${current}: ${labels()[current - 1]}`;
+        counter.textContent = `${copy[language].slide} ${current} ${copy[language].of} ${titlesEn.length}`;
+        prev.disabled = prevControl.disabled = current === 1;
+        next.disabled = nextControl.disabled = current === titlesEn.length;
+        stage.className = `stage motion-${motions[current - 1]} ${direction < 0 ? 'motion-back' : 'motion-forward'} is-changing`;
+        stage.dataset.slide = String(current);
+        stage.dataset.theme = themes[current - 1];
+        slideLabel.textContent = labels()[current - 1];
+        progressBar.style.width = `${(current / titlesEn.length) * 100}%`;
+        fullscreenProgressBar.style.width = `${(current / titlesEn.length) * 100}%`;
+        progress.setAttribute('aria-valuenow', String(current));
+        progress.setAttribute('aria-valuetext', `${copy[language].slide} ${current} ${copy[language].of} ${titlesEn.length}`);
+        fullscreenProgress.setAttribute('aria-valuenow', String(current));
+        fullscreenProgress.setAttribute('aria-valuetext', `${copy[language].slide} ${current} ${copy[language].of} ${titlesEn.length}`);
+        fullscreenButtons.find((button) => button.dataset.fsAction === 'prev').disabled = current === 1;
+        fullscreenButtons.find((button) => button.dataset.fsAction === 'next').disabled = current === titlesEn.length;
+        window.setTimeout(() => stage.classList.remove('is-changing'), 560);
+        thumbs.querySelectorAll('button').forEach((button, index) => button.setAttribute('aria-current', index + 1 === current ? 'true' : 'false'));
+        if (push) history.replaceState(null, '', `#slide-${current}`);
+      };
+      titlesEn.forEach((title, index) => {
+        const button = document.createElement('button');
+        button.type = 'button'; button.className = 'thumb'; button.setAttribute('role', 'listitem'); button.dataset.index = String(index + 1); button.setAttribute('aria-current', index === 0 ? 'true' : 'false');
+        const image = document.createElement('img'); image.loading = index > 3 ? 'lazy' : 'eager'; image.src = `/pitch-deck/dark-slide-${index + 1}.png`; image.alt = ''; button.append(image);
+        const number = document.createElement('span'); number.textContent = String(index + 1); button.append(number); button.addEventListener('click', () => setSlide(index + 1, true, index + 1 - current)); thumbs.append(button);
+      });
+      [prev, prevControl].forEach((button) => button.addEventListener('click', () => setSlide(current - 1, true, -1)));
+      [next, nextControl].forEach((button) => button.addEventListener('click', () => setSlide(current + 1, true, 1)));
+      const setLanguage = (nextLanguage, persist = true) => {
+        language = nextLanguage === 'fr' ? 'fr' : 'en';
+        const selected = copy[language];
+        document.documentElement.lang = language === 'fr' ? 'fr-CA' : 'en-CA';
+        deckKicker.textContent = selected.kicker; deckTitle.textContent = selected.title; deckSubtitle.textContent = selected.subtitle;
+        businessPlanLink.textContent = selected.businessPlan; summaryLink.textContent = selected.summary;
+        contactLabel.textContent = selected.contact; planLink.textContent = selected.plan; legalNote.textContent = selected.legal;
+        prev.textContent = '‹'; next.textContent = '›'; prev.setAttribute('aria-label', selected.previous); next.setAttribute('aria-label', selected.next);
+        prevControl.setAttribute('aria-label', selected.previous); prevControl.title = selected.previous;
+        nextControl.setAttribute('aria-label', selected.next); nextControl.title = selected.next; hint.textContent = selected.hint;
+        prevText.textContent = selected.previous; nextText.textContent = selected.next;
+        play.setAttribute('aria-label', playing ? selected.pause : selected.play); play.title = playing ? selected.pause : selected.play;
+        play.querySelector('.sr-only').textContent = playing ? selected.pause : selected.play;
+        const fsPlay = fullscreenButtons.find((button) => button.dataset.fsAction === 'play');
+        fsPlay.setAttribute('aria-label', playing ? selected.pause : selected.play);
+        fsPlay.setAttribute('aria-pressed', playing ? 'true' : 'false');
+        fsPlay.querySelector('.fs-play-icon').style.display = playing ? 'none' : 'block';
+        fsPlay.querySelector('.fs-pause-icon').style.display = playing ? 'block' : 'none';
+        fullscreenLabel.textContent = document.fullscreenElement ? selected.exit : selected.full;
+        fullscreen.setAttribute('aria-label', fullscreenLabel.textContent); fullscreenTop.setAttribute('aria-label', fullscreenLabel.textContent); fullscreenTop.title = fullscreenLabel.textContent;
+        languageButtons.forEach((button) => { button.setAttribute('aria-pressed', button.dataset.lang === language ? 'true' : 'false'); button.setAttribute('aria-label', `${selected.language}: ${button.dataset.lang.toUpperCase()}`); });
+        thumbs.querySelectorAll('button').forEach((button, index) => { button.setAttribute('aria-label', `${selected.slide} ${index + 1}: ${labels()[index]}`); const image = button.querySelector('img'); if (image) image.src = slideAsset(index + 1); });
+        updateLearningLoopCopy();
+        setSlide(current, false, 0);
+        if (persist) { try { localStorage.setItem('nota.pitch.lang', language); } catch {} }
+      };
+      languageButtons.forEach((button) => button.addEventListener('click', () => setLanguage(button.dataset.lang)));
+      const setPlaying = (nextPlaying) => {
+        playing = nextPlaying;
+        window.clearInterval(playTimer);
+        play.setAttribute('aria-pressed', playing ? 'true' : 'false');
+        play.setAttribute('aria-label', playing ? copy[language].pause : copy[language].play);
+        play.title = playing ? copy[language].pause : copy[language].play;
+        play.querySelector('.sr-only').textContent = playing ? copy[language].pause : copy[language].play;
+        const fsPlay = fullscreenButtons.find((button) => button.dataset.fsAction === 'play');
+        fsPlay.setAttribute('aria-label', playing ? copy[language].pause : copy[language].play);
+        fsPlay.setAttribute('aria-pressed', playing ? 'true' : 'false');
+        fsPlay.querySelector('.fs-play-icon').style.display = playing ? 'none' : 'block';
+        fsPlay.querySelector('.fs-pause-icon').style.display = playing ? 'block' : 'none';
+        if (playing) playTimer = window.setInterval(() => setSlide(current === titlesEn.length ? 1 : current + 1, true, 1), 5200);
+      };
+      play.addEventListener('click', () => setPlaying(!playing));
+      fullscreenButtons.forEach((button) => button.addEventListener('click', () => {
+        if (button.dataset.fsAction === 'prev') prevControl.click();
+        if (button.dataset.fsAction === 'next') nextControl.click();
+        if (button.dataset.fsAction === 'play') play.click();
+      }));
+      const jumpFromPointer = (event) => { const box = progress.getBoundingClientRect(); const ratio = Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)); const target = Math.round(ratio * (titlesEn.length - 1)) + 1; setSlide(target, true, target - current); };
+      progress.addEventListener('click', jumpFromPointer);
+      progress.addEventListener('keydown', (event) => { if (event.key === 'ArrowLeft') { event.preventDefault(); setSlide(current - 1, true, -1); } if (event.key === 'ArrowRight') { event.preventDefault(); setSlide(current + 1, true, 1); } if (event.key === 'Home') { event.preventDefault(); setSlide(1, true, -1); } if (event.key === 'End') { event.preventDefault(); setSlide(titlesEn.length, true, 1); } });
+      const jumpFromFullscreenPointer = (event) => { const box = fullscreenProgress.getBoundingClientRect(); const ratio = Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)); const target = Math.round(ratio * (titlesEn.length - 1)) + 1; setSlide(target, true, target - current); };
+      fullscreenProgress.addEventListener('click', jumpFromFullscreenPointer);
+      fullscreenProgress.addEventListener('keydown', (event) => { if (event.key === 'ArrowLeft') { event.preventDefault(); setSlide(current - 1, true, -1); } if (event.key === 'ArrowRight') { event.preventDefault(); setSlide(current + 1, true, 1); } if (event.key === 'Home') { event.preventDefault(); setSlide(1, true, -1); } if (event.key === 'End') { event.preventDefault(); setSlide(titlesEn.length, true, 1); } });
+      const toggleFullscreen = async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await stage.requestFullscreen(); } catch {} };
+      fullscreen.addEventListener('click', toggleFullscreen); fullscreenTop.addEventListener('click', toggleFullscreen);
+      document.addEventListener('fullscreenchange', () => { fullscreenLabel.textContent = document.fullscreenElement ? copy[language].exit : copy[language].full; fullscreen.setAttribute('aria-label', fullscreenLabel.textContent); fullscreenTop.setAttribute('aria-label', fullscreenLabel.textContent); fullscreenTop.title = fullscreenLabel.textContent; fullscreenControls.setAttribute('aria-hidden', document.fullscreenElement ? 'false' : 'true'); });
+      window.addEventListener('keydown', (event) => { if (event.key === 'ArrowLeft') setSlide(current - 1, true, -1); if (event.key === 'ArrowRight' || event.key === ' ') { event.preventDefault(); setSlide(current + 1, true, 1); } if (event.key === 'Home') setSlide(1, true, -1); if (event.key === 'End') setSlide(titlesEn.length, true, 1); if (event.key.toLowerCase() === 'f') fullscreen.click(); });
+      let savedLanguage = 'en'; try { savedLanguage = localStorage.getItem('nota.pitch.lang') || 'en'; } catch {}
+      const requestedLanguage = new URLSearchParams(window.location.search).get('lang');
+      setLanguage(requestedLanguage || savedLanguage, false);
+      const hash = window.location.hash.match(/^#slide-(\d+)$/); setSlide(hash ? hash[1] : 1, false);
+    })();
+  </script>
+</body>
+</html>

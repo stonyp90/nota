@@ -103,3 +103,6 @@ Do not call pre/post movement a causal A/B result or optimize solely for clicks.
 References: [GA tag configuration](https://developers.google.com/tag-platform/gtagjs/configure),
 [privacy controls](https://developers.google.com/tag-platform/security/guides/privacy),
 [GA4 data retention](https://support.google.com/analytics/answer/7667196?hl=en).
+
+> Le pipeline opérateur et les métriques first-party sont documentés dans
+> [CRM et conversion](./crm.md).

@@ -26,6 +26,7 @@
     "test:admin": "npm test --workspace @nota/admin",
     "build": "npm run build --workspace @nota/web",
     "build:admin": "npm run build --workspace @nota/admin",
+    "marketing:launch:kit": "node apps/web/scripts/prepare-launch-kit.mjs",
     "dev": "npm run dev --workspace @nota/web",
     "dev:admin": "npm run dev --workspace @nota/admin",
     "api:local": "npm run start --workspace @nota/api",

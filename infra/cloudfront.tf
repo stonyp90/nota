@@ -123,14 +123,27 @@ locals {
 resource "aws_cloudfront_function" "spa_router" {
   name    = "${var.project_name}-spa-router"
   runtime = "cloudfront-js-2.0"
-  comment = "Rewrite extensionless non-/api paths to /index.html for SPA routing."
+  comment = "Route shareable plan and pitch hosts, then rewrite extensionless app paths."
   publish = true
 
   code = <<-EOT
     function handler(event) {
       var request = event.request;
       var uri = request.uri;
-      if (${jsonencode(var.enable_www)} && request.headers.host.value === ${jsonencode("www.${var.domain_name}")}) {
+      var host = request.headers.host ? request.headers.host.value.toLowerCase() : '';
+      if (${jsonencode(var.plan_domain_name)} !== '' && host === ${jsonencode(lower(var.plan_domain_name))}) {
+        // The business-plan host opens on the concrete plan. Linked assets and
+        // explicit paths keep their original locations.
+        if (uri === '/' || uri === '') request.uri = '/business-plan.html';
+        return request;
+      }
+      if (${jsonencode(var.pitch_domain_name)} !== '' && host === ${jsonencode(lower(var.pitch_domain_name))}) {
+        // The pitch host opens on the interactive deck. Linked assets and
+        // explicit paths keep their original locations.
+        if (uri === '/' || uri === '') request.uri = '/pitch-deck.html';
+        return request;
+      }
+      if (${jsonencode(var.enable_www)} && host === ${jsonencode(lower("www.${var.domain_name}"))}) {
         var query = [];
         for (var key in request.querystring) {
           var entry = request.querystring[key];
@@ -248,16 +261,21 @@ resource "aws_cloudfront_distribution" "web" {
   # responses pass through unchanged. default_root_object stays index.html.
 
   # Custom domain aliases, only when a domain is configured.
-  aliases = local.has_custom_domain ? concat([var.domain_name], var.enable_www ? ["www.${var.domain_name}"] : []) : []
+  aliases = local.has_custom_domain || var.plan_domain_name != "" || var.pitch_domain_name != "" ? compact(concat(
+    var.domain_name != "" ? [var.domain_name] : [],
+    var.enable_www && var.domain_name != "" ? ["www.${var.domain_name}"] : [],
+    var.plan_domain_name != "" ? [var.plan_domain_name] : [],
+    var.pitch_domain_name != "" ? [var.pitch_domain_name] : [],
+  )) : []
 
   # Use the ACM cert (us-east-1) when a domain is set; otherwise fall back to
   # the default *.cloudfront.net certificate.
   viewer_certificate {
-    cloudfront_default_certificate = local.has_custom_domain ? null : true
+    cloudfront_default_certificate = local.has_custom_domain || var.plan_domain_name != "" || var.pitch_domain_name != "" ? null : true
     # Reference the validation resource so CloudFront waits until the cert is issued.
-    acm_certificate_arn      = local.has_custom_domain ? aws_acm_certificate_validation.cert[0].certificate_arn : null
-    ssl_support_method       = local.has_custom_domain ? "sni-only" : null
-    minimum_protocol_version = local.has_custom_domain ? "TLSv1.2_2021" : "TLSv1"
+    acm_certificate_arn      = local.has_custom_domain || var.plan_domain_name != "" || var.pitch_domain_name != "" ? aws_acm_certificate_validation.cert[0].certificate_arn : null
+    ssl_support_method       = local.has_custom_domain || var.plan_domain_name != "" || var.pitch_domain_name != "" ? "sni-only" : null
+    minimum_protocol_version = local.has_custom_domain || var.plan_domain_name != "" || var.pitch_domain_name != "" ? "TLSv1.2_2021" : "TLSv1"
   }
 
   restrictions {

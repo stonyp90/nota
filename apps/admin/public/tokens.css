@@ -13,22 +13,27 @@
 :root {
   /* Nota blue ramp, kept in lockstep with apps/web/public/styles.css. */
   --nota-blue-50: #f1f7fb;
-  --nota-blue-100: #e1eef5;
-  --nota-blue-200: #c3ddeb;
-  --nota-blue-300: #95c4d9;
-  --nota-blue-400: #69b7d5;
-  --nota-blue-500: #2a769b;
-  --nota-blue-600: #216680;
-  --nota-blue-700: #174a63;
-  --nota-blue-800: #113a51;
-  --nota-blue-900: #0b2939;
-  --nota-blue-950: #061c2a;
+  --nota-blue-100: #e5eef3;
+  --nota-blue-200: #c8dbe3;
+  --nota-blue-300: #a7c1cd;
+  --nota-blue-400: #78a9bf;
+  --nota-blue-500: #407598;
+  --nota-blue-600: #386888;
+  --nota-blue-700: #386888;
+  --nota-blue-800: #274a62;
+  --nota-blue-900: #264961;
+  --nota-blue-950: #101b26;
+  /* Shared warm Nota accent. The dark value is used for light-surface text;
+     the brighter value is used on midnight surfaces. */
+  --nota-orange-600: #b45309;
+  --nota-orange-400: #f79009;
+  --accent-warm: var(--nota-orange-600);
   /* Channel-only copies for the alpha tokens further down (washes, focus glow,
      shadow): rgb() cannot take a hex var, so no ramp value is retyped as a
      literal downstream. */
-  --nota-blue-400-rgb: 105 183 213;
-  --nota-blue-500-rgb: 42 118 155;
-  --nota-blue-700-rgb: 23 74 99;
+  --nota-blue-400-rgb: 120 169 191;
+  --nota-blue-500-rgb: 64 117 152;
+  --nota-blue-700-rgb: 56 104 136;
 
   /* Semantic tokens (light) */
   --brand: var(--nota-blue-700);
@@ -37,18 +42,19 @@
   --brand-hover: var(--nota-blue-800);
   --on-accent: #ffffff; /* text/knob on saturated accents (tier pills, toggle) — white in every theme */
 
-  --bg: #f2f5f7;
-  --surface: #fbfcfd;
-  --surface-inset: #eaf1f5;
-  --surface-hover: #e2ebf0;
-  --ink: #0d1b27;
-  --ink-muted: #526574;
-  --border: #d9e3e9;
-  --border-strong: #b6c8d4;
+  --bg: #eef5f7;
+  --surface: #fbfdfd;
+  --surface-inset: #e6f0f4;
+  --surface-hover: #dcecf2;
+  --ink: #173b52;
+  --ink-muted: #607986;
+  --subtitle-ink: #000000;
+  --border: #c5d8df;
+  --border-strong: #a9c3ce;
   --ring: var(--nota-blue-600);
 
   --danger: #b42318;
-  --warn: #b54708;
+  --warn: var(--accent-warm);
   --ok: var(--nota-blue-600);
 
   /* Tier accent ramp — cool (calm) to warm (urgent).
@@ -72,12 +78,20 @@
   --radius-xs: 3px;
   --radius-lg: 12px;
 
-  --shadow-sm: 0 1px 2px rgb(17 22 20 / 0.05);
-  --shadow: 0 6px 20px -8px rgb(17 22 20 / 0.12);
+  --shadow-sm: 0 1px 2px rgb(16 27 38 / 0.05);
+  --shadow: 0 6px 20px -8px rgb(16 27 38 / 0.12);
   --shadow-lg: 0 24px 50px -16px rgb(var(--nota-blue-700-rgb) / 0.24);
 
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  /* Same display face and scale as the public site (the Signature beta page is
+     the reference for the whole app, owner 2026-09-10). */
+  --font-display: 'Sora', var(--font-sans);
+  --weight-display: 800;
+  --type-h1: clamp(42px, 4.25vw, 68px); --type-h1-lh: 1.02; --type-h1-ls: -.055em;
+  --type-h2: clamp(24px, 2.35vw, 34px); --type-h2-lh: 1.15; --type-h2-ls: -.045em;
+  --type-h3: 17px; --type-h3-lh: 1.3; --type-h3-ls: -.02em;
+  --type-eyebrow: 12px; --type-eyebrow-ls: .1em;
 
   --maxw: 1600px; /* maximized width — fills wide screens, side padding via .wrap */
   --gap: 20px;
@@ -97,19 +111,21 @@
     --brand-bright: var(--nota-blue-400);
     --brand-ink: #061c2a;
     --brand-hover: var(--nota-blue-400);
+    --accent-warm: var(--nota-orange-400);
 
-    --bg: #0f110f;
+    --bg: #101820;
     --surface: #0f2030;
     --surface-inset: #132b3f;
     --surface-hover: #19384d;
     --ink: #f4f8fa;
     --ink-muted: #afc2cf;
+    --subtitle-ink: #f4f8fa;
     --border: #294353;
     --border-strong: #3f5f70;
     --ring: var(--nota-blue-400);
 
     --danger: #f97066;
-    --warn: #f79009;
+    --warn: var(--accent-warm);
     --ok: var(--nota-blue-500);
 
     --tier-standard: #64748b;
@@ -130,19 +146,21 @@
   --brand-bright: var(--nota-blue-400);
   --brand-ink: #061c2a;
   --brand-hover: var(--nota-blue-400);
+  --accent-warm: var(--nota-orange-400);
 
-  --bg: #0f110f;
+  --bg: #101820;
   --surface: #0f2030;
   --surface-inset: #132b3f;
   --surface-hover: #19384d;
   --ink: #f4f8fa;
   --ink-muted: #afc2cf;
+  --subtitle-ink: #f4f8fa;
   --border: #294353;
   --border-strong: #3f5f70;
   --ring: var(--nota-blue-400);
 
   --danger: #f97066;
-  --warn: #f79009;
+  --warn: var(--accent-warm);
   --ok: var(--nota-blue-500);
 
   --tier-standard: #64748b;
@@ -167,11 +185,11 @@
 
   /* Translucent washes for hover/active states. Buttons stay outline/transparent
      — no button ever gets a solid fill — so these low-alpha tints are the only
-     background a button shows on interaction. Green channel is hunter-500
-     (80 184 72), faint enough to read the same in light and dark. --neutral-wash
+     background a button shows on interaction. The signal channel is Nota blue-teal,
+     faint enough to read the same in light and dark. --neutral-wash
      is a theme-neutral ink veil for non-brand controls. */
   --brand-wash: rgb(var(--nota-blue-500-rgb) / 0.10);
   --brand-wash-strong: rgb(var(--nota-blue-500-rgb) / 0.18);
-  --neutral-wash: rgb(120 130 120 / 0.10);
+  --neutral-wash: rgb(96 121 134 / 0.10);
   --focus-ring: rgb(var(--nota-blue-500-rgb) / 0.15); /* input/control focus glow (3px) — theme-neutral, same as the washes */
 }

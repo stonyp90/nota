@@ -25,6 +25,20 @@ test('different lender values are retained as unresolved conflicts', () => {
   assert.equal(v.ok, true);
   assert.deepEqual(v.value.conflicts, ['lender_name']);
 });
+test('uncertainty questions are server-derived and feedback decisions are bounded', () => {
+  const extractionInput = { ...input, pages: [...input.pages, { documentId: 'offer', page: 1, text: 'Prêteur : Autre Banque.' }] };
+  const preparation = D.validateFinancingAIExtraction(extractionInput, { fields: [field, {
+    fieldId: 'lender_name', value: 'Autre Banque', evidence: [{ documentId: 'offer', page: 1, quote: 'Prêteur : Autre Banque.' }],
+  }] }).value;
+  const questions = D.notaryAIUncertaintyQuestions('refinancement', preparation);
+  assert.deepEqual(questions.map(question => question.id), [
+    ...preparation.missing.map(id => 'missing:' + id), 'conflict:lender_name',
+  ]);
+  const valid = D.validateNotaryAIUncertaintyResponse('refinancement', preparation, { questionId: 'conflict:lender_name', decision: 'resolved', note: 'Source officielle retenue.' });
+  assert.equal(valid.ok, true);
+  assert.equal(valid.value.requiresNotaryAnswer, undefined);
+  assert.equal(D.validateNotaryAIUncertaintyResponse('refinancement', preparation, { questionId: 'conflict:lender_name', decision: 'invented' }).ok, false);
+});
 test('duplicate pages and oversized or empty inputs are rejected', () => {
   for (const pages of [[], [input.pages[0], input.pages[0]], [{ ...input.pages[0], page: 0 }], [{ ...input.pages[0], text: 'x'.repeat(D.FINANCING_AI_LIMITS.maxPageChars + 1) }]]) {
     assert.equal(D.validateFinancingAIInput({ ...input, pages }).ok, false);

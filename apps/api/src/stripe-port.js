@@ -128,6 +128,35 @@ function createStripeAdapter({ secretKey, webhookSecret, connectWebhookSecret, s
       return { url: link.url };
     },
 
+    // Nota AI is a separate product from Connect marketplace settlement. A
+    // hosted Checkout subscription keeps card data out of Nota and lets Stripe
+    // own recurring payment retries and invoices.
+    async createNotaryAISubscription({ priceId, notaryId, customerEmail, successUrl, cancelUrl, planId, language }) {
+      if (!priceId) throw new Error('AI subscription price is not configured');
+      const metadata = { notaryId: notaryId || '', planId: planId || '', product: 'nota_ai_subscription' };
+      const session = await stripe.checkout.sessions.create({
+        mode: 'subscription', locale: checkoutLocale(language),
+        line_items: [{ price: priceId, quantity: 1 }],
+        subscription_data: { metadata }, customer_email: customerEmail || undefined,
+        metadata, success_url: successUrl, cancel_url: cancelUrl,
+      }, { idempotencyKey: `nota-ai-subscription:${notaryId}:${planId}` });
+      return { sessionId: session.id, url: session.url };
+    },
+
+    // One-off AI units are deliberately priced by the domain and passed as a
+    // quantity, so the customer sees the exact total on Stripe's hosted page.
+    async createNotaryAIUsagePayment({ unitAmountCents, quantity, notaryId, customerEmail, successUrl, cancelUrl, planId, language, idempotencyKey }) {
+      if (!(unitAmountCents > 0) || !(quantity > 0)) throw new Error('AI usage price is invalid');
+      const metadata = { notaryId: notaryId || '', planId: planId || '', quantity: String(quantity), product: 'nota_ai_usage' };
+      const session = await stripe.checkout.sessions.create({
+        mode: 'payment', locale: checkoutLocale(language), payment_method_types: ['card'],
+        line_items: [{ quantity, price_data: { currency: 'cad', unit_amount: unitAmountCents,
+          product_data: { name: 'Unités de préparation IA Nota' } } }],
+        customer_email: customerEmail || undefined, metadata, success_url: successUrl, cancel_url: cancelUrl,
+      }, { idempotencyKey: `nota-ai-usage:${notaryId}:${planId}:${quantity}:${idempotencyKey || require('node:crypto').randomUUID()}` });
+      return { sessionId: session.id, url: session.url };
+    },
+
     // NOTE (ADR 0029) — `chargeActCommission` a été retiré le 2026-09-01.
     // C'était une charge de destination sur le compte connecté du notaire, avec
     // Nota en frais d'application : elle créait un PaymentIntent sans moyen de

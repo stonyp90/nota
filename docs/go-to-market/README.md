@@ -30,6 +30,7 @@ grille complète et pour ce que les ADR 0031, 0034 et 0030 ont retiré.
 
 ## Lancement cette semaine
 
+- [Plan de lancement public en 4 étapes](public-launch-nota.md) : le chemin minimal pour combiner confiance, démonstration, SEO et mesure sans publier avant la fin des animations.
 - [Plan exécutable du 8 au 13 septembre](launch-week-2026-09-08.md) : référencement, diffusion, budget proposé, messages FR/EN et conversion.
 - [La vidéo de la salle de signature](video-salle-signature.md) : le plan de tournage, de montage et de publication de la démonstration **bêta** — ce qu'elle montre, les quatre affirmations qu'elle ne fait jamais, et la liste de refus avant publication.
 - [Tableau de suivi quotidien](launch-scorecard.csv) : valeurs laissées vides tant que non mesurées.
@@ -63,6 +64,7 @@ and [recurring review log](behavior-review-log.md).
 | [`validation-notaires.md`](validation-notaires.md) | Le playbook : les hypothèses à faire trancher par des notaires en exercice, avant d'écrire la ligne de code suivante. |
 | [`entrevue-notaire.md`](entrevue-notaire.md) | La grille des 20 minutes, faite pour repartir avec des chiffres et non des impressions. |
 | [`courriels-notaires.md`](courriels-notaires.md) | Les gabarits d'approche, au modèle des ADR 0031 et 0034 : deux lignes, 100 % des honoraires au notaire, prix de Nota publié par service. |
+| [`vague-1-dix-notaires.md`](vague-1-dix-notaires.md) | Dix brouillons individuels révisés avec la grille de prix visible dès le premier échange. Aucun envoi effectué. |
 | [`courriel-me-dany-gamache.md`](courriel-me-dany-gamache.md) | Le premier courriel, relu à trois lentilles — le patron dont les neuf autres dérivent. |
 | [`vague-1-neuf-notaires.md`](vague-1-neuf-notaires.md) | Les neuf destinataires après Gamache, avec la ligne personnalisée de chacun. |
 | [`approche-institutions.md`](approche-institutions.md) | Les trois portes institutionnelles — AJNQ, APNQ, Chambre — et l'objectif propre à chacune. |

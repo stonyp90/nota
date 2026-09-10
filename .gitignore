@@ -53,3 +53,7 @@ output/
 # Python bytecode des scripts d'exploitation.
 __pycache__/
 *.pyc
+
+# Scratch build output and unrelated temp files (never versioned).
+.codex-build/
+tmp/

@@ -91,6 +91,28 @@ test('misconfigured origin or key disables providers including production HTTP',
     await assert.rejects(service.start('google', 'client'), { code: 'oauth_unconfigured' });
   }
 });
+
+test('local mode completes the real browser-shaped OIDC loopback with PKCE', async () => {
+  const env = {
+    NODE_ENV: 'test',
+    NOTA_OAUTH_LOCAL: 'true',
+    NOTA_OAUTH_ORIGIN: 'http://localhost:4173',
+    NOTA_OAUTH_ENCRYPTION_KEY: 'cd'.repeat(32),
+  };
+  const repo = createMemoryRepo();
+  const service = createOAuth({ repo, env, now: () => Date.now() });
+  assert.deepEqual(service.providers().map(p => p.configured), [true, true, true]);
+  const started = await service.start('google', 'client', 'en');
+  const authorization = service.localAuthorize('google', Object.fromEntries(new URL(started.url).searchParams));
+  assert.equal(authorization.statusCode, 303);
+  const callback = new URL(authorization.headers.location);
+  const ticket = await service.callback('google', Object.fromEntries(callback.searchParams), started.binding);
+  const demo = service.localDemoIdentity('google');
+  await repo.putOAuthIdentity(demo.subject, demo);
+  const complete = await service.complete(ticket, started.binding);
+  assert.equal(complete.email, 'oauth.demo@example.test');
+  assert.equal(complete.provider, 'google');
+});
 const request = (path, body, binding, method = 'POST') => ({ path: '/auth/oauth/' + path, method, body, sourceIp: '127.0.0.1', headers: { 'content-type': 'application/json', origin: 'https://nota.example', cookie: 'nota_oauth_binding=' + binding } });
 test('HTTP completion reuses client session verification and does not grant the provider email', async () => {
   const f = fixture(), { flow, result } = await authenticate(f);
