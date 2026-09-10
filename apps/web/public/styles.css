@@ -3511,9 +3511,9 @@ dialog:focus, dialog:focus-visible { outline: none; }
    copy stays in the document flow at every width, so it never covers the live
    inventory or makes a section feel missing behind a tooltip. */
 .beta-teaser-trigger {
-  appearance: none; display: flex; align-items: center; gap: var(--space-4);
-  width: 100%; min-height: 38px; padding: 7px 10px; border: 1px solid var(--border);
-  border-radius: var(--radius); background: color-mix(in srgb, var(--surface-inset) 58%, transparent);
+  appearance: none; display: flex; align-items: center; gap: 12px;
+  width: 100%; min-height: 54px; padding: 9px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius-lg); background: linear-gradient(100deg, color-mix(in srgb, var(--surface-inset) 78%, transparent), color-mix(in srgb, var(--surface) 66%, transparent));
   color: var(--ink); font: inherit; text-align: left;
   transition: background-color .15s, border-color .15s, box-shadow .15s;
 }
@@ -3521,12 +3521,18 @@ dialog:focus, dialog:focus-visible { outline: none; }
   background: var(--surface-inset); border-color: var(--border-strong);
 }
 .beta-teaser:hover, .beta-teaser:focus-within, .beta-teaser.is-open { z-index: 30; }
+.beta-teaser-mark {
+  display: grid; place-items: center; flex: none; width: 32px; height: 32px;
+  border-radius: var(--radius-sm); color: var(--brand-ink); background: var(--brand);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--brand) 24%, transparent);
+}
+.beta-teaser-mark svg { display: block; width: 23px; height: 23px; }
 .beta-teaser-copy { display: grid; gap: 1px; min-width: 0; }
 .beta-teaser-trigger .sub-card-kicker { margin: 0; font-size: 9.5px; }
 .beta-teaser-trigger .sub-card-title { font-size: 12.5px; line-height: 1.2; }
-.beta-teaser-hint { margin-left: auto; color: var(--ink-muted); font-size: 11px; white-space: nowrap; }
+.beta-teaser-hint { margin-left: auto; padding: 5px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--ink-muted); font-size: 11px; font-weight: 700; white-space: nowrap; }
 .beta-teaser-info {
-  appearance: none; display: grid; place-items: center; flex: none; width: 18px; height: 18px;
+  appearance: none; display: grid; place-items: center; flex: none; width: 30px; height: 30px;
   border: 1px solid var(--border-strong); border-radius: 50%; color: var(--brand);
   background: transparent; font: inherit; font-size: 11px; font-weight: 800; line-height: 1;
   cursor: pointer; transition: background-color .15s, border-color .15s, transform .15s;
