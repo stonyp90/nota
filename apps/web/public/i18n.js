@@ -86,6 +86,7 @@
     "Les vérifications d’identité y sont simulées. N’utilisez aucun renseignement d’identité réel. Un enregistrement local ne peut démarrer qu’après le consentement des deux participants.": "Identity checks are simulated. Do not use any real identity information. A local recording can start only after both participants consent.",
     "Essayer le parcours client": "Try the client workflow",
     "Essayer le parcours notaire": "Try the notary workflow",
+    "Navigation légale": "Legal navigation",
 
     'Mesure facultative.': 'Optional measurement.',
     'Avec votre accord, Google Analytics mesure les visites et les clics. Aucun nom, courriel, contenu de formulaire ou lien de dossier ne lui est envoyé. Google peut traiter ces données à l’extérieur du Canada. Les témoins de mesure et la provenance conservée sur cet appareil expirent après 30 jours sans nouvelle visite. Vous pouvez retirer votre accord dans « Préférences de mesure ». La provenance d’une demande reste enregistrée avec celle-ci, même sans Google Analytics.': 'With your permission, Google Analytics measures visits and clicks. No name, email, form content or case link is sent to it. Google may process this data outside Canada. Measurement cookies and acquisition data saved on this device expire after 30 days without another visit. You can withdraw permission under “Measurement preferences”. The source of a request remains saved with it, even without Google Analytics.',

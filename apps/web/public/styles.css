@@ -5855,6 +5855,49 @@ body.salle-ouverte { overflow: hidden; }
   .beta-preview { padding: 17px; }
   .beta-preview-scene { min-height: 190px; gap: 10px; }
 }
+
+/* Cross-pane tablet pass: 768–900px is neither desktop nor phone. Keep the
+   same Nota rhythm, but give each story a single reading column before the
+   calendar/cards become too narrow to compare comfortably. */
+@media (min-width: 768px) and (max-width: 900px) {
+  #pane-carnet .intro--hero { grid-template-columns: minmax(0, 1fr); gap: var(--space-7); }
+  #pane-carnet .pulse-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+  #pane-carnet .pulse-item { display: contents; }
+  #pane-carnet .pulse-item .mini-btn { display: none; }
+  #pane-carnet .pulse-item .pulse-row { margin: 0; padding: 10px 12px; }
+  #pane-carnet .pulse-row { display: flex; flex-direction: column; align-items: stretch; gap: 7px; }
+  #pane-carnet .pulse-figs { flex-direction: column; align-items: stretch; gap: 3px; }
+  #pane-carnet .pulse-fig { flex-direction: row; justify-content: space-between; align-items: baseline; gap: 8px; }
+  #pane-carnet .pulse-bar, #pane-carnet .pulse-meta { display: none; }
+
+  #pane-beta .beta-hero { grid-template-columns: minmax(0, 1fr); gap: 32px; }
+  #pane-beta .beta-preview { max-width: 620px; }
+  #pane-beta .beta-security-grid, #pane-beta .beta-features { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #pane-beta .beta-access-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+  .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Keep the Nota signature visible inside secondary surfaces, not only in the
+   global header. This makes the brand survive screenshots, shared previews and
+   the footer while reusing the canonical SVG mark. */
+.beta-paper-brand, .footer-brand { display: inline-flex; align-items: center; gap: 7px; }
+.beta-paper-brand svg { width: 18px; height: 18px; flex: none; }
+.footer-brand svg { width: 24px; height: 24px; flex: none; }
+
+/* Legal content is long by necessity; this compact local navigator gives the
+   reader a stable way to move between the three trust documents. */
+.legal-nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0 20px; }
+.legal-nav-link {
+  display: inline-flex; align-items: center; min-height: 38px; padding: 7px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--ink-muted); font-size: 12.5px; font-weight: 700;
+  text-decoration: none; background: var(--surface-inset);
+}
+.legal-nav-link:hover { color: var(--ink); border-color: var(--border-strong); text-decoration: none; }
+.legal-nav-link.is-on { color: var(--brand-ink); border-color: var(--brand); background: var(--brand); }
+@media (pointer: coarse) { .legal-nav-link { min-height: 44px; } }
+
 @media (max-width: 720px) {
   .beta-page { padding-top: 30px; padding-bottom: 44px; }
   .beta-hero { grid-template-columns: 1fr; gap: 30px; }
