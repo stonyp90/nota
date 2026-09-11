@@ -176,6 +176,8 @@
     "Chargement des données": "Loading data",
     "Trouver une section": "Find a section",
     "Rechercher une section": "Search sections",
+    "Changer de section": "Change section",
+    "Accès refusé": "Access denied",
     "Aucune section trouvée. Effacez la recherche pour tout afficher.": "No sections found. Clear your search to show all sections.",
 
   // Usagers — le dossier d'une personne (Loi 25, art. 27 et 28).
@@ -643,6 +645,13 @@
   "Le barème enregistré sera supprimé — les valeurs par défaut reprendront effet dès la prochaine annulation.": "The stored schedule will be deleted — the default values take effect again at the next cancellation.",
   "Réservé": "Reserved",
   "Réservé à l’administrateur principal.": "Reserved for the primary administrator.",
+  // Un refus nomme la permission qui manque : chacune de ces clés se donne à
+  // la carte, et « réservé à l'administrateur principal » envoyait l'opérateur
+  // demander le mauvais droit.
+  "Cette section demande la permission d’écrire les courriels.": "This section requires permission to edit emails.",
+  "Cette section demande la permission de modifier les réglages.": "This section requires permission to change settings.",
+  "Cette section demande la permission de lire les renseignements personnels.": "This section requires permission to read personal information.",
+  "Cette section demande la permission de lire le journal d’audit.": "This section requires permission to read the audit log.",
   "Accès réservé": "Restricted access",
   "— cette section est réservée à l’administrateur principal.": "— this section is reserved for the primary administrator.",
   "Réseau": "Network",

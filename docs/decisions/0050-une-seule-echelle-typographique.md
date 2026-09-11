@@ -7,7 +7,7 @@
 
 Le propriétaire, captures à l'appui : « the font is really not accurate across
 the app — the whole app must use the pattern from this page ». La page en
-question est le pane Signature (bêta) : titre en Sora 800, 42–68 px, interligne
+question est le pane Signature (bêta) : titre en Sora 800, interligne
 1,02, approche −0,055 em ; lede Inter 17 px / 1,7 ; surtitre 12 px, capitales,
 approche 0,1 em.
 
@@ -26,10 +26,20 @@ rouge. Un nombre rempli se lit comme un bouton ; une date est un fait.
 
 ## Décision
 
-1. **Des jetons `--type-*` dans `:root`, copiés de la bêta, verbatim.** h1
-   `clamp(42px, 4.25vw, 68px)` (variante empilée `clamp(42px, 9vw, 58px)`), h2
-   `clamp(24px, 2.35vw, 34px)`, h3 17 px, lede 17 px / 1,7, surtitre 12 px /
-   0,1 em, avec leurs interlignes et approches. `--font-display: 'Sora'` et
+1. **Des jetons `--type-*` dans `:root`, une seule échelle pour tout.** h1
+   `clamp(30px, 2.6vw, 44px)` (variante empilée `clamp(28px, 8vw, 38px)`), h2
+   `clamp(20px, 1.6vw, 26px)`, h3 17 px, lede 17 px / 1,7, surtitre 12 px /
+   0,1 em, avec leurs interlignes et approches.
+
+   *Amendement du 2026-09-11 — le propriétaire, devant l'Espace notaire sur un
+   écran de 1 990 px : « the font is way too big ».* L'échelle partait de la
+   bêta verbatim (42–68 px au h1, 24–34 px au h2) ; à pleine largeur, le titre
+   mangeait la page avant la première demande. Les barreaux descendent d'un
+   cran — h1 68 → 44 px, h2 34 → 26 px, variante empilée 58 → 38 px — sans
+   toucher h3, le lede ni le surtitre, et sans changer la règle : les valeurs
+   ne vivent qu'ici et dans les quatre `:root` que `typographie.test.mjs`
+   relit (carnet, salle, console, guide de marque), plus le plan d'affaires et
+   le pitch deck. `--font-display: 'Sora'` et
    `--weight-display: 800` deviennent la face et la graisse de TOUT titre.
 2. **`h1, h2, h3` lisent l'échelle globalement.** Aucune règle de titre ne
    pose sa propre taille, face, graisse ou approche : un pane ne fait que
@@ -40,7 +50,7 @@ rouge. Un nombre rempli se lit comme un bouton ; une date est un fait.
 4. **La salle de signature et la console admin** portent la même face, la même
    graisse et la même échelle. Une seule dérogation, dite dans le code : le
    titre de page de la console (surface de travail) s'assoit sur le barreau h2,
-   pas sur le barreau h1 — 68 px au-dessus d'une table repousserait la donnée
+   pas sur le barreau h1 — un titre d'affichage au-dessus d'une table repousserait la donnée
    qu'il introduit sous le premier écran.
 5. **Aucun nombre du calendrier ne porte de fond.** Aujourd'hui se dit par la
    couleur de marque et la graisse ; le palier extrême par son encre la plus

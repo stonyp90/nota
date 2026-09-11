@@ -97,7 +97,7 @@ test('real WebCrypto acknowledgments are verified and export excludes SDP/creden
   }
   for (const forbidden of ['a=fingerprint', 'lastSeenAt', 'connected', 'credential', 'authorization']) assert.ok(!out.body.includes(forbidden));
   assert.equal(await a.repo.getActCompletion(bid.id), null);
-  assert.deepEqual(await a.repo.get(bid.id), bid);
+  assert.deepEqual(await a.repo.get(bid.id, bid.dateISO), bid);
 });
 test('notary controls release; stale revisions and forged proof cannot advance', async () => {
   const a = await setup(); await a.admitted(); await a.observed();
@@ -132,7 +132,7 @@ test('signaling requires admission, fingerprint, correct sender and bounded payl
   assert.equal((await a.post('signal', { type: 'offer', sdp: sdp + 'x'.repeat(24000) })).statusCode, 400);
   assert.equal((await a.post('signal', { type: 'offer', sdp, signature: 'A'.repeat(86) })).statusCode, 422);
   assert.equal((await a.post('signal', { type: 'offer', sdp })).statusCode, 200);
-  const raw = await a.repo.get(bid.id); assert.equal(raw.signals, undefined);
+  const raw = await a.repo.get(bid.id, bid.dateISO); assert.equal(raw.signals, undefined);
   const publicResponse = await a.app.handle({ path: '/bids', method: 'GET', query: { month: '2026-09' } });
   assert.ok(!publicResponse.body.includes('fingerprint'));
 });

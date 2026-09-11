@@ -65,14 +65,26 @@ test('public beta is explicit, makes no authenticated requests and does not star
   assert.equal(doc.querySelectorAll('script[src^="http"]').length, 0, 'No third-party scripts');
 });
 
-test('every signing entry point uses the shared Nota favicon mark', () => {
-  assert.match(html, /class="brand-mark" src="favicon\.svg"/, 'header uses the shared mark');
-  assert.match(html, /class="video-brand"><img src="favicon\.svg"/, 'video surface uses the shared mark');
-  assert.match(html, /class="paper-brand"><img src="favicon\.svg"/, 'document preview uses the shared mark');
-  assert.match(html, /class="footer-brand"><img src="favicon\.svg"/, 'footer uses the shared mark');
+test('every signing entry point carries the production lockup (01): tile + drawn word, by <use>', () => {
+  // One drawing, byte for byte the carnet's (index.html): the two symbols are
+  // inlined once, and every mark on the page references them. No surface may
+  // spell the brand as the N tile beside typeset « nota. » again.
+  const index = source('../public/index.html');
+  const symbol = (src, id) => new RegExp('<symbol id="' + id + '"[\\s\\S]*?</symbol>').exec(src)[0].replace(/<!--[\s\S]*?-->/g, '').replace(/\s+/g, ' ');
+  assert.equal((html.match(/<symbol id="nota-logomark"/g) || []).length, 1, 'one logomark symbol');
+  assert.equal((html.match(/<symbol id="nota-wordmark"/g) || []).length, 1, 'one wordmark symbol');
+  assert.equal(symbol(html, 'nota-logomark'), symbol(index, 'nota-logomark'), 'the tile is the carnet’s drawing');
+  assert.equal(symbol(html, 'nota-wordmark'), symbol(index, 'nota-wordmark'), 'the word is the carnet’s drawing');
+  const lockup = '<svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg></span>';
+  for (const [where, open] of [['header', '<a class="brand" href="/" aria-label="Nota"><span class="brand-lockup" aria-hidden="true">'], ['video surface', '<span class="video-brand" role="img" aria-label="Nota">'], ['document preview', '<strong class="paper-brand" role="img" aria-label="Nota">'], ['footer', '<span class="footer-brand" role="img" aria-label="Nota">']]) {
+    assert.ok(html.includes(open + lockup), where + ' carries the lockup by reference');
+  }
+  assert.match(html, /<span class="brand-sub" aria-hidden="true">Québec<\/span><\/a>/, 'the header keeps the QUÉBEC badge');
+  assert.doesNotMatch(html, /nota<span class="brand-dot">|>nota\.</, 'the brand is never typeset « nota. » on this surface');
+  assert.doesNotMatch(html, /<img[^>]*src="favicon\.svg"/, 'no favicon <img> stands in for the lockup');
   assert.match(favicon, /#264961/i, 'favicon carries the Nota deep-teal square');
-  assert.match(favicon, /#407598/i, 'favicon carries the Nota cyan signal dot');
-  assert.match(favicon, /#101b26/i, 'favicon carries the Nota dark-ink outline');
+  assert.ok(favicon.includes('<rect x="40" y="8" width="16" height="16" rx="3" fill="#407598" stroke="#264961" stroke-width="3"/>'), 'favicon carries the Nota square signal (variant C), ringed in the tile colour like the symbol');
+  assert.doesNotMatch(favicon, /#101b26|<circle/i, 'favicon is the symbol’s drawing: no midnight ring, no round signal');
   assert.doesNotMatch(favicon, /#315b43|#599a71|#2c5f34|#50b848/i, 'favicon has no legacy green mark');
 });
 

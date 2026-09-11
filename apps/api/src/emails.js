@@ -30,8 +30,14 @@
  *   - a consistent sign-off — « L’équipe Nota » / « The Nota team »;
  *   - the brand shell: PALETTE mirrors the web light-theme tokens key by key,
  *     every radius sits on the web square scale (no pills), the logo is text
- *     (no image of any kind), tables all the way down, ≤ 600 px;
- *   - mobile-friendly, inline-CSS HTML (email clients strip <style>/tokens);
+ *     (no image of any kind) and spells the production lockup — exploration
+ *     01 « Monogramme lié », variant C (ADR 0048): tile N■ + OTA. + QUÉBEC
+ *     badge on the signal colour —,
+ *     tables all the way down, ≤ 600 px;
+ *   - mobile-friendly, inline-CSS HTML (email clients strip <style>/tokens):
+ *     the inline LIGHT styles are the source of truth; the ONE <style> block
+ *     carries nothing but the dark layer (DARK mirrors the web dark tokens),
+ *     read only by clients that honour prefers-color-scheme / [data-ogsc];
  *   - a plain-text alternative carrying every link the HTML carries;
  *   - a CASL / Law-25 footer: bilingual sender identification (Nota + mailing
  *     address), the contact and privacy addresses from domain.CONTACT, and a
@@ -70,23 +76,42 @@ const SENDER = {
 // are mandatory for email, so this is the ONE flattened copy of the web's
 // light-theme tokens (apps/web/public/styles.css :root) — emails-brand.test.mjs
 // reads that file and holds every key here to it, so the mail can never drift
-// from the site. The card is light-only on purpose (see layout()).
+// from the site. Light is the inline truth; the dark layer is DARK below.
 const PALETTE = {
-  ink: '#173b52', // --ink
-  muted: '#607986', // --ink-muted (AA on every light surface)
+  ink: '#173b52', // --ink — headings, body, and the O T A of the lockup (exploration 01 draws the word in deep ink)
+  muted: '#526b78', // --ink-muted (AA on every light surface — 4.6:1 even on the canvas)
   bg: '#eef5f7', // --bg — the page canvas the card floats on
   card: '#fbfdfd', // --surface
   border: '#c5d8df', // --border
   brand: '#386888', // --brand (Nota blue-teal) — fills, rules, links
-  brandDark: '#274a62', // --brand-hover — the button's edge
-  markBg: '#264961', // the reference lockup's deep blue-teal square
-  brandBright: '#407598', // the reference lockup's cyan signal
-  brandInk: '#ffffff', // --brand-ink — text on the brand fill
-  tint: '#ebf1f5', // nota-blue-50 — the callout wash
+  brandDark: '#274a62', // --brand-hover = --nota-blue-800 — the button's edge, the QUÉBEC badge text
+  markBg: '#264961', // --nota-blue-900 — the lockup's deep blue-teal tile
+  brandBright: '#407598', // --nota-blue-500 — the lockup's signal dot
+  brandInk: '#ffffff', // --brand-ink — text on the brand fill, the N in the tile
+  tint: '#ebf1f5', // --nota-blue-50 — the callout wash, the QUÉBEC badge ground
 };
-// The web square scale (--radius-lg / --radius / --radius-sm): the card, the
-// mark and the button, the callout. No pills, no circles.
-const RADIUS = { card: '12px', control: '8px', panel: '6px' };
+// The dark layer — the web's dark tokens, verbatim (apps/web/public/styles.css,
+// `@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) {…} }`),
+// emitted ONLY inside the <style> block that darkStyle() writes, so a client
+// that strips <style> keeps the inline light card intact. The tile
+// (--nota-blue-900), its white N and the QUÉBEC badge (--nota-blue-50 ground on
+// --nota-blue-800 text) are constants of the mark and do not flip.
+// emails-brand.test.mjs pins every key here to that dark block.
+const DARK = {
+  bg: '#101820', // --bg (dark) — the product canvas; NOT --nota-blue-950 (#101b26), which is the wordmark ink
+  card: '#0f2030', // --surface (dark)
+  panel: '#132b3f', // --surface-inset (dark) — the callout wash
+  border: '#294353', // --border (dark) — card edge, hairlines, digest rows
+  ink: '#f4f8fa', // --ink (dark) — headings, body, the O T A
+  muted: '#afc2cf', // --ink-muted (dark)
+  brand: '#407598', // --brand (dark) = --nota-blue-500 — CTA fill, the card's top rule, the callout rule
+  link: '#78a9bf', // --brand-bright (dark) = --nota-blue-400 — links, the CTA's edge
+  brandInk: '#ffffff', // --on-accent — white on a saturated fill in every theme (the dark --brand-ink #061c2a would sit at 3.5:1 on the dark --brand; a 16px/600 label needs 4.5:1)
+};
+// The web square scale (--radius-lg / --radius / --radius-sm / --radius-xs):
+// the card; the tile and the button; the callout; the QUÉBEC badge. No pills,
+// no circles.
+const RADIUS = { card: '12px', control: '8px', panel: '6px', badge: '3px' };
 
 // Nota web font stack. Email clients that lack Inter fall back gracefully.
 const FONT = "Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif";
@@ -215,7 +240,7 @@ function preheaderHtml(text) {
 function button(label, url) {
   return (
     '<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin:26px auto 6px;border-collapse:separate;">' +
-    '<tr><td align="center" bgcolor="' +
+    '<tr><td align="center" class="nm-cta" bgcolor="' +
     PALETTE.brand +
     '" style="border-radius:' + RADIUS.control + ';background-color:' +
     PALETTE.brand +
@@ -233,12 +258,18 @@ function button(label, url) {
     '</a></td></tr></table>'
   );
 }
-// Header band: the Nota "N" mark rendered WITHOUT images/SVG (many clients block
-// them) — a cobalt square holding a bold white "N" — next to the "Nota"
-// wordmark in brand blue and a small bilingual tagline. The mark is decoration
-// (aria-hidden): the wordmark IS the accessible name, so a screen reader says
-// « Nota », not « N Nota ». border-radius degrades gracefully to a square. Sits
-// at the top of the card, above a hairline rule.
+// Header band: the production lockup — exploration 01 « Monogramme lié » (ADR
+// 0048, amendment 2026-09-11) — typeset WITHOUT images or SVG (many clients
+// block both). Left to right: the deep blue-teal tile (--nota-blue-900) holding
+// a heavy white N with the small signal dot (--nota-blue-500) at its top-right,
+// then O T A in solid uppercase letters at the SAME weight (800) on tight
+// tracking (-0.07em) with no rule under the word, then the QUÉBEC badge on the
+// signal colour (--nota-blue-500 ground, white text — design 02). The letters are written in
+// capitals (Outlook ignores text-transform), the word takes the deep ink the
+// exploration draws it in and flips to the dark --ink; the tile and the badge
+// are constants of the mark. The lockup table is ONE accessible image named
+// « Nota Québec », so a screen reader never spells « N OTA ». A bilingual
+// tagline sits under it. border-radius degrades gracefully to a square.
 // Application entry points configure French by default. Explicit bilingual
 // rendering remains available for template authoring and translation checks.
 function emailLanguage(ctx = {}) {
@@ -250,31 +281,52 @@ function languageCopy(lang, fr, en, separator = ' / ') {
   return lang === 'fr' ? fr : lang === 'en' ? en : fr + separator + en;
 }
 
+// Variant C · design 02 · layout 16 (ADR 0048, 2026-09-11) at a 40 px tile:
+// the SAME five ratios styles.css declares as --lockup-* (word caps .60 × tile,
+// centred; tile→word gap .12; word→badge gap .16; badge font-size .16), as one
+// set of px constants — the chosen layout is a value change here, not a redraw.
+// Text can only approximate a cap height: Inter's caps are ≈ 0.73 em, so 24 px
+// of caps (.60 × 40) is a 33 px font on the tile's 40 px line, centred by the
+// line box itself. The tile's radius is the square 6 px step (7/64 of 40 px).
+// Of the drawing's two letter details, the period (« 27 · Le point final », a
+// signal square after the A) IS typeset — a « . » in the signal colour, weight
+// 800 — while the bevelled T stem (« 22 · Le T signé ») cannot be: text has no bevel.
+const LOCKUP = { tile: 40, word: 33, gap: 5, badgeGap: 6, badgeSize: 7, badgeLine: 9, badgePad: '4px 5px' };
 function logoHeader(lang) {
+  const L = LOCKUP;
   return (
-    '<tr><td style="padding:26px 30px 22px;border-bottom:1px solid ' +
+    '<tr><td class="nm-hr" style="padding:26px 30px 22px;border-bottom:1px solid ' +
     PALETTE.border +
     ';">' +
-    '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>' +
-    '<td width="40" height="40" align="center" valign="middle" aria-hidden="true" style="width:40px;height:40px;background-color:' +
+    '<table role="img" aria-label="Nota Québec" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr>' +
+    // The tile: N + the square signal (variant C).
+    '<td width="' + L.tile + '" height="' + L.tile + '" align="center" valign="middle" aria-hidden="true" style="width:' + L.tile + 'px;height:' + L.tile + 'px;background-color:' +
     PALETTE.markBg +
-    ';border-radius:' + RADIUS.control + ';font-family:' +
+    ';border-radius:' + RADIUS.panel + ';font-family:' +
     FONT +
-    ';font-size:22px;line-height:40px;font-weight:800;color:' +
+    ';font-size:24px;line-height:' + L.tile + 'px;font-weight:800;color:' +
     PALETTE.brandInk +
-    ';text-align:center;">N<span style="display:inline-block;margin-left:-4px;vertical-align:top;font-size:11px;line-height:16px;color:' + PALETTE.brandBright + ';">●</span></td>' +
-    '<td valign="middle" style="padding-left:12px;">' +
-    '<div style="font-family:' +
+    ';text-align:center;">N<span style="display:inline-block;margin-left:-4px;vertical-align:top;font-size:11px;line-height:14px;color:' + PALETTE.brandBright + ';">■</span></td>' +
+    // The word: O T A, solid, heavy, tight — centred on the tile, .60 of it tall.
+    '<td valign="middle" class="nm-ink" style="padding-left:' + L.gap + 'px;font-family:' +
     FONT +
-    ';font-size:21px;line-height:1.1;font-weight:800;letter-spacing:-0.02em;color:' +
+    ';font-size:' + L.word + 'px;line-height:' + L.tile + 'px;font-weight:800;letter-spacing:-0.07em;color:' +
     PALETTE.ink +
-    ';">Nota</div>' +
-    '<div style="font-family:' +
+    ';white-space:nowrap;">OTA<span style="color:' + PALETTE.brandBright + ';">.</span></td>' +
+    // The badge: QUÉBEC on the signal colour, white text, centred on the tile.
+    '<td valign="middle" style="padding:0 0 0 ' + L.badgeGap + 'px;"><span style="display:inline-block;padding:' + L.badgePad + ';background-color:' +
+    PALETTE.brandBright +
+    ';border-radius:' + RADIUS.badge + ';font-family:' +
+    FONT +
+    ';font-size:' + L.badgeSize + 'px;line-height:' + L.badgeLine + 'px;font-weight:800;letter-spacing:0.1em;color:' +
+    PALETTE.brandInk +
+    ';white-space:nowrap;">QUÉBEC</span></td>' +
+    '</tr></table>' +
+    '<div class="nm-muted" style="margin-top:10px;font-family:' +
     FONT +
     ';font-size:12px;line-height:1.5;font-weight:500;letter-spacing:0.02em;color:' +
     PALETTE.muted +
     ';">' + languageCopy(lang, 'La place de marché notariale', 'The notarial marketplace', ' · ') + '</div>' +
-    '</td></tr></table>' +
     '</td></tr>'
   );
 }
@@ -291,12 +343,12 @@ function preferencesUrl(unsubscribeUrl, baseUrl) {
 }
 function footer(unsubscribeUrl, baseUrl, lang) {
   const link = (href, label) =>
-    '<a href="' + esc(href) + '" style="color:' + PALETTE.muted + ';text-decoration:underline;">' + label + '</a>';
+    '<a href="' + esc(href) + '" class="nm-muted" style="color:' + PALETTE.muted + ';text-decoration:underline;">' + label + '</a>';
   return (
-    '<tr><td style="padding:22px 30px 26px;border-top:1px solid ' +
+    '<tr><td class="nm-hr" style="padding:22px 30px 26px;border-top:1px solid ' +
     PALETTE.border +
     ';">' +
-    '<div style="font-family:' +
+    '<div class="nm-muted" style="font-family:' +
     FONT +
     ';font-size:12px;line-height:1.6;color:' +
     PALETTE.muted +
@@ -323,7 +375,7 @@ function footer(unsubscribeUrl, baseUrl, lang) {
 const SIGNOFF = { fr: 'L’équipe Nota', en: 'The Nota team' };
 function signoffHtml(lang, signature) {
   return (
-    '<p style="margin:22px 0 0;font-family:' +
+    '<p class="nm-muted" style="margin:22px 0 0;font-family:' +
     FONT +
     ';font-size:14px;line-height:1.6;color:' +
     PALETTE.muted +
@@ -336,7 +388,7 @@ function signoffHtml(lang, signature) {
 function divider() {
   return (
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 26px;">' +
-    '<tr><td style="border-top:1px solid ' +
+    '<tr><td class="nm-hr" style="border-top:1px solid ' +
     PALETTE.border +
     ';font-size:0;line-height:0;">&nbsp;</td></tr></table>'
   );
@@ -345,7 +397,7 @@ function divider() {
 // sign-off in that language.
 function sectionHtml({ heading, lead, bodyHtml, ctaLabel, signature }, ctaUrl, lang) {
   return (
-    '<h1 style="margin:0 0 12px;font-family:' +
+    '<h1 class="nm-ink" style="margin:0 0 12px;font-family:' +
     FONT +
     ';font-size:22px;line-height:1.3;font-weight:700;color:' +
     PALETTE.ink +
@@ -353,7 +405,7 @@ function sectionHtml({ heading, lead, bodyHtml, ctaLabel, signature }, ctaUrl, l
     esc(heading) +
     '</h1>' +
     (lead
-      ? '<p style="margin:0 0 18px;font-family:' +
+      ? '<p class="nm-muted" style="margin:0 0 18px;font-family:' +
         FONT +
         ';font-size:15px;line-height:1.6;color:' +
         PALETTE.muted +
@@ -366,26 +418,63 @@ function sectionHtml({ heading, lead, bodyHtml, ctaLabel, signature }, ctaUrl, l
     signoffHtml(lang, signature)
   );
 }
+// The dark layer. One rule set, written twice: once under
+// `@media (prefers-color-scheme: dark)` (Apple Mail, iOS Mail, the Outlook
+// apps, Thunderbird), once under Outlook.com's `[data-ogsc]` wrapper. Every
+// declaration is !important because it must beat the inline light style it
+// overrides; every class it targets is a hook the helpers above set. Clients
+// that strip <style> (Gmail web strips media queries) simply keep the light
+// card — the inline styles are the truth, this block is a courtesy.
+function darkRules(prefix) {
+  // The prefix goes on EVERY member of a selector list — `[data-ogsc] body,
+  // .nm-canvas` would leave `.nm-canvas` bare and paint the light card's
+  // canvas dark in every client (caught by the light-mode screenshot).
+  const rule = (sel, decl) => sel.split(',').map((s) => prefix + s).join(',') + '{' + decl + '}';
+  return [
+    rule('body,.nm-canvas', 'background-color:' + DARK.bg + ' !important;'),
+    rule('.nm-card', 'background-color:' + DARK.card + ' !important;border-color:' + DARK.border + ' !important;border-top-color:' + DARK.brand + ' !important;'),
+    rule('.nm-hr', 'border-color:' + DARK.border + ' !important;'),
+    rule('.nm-ink', 'color:' + DARK.ink + ' !important;'),
+    rule('.nm-muted', 'color:' + DARK.muted + ' !important;'),
+    rule('.nm-link', 'color:' + DARK.link + ' !important;'),
+    rule('.nm-cta', 'background-color:' + DARK.brand + ' !important;'),
+    rule('.nm-cta a', 'color:' + DARK.brandInk + ' !important;border-color:' + DARK.link + ' !important;'),
+    rule('.nm-callout', 'background-color:' + DARK.panel + ' !important;border-left-color:' + DARK.brand + ' !important;color:' + DARK.ink + ' !important;'),
+  ].join('');
+}
+function darkStyle() {
+  return (
+    '<style>' +
+    ':root{color-scheme:light dark;supported-color-schemes:light dark;}' +
+    '@media (prefers-color-scheme: dark){' + darkRules('') + '}' +
+    darkRules('[data-ogsc] ') +
+    '</style>'
+  );
+}
 // One shared, robust shell for every template. A full-bleed neutral background
-// table frames a single light card (header + FR block + divider + EN block +
-// footer) so all text sits on a stable light surface — legible with images off
-// and safe in dark-mode clients. The MSO ghost table pins the width to 600px in
+// table frames a single card (header + FR block + divider + EN block + footer)
+// so all text sits on a stable surface — legible with images off. The inline
+// styles paint the LIGHT theme; the color-scheme metas + darkStyle() let a
+// client that honours dark mode repaint the same card on the web's dark tokens
+// instead of auto-inverting it. The MSO ghost table pins the width to 600px in
 // Outlook, where max-width is ignored; everywhere else the card is fluid up to
 // 600px, one column, mobile-friendly.
 function layout({ preheader, fr, en, ctaUrl, unsubscribeUrl, baseUrl, lang }) {
   return (
     '<!doctype html><html lang="' + (lang === 'en' ? 'en-CA' : 'fr-CA') + '"><head><meta charset="utf-8" />' +
     '<meta name="viewport" content="width=device-width, initial-scale=1" />' +
-    // The card is deliberately light-only (stable, legible everywhere); these
-    // metas tell Apple Mail and friends not to auto-invert it in dark mode.
-    '<meta name="color-scheme" content="light" />' +
-    '<meta name="supported-color-schemes" content="light" />' +
-    '<title>' + esc((lang === 'en' ? en.heading : fr.heading) || 'Nota') + ' — Nota</title></head><body style="margin:0;padding:0;">' +
+    // Both schemes are declared, so Apple Mail and friends apply the dark
+    // layer below instead of inventing an inversion of the light card.
+    '<meta name="color-scheme" content="light dark" />' +
+    '<meta name="supported-color-schemes" content="light dark" />' +
+    '<title>' + esc((lang === 'en' ? en.heading : fr.heading) || 'Nota') + ' — Nota</title>' +
+    darkStyle() +
+    '</head><body class="nm-canvas" style="margin:0;padding:0;">' +
     preheaderHtml(preheader || '') +
-    '<div style="background-color:' +
+    '<div class="nm-canvas" style="background-color:' +
     PALETTE.bg +
     ';margin:0;padding:0;">' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="nm-canvas" bgcolor="' +
     PALETTE.bg +
     '" style="width:100%;background-color:' +
     PALETTE.bg +
@@ -394,7 +483,7 @@ function layout({ preheader, fr, en, ctaUrl, unsubscribeUrl, baseUrl, lang }) {
     FONT +
     ';">' +
     '<!--[if mso]><table role="presentation" width="600" align="center" cellpadding="0" cellspacing="0" border="0"><tr><td><![endif]-->' +
-    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:600px;margin:0 auto;background-color:' +
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="nm-card" style="width:100%;max-width:600px;margin:0 auto;background-color:' +
     PALETTE.card +
     ';border:1px solid ' +
     PALETTE.border +
@@ -439,7 +528,7 @@ function textLayout({ fr, en, ctaUrl, unsubscribeUrl, baseUrl, lang }) {
 }
 function para(text) {
   return (
-    '<p style="margin:0 0 16px;font-family:' +
+    '<p class="nm-ink" style="margin:0 0 16px;font-family:' +
     FONT +
     ';font-size:15px;line-height:1.6;color:' +
     PALETTE.ink +
@@ -453,7 +542,7 @@ function para(text) {
 function callout(text) {
   return (
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 18px;border-collapse:separate;">' +
-    '<tr><td style="padding:13px 16px;background-color:' +
+    '<tr><td class="nm-callout" style="padding:13px 16px;background-color:' +
     PALETTE.tint +
     ';border-left:3px solid ' +
     PALETTE.brand +
@@ -474,19 +563,19 @@ function detailRows(rows) {
     .filter((r) => r && r.value)
     .map(
       (r) =>
-        '<tr><td style="padding:5px 14px 5px 0;font-family:' +
+        '<tr><td class="nm-muted" style="padding:5px 14px 5px 0;font-family:' +
         FONT +
         ';font-size:14px;line-height:1.5;color:' +
         PALETTE.muted +
         ';white-space:nowrap;vertical-align:top;">' +
         esc(r.label) +
-        '</td><td style="padding:5px 0;font-family:' +
+        '</td><td class="nm-ink" style="padding:5px 0;font-family:' +
         FONT +
         ';font-size:14px;line-height:1.5;font-weight:600;color:' +
         PALETTE.ink +
         ';vertical-align:top;">' +
         (r.href
-          ? '<a href="' + esc(r.href) + '" style="color:' + PALETTE.brand + ';text-decoration:underline;">' + esc(r.value) + '</a>'
+          ? '<a href="' + esc(r.href) + '" class="nm-link" style="color:' + PALETTE.brand + ';text-decoration:underline;">' + esc(r.value) + '</a>'
           : esc(r.value)) +
         '</td></tr>'
     )
@@ -507,7 +596,7 @@ function detailText(rows, lang) {
 function bullets(items) {
   const li = (items || []).filter(Boolean);
   return li.length
-    ? '<ul style="margin:0 0 16px;padding-left:20px;font-family:' + FONT + ';font-size:15px;line-height:1.6;color:' + PALETTE.ink + ';">' +
+    ? '<ul class="nm-ink" style="margin:0 0 16px;padding-left:20px;font-family:' + FONT + ';font-size:15px;line-height:1.6;color:' + PALETTE.ink + ';">' +
       li.map((t) => '<li>' + esc(t) + '</li>').join('') +
       '</ul>'
     : '';
@@ -1130,7 +1219,7 @@ function bidRows(bids, lang) {
     .map(
       (b) =>
         '<tr>' +
-        '<td style="padding:8px 0;border-bottom:1px solid ' +
+        '<td class="nm-ink nm-hr" style="padding:8px 0;border-bottom:1px solid ' +
         PALETTE.border +
         ';font-size:14px;color:' +
         PALETTE.ink +
@@ -1141,7 +1230,7 @@ function bidRows(bids, lang) {
             : svcNom(b.serviceId) + ' · ' + fmtDate(b.dateISO)
         ) +
         '</td>' +
-        '<td style="padding:8px 0;border-bottom:1px solid ' +
+        '<td class="nm-ink nm-hr" style="padding:8px 0;border-bottom:1px solid ' +
         PALETTE.border +
         ';font-size:14px;font-weight:600;text-align:right;color:' +
         PALETTE.ink +
@@ -1686,7 +1775,7 @@ function documentsDemandes(ctx) {
   const items = Array.isArray(d.documents) ? d.documents.map((x) => (x && x.nom) || String(x)) : [];
   const etude = d.etude || null;
   const listHtml = items.length
-    ? '<ul style="margin:0 0 16px;padding-left:20px;font-family:' + FONT + ';font-size:15px;line-height:1.6;color:' + PALETTE.ink + ';">' +
+    ? '<ul class="nm-ink" style="margin:0 0 16px;padding-left:20px;font-family:' + FONT + ';font-size:15px;line-height:1.6;color:' + PALETTE.ink + ';">' +
       items.map((n) => '<li>' + esc(n) + '</li>').join('') +
       '</ul>'
     : '';
@@ -4071,6 +4160,9 @@ module.exports = {
   PLACEHOLDER_ADDRESS,
   SENDER,
   PALETTE,
+  DARK,
+  RADIUS,
+  LOCKUP,
   TEMPLATES,
   TEMPLATE_META,
   OVERRIDE_LIMITS,

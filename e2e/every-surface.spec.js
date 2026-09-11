@@ -26,6 +26,7 @@ const { test, expect } = require('@playwright/test');
 const { measure, settle } = require('./layout-lens');
 
 const ADMIN = `http://localhost:${process.env.E2E_ADMIN_PORT || 4312}`;
+const API = `http://localhost:${process.env.E2E_API_PORT || 8811}`;
 const DOCS = `http://localhost:${process.env.E2E_DOCS_PORT || 4313}`;
 
 const VIEWPORTS = [
@@ -88,6 +89,36 @@ async function adminInto(page, request, view) {
  * The surfaces. `root` is the column the lens measures for blank bands;
  * `wait` proves the surface rendered; `open` reaches a state past the load.
  */
+/**
+ * A retained act, opened through the real doors (publication, notary session,
+ * profile, retention), and the notary token that reaches its signing room.
+ * The room is a shipped surface: it has to hold its shape at every size too.
+ */
+async function retainedAct(request) {
+  const dateISO = new Date(Date.now() + 21 * 86_400_000).toISOString().slice(0, 10);
+  const email = `lens.salle.${Date.now().toString(36)}@etude.ca`;
+  const published = await request.post(`${API}/bids`, {
+    data: {
+      serviceId: 'refinancement', dateISO, montant: 2400, courriel: 'lens.client@exemple.ca', prefixe: 'G1R',
+      pricing: { valeur_pret: 250000, succession: 'non', approbation_bancaire: 'obtenue', preteur: 'banque_nationale', deplacement: 'client_50' },
+    },
+  });
+  if (published.status() !== 201) throw new Error(`publication refused: ${await published.text()}`);
+  const { bid } = await published.json();
+  const asked = await request.post(`${API}/notary/session/request`, { data: { email } });
+  const { devToken } = await asked.json();
+  const opened = await request.post(`${API}/notary/session/verify`, { data: { token: devToken } });
+  const token = (await opened.json()).token;
+  const headers = { authorization: `Bearer ${token}` };
+  await request.post(`${API}/notary/profile`, {
+    headers,
+    data: { nom: 'Me Lentille', etude: 'Étude Lentille', telephone: '418 555 0142', adresse: '1, rue de la Mesure, Québec (QC) G1R 1A1' },
+  });
+  const accepted = await request.post(`${API}/notary/bids/accept`, { headers, data: { id: bid.id, dateISO: bid.dateISO } });
+  if (accepted.status() !== 200) throw new Error(`retention refused: ${await accepted.text()}`);
+  return { bid, token };
+}
+
 const SURFACES = [
   { key: 'carnet', url: '/?lang=fr', seed: seenBoth, wait: '#pulse-rows .pulse-row', root: '#pane-carnet' },
   { key: 'carnet, English, dark theme', url: '/?lang=en', seed: seenBothDark, wait: '#pulse-rows .pulse-row', root: '#pane-carnet', theme: 'dark' },
@@ -130,18 +161,39 @@ const SURFACES = [
       await expect(p.locator('#chat-panel')).toBeVisible();
     }, root: '#chat-panel' },
   { key: 'signing room · welcome', url: '/signature.html?lang=fr', seed: () => {}, wait: '#welcome', root: 'body' },
+  { key: 'signing room · workspace', wait: '#workspace:not([hidden])', root: '#workspace',
+    prepare: async (page, request) => {
+      const { bid, token } = await retainedAct(request);
+      await page.addInitScript((t) => { try { localStorage.setItem('nota.notary.token', JSON.stringify(t)); } catch (e) { /* storage blocked */ } }, token);
+      return `/signature.html?lang=fr&role=notary&bidId=${encodeURIComponent(bid.id)}&dateISO=${bid.dateISO}`;
+    } },
   { key: 'acquisition page · refinancement (fr)', url: '/notaire-refinancement-quebec.html', seed: () => {}, wait: '.search-page h1', root: '.search-page' },
+  { key: 'acquisition page · refinancing (en)', url: '/mortgage-refinancing-notary-quebec-city.html', seed: () => {}, wait: '.search-page h1', root: '.search-page' },
+  { key: 'acquisition page · financement (fr)', url: '/notaire-financement-quebec.html', seed: () => {}, wait: '.search-page h1', root: '.search-page' },
   { key: 'acquisition page · financing (en)', url: '/mortgage-financing-notary-quebec-city.html', seed: () => {}, wait: '.search-page h1', root: '.search-page' },
   { key: 'admin · sign-in', url: `${ADMIN}/?lang=fr`, seed: () => {}, wait: '#auth-email', root: '#app' },
+  // Every section of the console rail (apps/admin/public/admin.js,
+  // ADMIN_SECTIONS) — a section nobody measures is a section that drifts.
   { key: 'admin · aperçu', admin: '', root: '#app' },
+  { key: 'admin · fonctionnalités', admin: 'fonctionnalites', root: '#app' },
+  { key: 'admin · services', admin: 'services', root: '#app' },
   { key: 'admin · courriels', admin: 'courriels', root: '#app' },
-  { key: 'admin · messagerie', admin: 'support', root: '#app' },
+  { key: 'admin · campagnes', admin: 'campagnes', root: '#app' },
+  { key: 'admin · audiences', admin: 'audiences', root: '#app' },
+  { key: 'admin · prix', admin: 'prix', root: '#app' },
+  { key: 'admin · paiements', admin: 'paiements', root: '#app' },
   { key: 'admin · accès', admin: 'acces', root: '#app' },
+  { key: 'admin · annulation', admin: 'annulation', root: '#app' },
+  { key: 'admin · cabinets', admin: 'cabinets', root: '#app' },
+  { key: 'admin · messagerie', admin: 'support', root: '#app' },
   { key: 'admin · CRM', admin: 'crm', root: '#app' },
+  { key: 'admin · notaires', admin: 'notaires', root: '#app' },
+  { key: 'admin · audit', admin: 'audit', root: '#app' },
   { key: 'admin · usagers', admin: 'usagers', root: '#app' },
   { key: 'pitch deck', url: `${DOCS}/pitch-deck.html`, seed: () => {}, wait: '#slide', root: 'body' },
   { key: 'business plan', url: `${DOCS}/business-plan.html`, seed: () => {}, wait: '#plan-en', root: 'body' },
   { key: 'brand guide', url: '/brand.html', seed: () => {}, wait: 'h1', root: 'body' },
+  { key: 'brand explorations', url: '/brand-explorations.html', seed: () => {}, wait: 'h1', root: 'body' },
 ];
 
 // The two first-visit surfaces exist only WITHOUT reduced motion (the films
@@ -160,6 +212,9 @@ async function sweep(page, request, surface, testInfo) {
   page.on('pageerror', (e) => errors.push(String(e.message).slice(0, 160)));
   page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text().slice(0, 160)); });
   if (surface.seed) await page.addInitScript(surface.seed);
+  // A surface that needs a live session (the signing room) opens its own door
+  // once, before the first size, and answers with the URL that reaches it.
+  const url = (surface.prepare ? await surface.prepare(page, request) : null) || surface.url;
 
   for (const vp of sizes) {
     if (surface.maxWidth && vp.width > surface.maxWidth) continue;
@@ -170,7 +225,7 @@ async function sweep(page, request, surface, testInfo) {
       else {
         const firstVisit = !surface.preservePage || vp === sizes[0];
         if (firstVisit) {
-          await page.goto(surface.url);
+          await page.goto(url);
           await page.waitForSelector(surface.wait, { timeout: 20_000 });
           if (surface.open) await surface.open(page);
         } else {

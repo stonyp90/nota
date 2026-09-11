@@ -18,15 +18,23 @@ anything.
 3. **Presentation only.** Templates format context they are given. Amounts go
    through `domain.money()` / `domain.moneyEn()`, service and tier names
    through `nom`/`nomEn` — never hardcoded, never computed in the mail layer.
-4. **Survives hostile clients.** Table-based layout, all CSS inline (clients
-   strip `<style>`), no `<img>`, no `<svg>`, no `url()` — the logo is pure
-   CSS/text so the brand shows even with images blocked (the « N » mark is
-   `aria-hidden`; the wordmark is the accessible name). An MSO ghost table
-   pins Outlook to 600px; everywhere else the card is fluid. `color-scheme` /
-   `supported-color-schemes` metas declare the card light-only so Apple Mail
-   does not auto-invert it in dark mode, and the English block carries
-   `lang="en-CA"` inside the `fr-CA` document so screen readers switch
-   pronunciation.
+4. **Survives hostile clients.** Table-based layout, every LIGHT style inline
+   (clients strip `<style>`), no `<img>`, no `<svg>`, no `url()` — the logo
+   is typeset so the brand shows even with images blocked. It spells the
+   production lockup, exploration 01 « Monogramme lié » (ADR 0048 and its
+   2026-09-11 amendment): the deep blue-teal tile holding a heavy white « N »
+   with the small signal dot at its top-right, then « OTA » in solid
+   uppercase letters at the same 800 weight on `-0.07em` tracking (no rule
+   under the word), then the pale « QUÉBEC » badge. The lockup table is one
+   accessible image named « Nota Québec », so a screen reader never spells
+   « N OTA ». An MSO ghost table pins Outlook to 600px; everywhere else the
+   card is fluid. The `color-scheme` / `supported-color-schemes` metas declare
+   `light dark`, and ONE `<style>` block carries nothing but the dark layer
+   (see *Design tokens*), so Apple Mail, iOS Mail and the Outlook apps repaint
+   the card on the product's dark tokens instead of auto-inverting it —
+   clients that strip `<style>` keep the light card. The English block
+   carries `lang="en-CA"` inside the `fr-CA` document so screen readers
+   switch pronunciation.
 5. **Compliant on every message.** CASL / Law 25 footer with sender name,
    registered mailing address, a plain-language reason, the contact and
    privacy addresses from `domain.CONTACT`, and a working
@@ -53,9 +61,9 @@ anything.
 ┌──────────────────────────────────────────────┐  ← Nota light blue #eef5f7 page
 │ ┌──────────────────────────────────────────┐ │
 │ │ ███ 3px Nota blue-teal top rule          │ │  ← surface card, max 600px,
-│ │  [N•] Nota                               │ │    1px border, 12px radius
-│ │      La place de marché notariale ·      │ │  ← CSS-only logo header
-│ │      The notarial marketplace            │ │
+│ │  [N•]OTA [QUÉBEC]                        │ │    1px border, 12px radius
+│ │  La place de marché notariale ·          │ │  ← typeset 01 lockup + tagline
+│ │  The notarial marketplace                │ │
 │ ├──────────────────────────────────────────┤ │
 │ │  H1 (fr)                                 │ │
 │ │  lead (fr, muted)                        │ │
@@ -93,18 +101,62 @@ follows — change a color there, never inline:
 | `card` | `--surface` | the card |
 | `border` | `--border` | card edge, hairlines, digest rows |
 | `brand` | `--brand` (Nota blue-teal) | top rule, wordmark, CTA fill, links |
-| `brandDark` | `--brand-hover` (deep Québec blue) | the CTA's 1px edge |
-| `brandInk` | `--brand-ink` | text on the brand fill |
-| `tint` | `--nota-blue-50` | the callout wash |
+| `brandDark` | `--brand-hover` = `--nota-blue-800` | the CTA's 1px edge, the QUÉBEC badge text |
+| `markBg` | `--nota-blue-900` | the lockup's tile |
+| `brandBright` | `--nota-blue-500` | the lockup's signal dot |
+| `brandInk` | `--brand-ink` | text on the brand fill, the N in the tile |
+| `tint` | `--nota-blue-50` | the callout wash, the QUÉBEC badge ground |
 
-Every hex literal in a rendered message must be one of these (asserted) —
-there is no email-only colour. Radii sit on the web square scale
-(`RADIUS`): card `--radius-lg` 12px, mark and CTA `--radius` 8px, callout
-`--radius-sm` 6px — no pills, no circles (asserted).
+Every hex literal written inline must be one of these (asserted) — there is
+no email-only colour. Radii sit on the web square scale (`RADIUS`): card
+`--radius-lg` 12px, tile and CTA `--radius` 8px, callout `--radius-sm` 6px,
+QUÉBEC badge `--radius-xs` 3px — no pills, no circles (asserted).
+
+### The lockup (exploration 01)
+
+`logoHeader()` typesets the three pieces of the production mark in one
+`<table role="img" aria-label="Nota Québec">`: a 40px tile on `markBg` with a
+24px/800 white « N » and an 11px `brandBright` « ■ » (variant C: a square signal) riding its top-right;
+« OTA » at 26px/800, `letter-spacing:-0.07em`, in `ink`, 3px from the tile so
+the N opens directly into the word; « QUÉBEC » at 9px/700, `0.08em`, on `tint`
+with `brandDark` text, seated on the word's baseline. The letters are written
+in capitals (Outlook ignores `text-transform`). The tile and the badge are
+constants of the mark and do not change with the theme; only the word takes
+the theme's ink. The same block, verbatim, is the owner's personal signature
+in `docs/signature-courriel.html` (copy-paste ready, tables + inline styles,
+no image), pinned by the same test.
+
+### The dark layer
+
+`DARK` is the one flattened copy of the web **dark** tokens — the standalone
+`@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) {…} }`
+block of `styles.css`, values verbatim — and `emails-brand.test.mjs` pins every
+key to it:
+
+| DARK key | Web token (dark) | Role in the mail |
+| --- | --- | --- |
+| `bg` | `--bg` `#101820` | the canvas (the product's dark canvas — NOT `--nota-blue-950` `#101b26`, the wordmark midnight) |
+| `card` | `--surface` `#0f2030` | the card |
+| `panel` | `--surface-inset` `#132b3f` | the callout wash |
+| `border` | `--border` `#294353` | card edge, hairlines, digest rows |
+| `ink` | `--ink` `#f4f8fa` | headings, body, the « OTA » |
+| `muted` | `--ink-muted` `#afc2cf` | lead, tagline, footer, sign-off |
+| `brand` | `--brand` = `--nota-blue-500` `#407598` | CTA fill, the card's top rule, the callout rule |
+| `link` | `--brand-bright` = `--nota-blue-400` `#78a9bf` | links, the CTA's edge |
+| `brandInk` | `--on-accent` `#ffffff` | the CTA label (the dark `--brand-ink` `#061c2a` sits at 3.5:1 on the dark `--brand`; a 16px/600 label needs 4.5:1) |
+
+The inline light styles stay the source of truth. `darkStyle()` writes ONE
+`<style>` block: `:root{color-scheme:light dark;…}`, then the rule set under
+`@media (prefers-color-scheme: dark)`, then the same rule set prefixed
+`[data-ogsc]` for Outlook.com. Every declaration is `!important` (it must beat
+the inline light style it overrides) and targets a class hook the helpers set:
+`nm-canvas`, `nm-card`, `nm-hr`, `nm-ink`, `nm-muted`, `nm-link`, `nm-cta`,
+`nm-callout`. Every hex inside the block must be a `DARK` value, every hex
+outside it a `PALETTE` value (asserted). The test also computes WCAG 2.2
+contrast for the tile, the word, the badge, the CTA and links in both modes
+and refuses anything under 4.5:1.
 
 Type: Inter-first stack (`Inter, system-ui, …`), matching the web `--font-sans`.
-The card always sits on the light surface — deliberate: it stays legible in
-dark-mode clients that would otherwise invert unknown backgrounds.
 
 CTA button: Nota blue-teal fill, white 16px/600 label, `14px 32px` padding
 (≥44px touch target), `mso-padding-alt` for Outlook, 8px radius, 1px
@@ -128,10 +180,13 @@ registering a template is what opts it in. Each line is an assertion:
   block, HTML and text.
 - **Footer**: sender name, mailing address, contact + privacy addresses from
   `domain.CONTACT` as `mailto:` links, unsubscribe link — HTML and text.
-- **Shell**: `max-width:600px`, `role="presentation"` tables, no `<style>`,
-  no `<img>`/`<svg>`/`url(`, Inter stack, `color-scheme` metas, `lang`
-  switch, aria-hidden mark + wordmark + tagline, palette-only colours,
-  square-scale radii.
+- **Shell**: `max-width:600px`, `role="presentation"` tables, exactly one
+  `<style>` (the dark layer, nothing else — light stays inline), no
+  `<img>`/`<svg>`/`url(`, Inter stack, `light dark` color-scheme metas,
+  `lang` switch, the 01 lockup, variant C (tile N■ + OTA. + QUÉBEC on the signal colour, one `role="img"`
+  named « Nota Québec ») + tagline, palette-only colours inline and
+  DARK-only colours in the layer, square-scale radii, ≥ 4.5:1 on the
+  lockup, CTA and links in both modes.
 - **No leaks**: no `{{`, `undefined`, `null`, `NaN`, `[object`, lorem/TODO,
   and no empty « · · » offer line — with the rich context and the bare one.
 - **Text alternative** carries every `http(s)` link the HTML carries.

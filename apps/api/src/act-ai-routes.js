@@ -19,6 +19,11 @@ function createActAIRoutes({ repo, env, authenticate, json, parseBody, getSecret
     quota_epuise: 'Votre quota de préparation IA est épuisé. Choisissez une formule ou achetez des unités.',
     paiement_requis: 'Votre abonnement IA nécessite une mise à jour du paiement.',
   }[code] || undefined }] });
+  // ADR 0049: a refusal names the notary's real situation. `reason` is the
+  // entitlement view's word; the closed states with their own door are mapped,
+  // every other closed state (no record, never enrolled) is « il faut un accès ».
+  const REFUSAL_BY_REASON = { quota_epuise: 'quota_epuise', paiement_requis: 'paiement_requis' };
+  const refusalFor = entitlement => REFUSAL_BY_REASON[entitlement?.reason] || 'ai_access_required';
   const packet = bid => D.actWorkPacket(bid, { todayISO: D.businessDay(nowMs(), D.BUSINESS_TIMEZONE) });
   const inFlight = new Map();
   let cachedProvider;
@@ -84,7 +89,7 @@ function createActAIRoutes({ repo, env, authenticate, json, parseBody, getSecret
     // Keep already-created work available for review when a trial or plan ends;
     // entitlement is required only before a new AI provider call.
     const needsEntitlement = route.endsWith('/preparation') && method === 'POST';
-    if (needsEntitlement && aiAccess && aiAccess.monetized() && (!entitlement || !entitlement.enabled)) return error(402, entitlement?.reason === 'paiement_requis' ? 'paiement_requis' : 'ai_access_required');
+    if (needsEntitlement && aiAccess && aiAccess.monetized() && (!entitlement || !entitlement.enabled)) return error(402, refusalFor(entitlement));
     if (method === 'GET') return json(200, { analysis: analysisOf(bid), workPacket: packet(bid) });
 
     if (route.endsWith('/review')) {

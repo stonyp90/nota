@@ -263,3 +263,82 @@ communication, c'est le violer.
   que ce n'est pas fait, l'alarme ne couvre que la moitié publique de la piste.
 - `terraform apply` est requis pour que les deux `Deny`, le filtre de métrique
   et l'alarme existent réellement. Rien n'est appliqué à ce jour.
+
+## Amendement du 2026-09-11 — un accès refusé laisse une trace
+
+**Constat.** Un audit BDD du 11 septembre 2026 a sondé la console avec une
+opératrice qui ne détient que `analytics:read`. Refusée à
+`GET /admin/usagers/{courriel}` (le dossier d'une personne, Loi 25), à
+`GET /admin/notaries` et à `GET /admin/crm/leads`, elle n'a laissé dans le
+journal que `login_requested` et `login_success`. `apps/api/src/admin.js`
+écrivait une trace sur chaque lecture sensible **réussie**
+(`dossier_usager_consulte`, `dossier_usager_exporte`, …) et sur **aucun** 403.
+Quelqu'un qui sonde les portes des dossiers était invisible au registre même
+qui existe pour rendre un accès reprochable — le contraire exact du titre de
+cette décision.
+
+**Décision.** Un refus de permission est un événement d'audit au même titre
+qu'un accès accordé. Toute porte de `admin.js` gardée par `rbac.can` répond
+désormais par **un seul entonnoir**, `refuserAcces()`, qui écrit la trace puis
+rend le 403 — même statut, même code `interdit`, **même message** qu'avant. Un
+test statique (`apps/api/test/admin-refus-audite.test.mjs`) refuse tout
+`status: 403` écrit ailleurs dans le fichier : une future porte ne peut pas
+redevenir muette sans faire rougir la suite.
+
+**Ce que la trace porte.**
+
+```js
+action: 'acces_refuse',
+adminId, email, ip,            // l'opérateur refusé — comme tout geste de la console
+meta: {
+  porte: 'getUserFile',        // le use-case frappé, pas le chemin HTTP
+  permission: 'subjects:read', // la clé qui manquait
+  equivalentes: [...],         // porte « l'une OU l'autre » (prix : settings:write OU billing:write)
+  manquantes: [...],           // porte à DEUX clés, quand plus d'une manque (soutien : support:read ET pii:read)
+  sujet: 'sha256 tronqué'      // portes usagers seulement ; null si l'adresse n'en est pas une
+}
+```
+
+L'acteur est nommé comme dans tout le journal **administratif** : identifiant,
+courriel et adresse d'origine de l'opérateur. Ce sont des employés agissant sur
+une console interne — la règle du §1 (« le journal administratif continue de
+consigner le courriel et l'adresse de l'administrateur ») est antérieure et
+inchangée. La borne de sept ans (§5) s'applique par l'adaptateur, comme partout.
+
+**Ce que la trace ne porte jamais.** Ni la ressource demandée, ni l'adresse du
+sujet. Une trace de refus qui recopierait le dossier — ou seulement le courriel
+frappé — deviendrait elle-même la fuite qu'elle est censée rendre reprochable,
+dans un journal ouvert avec `audit:read` **sans** `pii:read`. Le sujet est donc
+nommé par la même **empreinte** que `dossier_usager_consulte` (SHA-256 tronqué à
+16 caractères hexadécimaux), ce qui permet de voir que trois refus visaient le
+*même* dossier sans jamais dire lequel. Les tests vérifient que ni l'adresse ni
+sa partie locale n'apparaissent dans la trace sérialisée, et que `meta` ne porte
+que `porte`, `permission` et `sujet`.
+
+**Ce qui ne trace pas, et pourquoi.**
+
+- Un **401** (aucune session, jeton périmé ou retouché) n'écrit rien : il n'y a
+  aucun opérateur à nommer, et consigner l'origine d'un inconnu contredirait le
+  corollaire du §1. Les connexions manquées ont déjà leurs traces
+  (`login_failed`, `login_throttled`, `login_requested_unknown`).
+- Un accès **accordé** n'écrit pas `acces_refuse` : la trace dit « refusé », pas
+  « a frappé à la porte ». Le contre-essai est dans `features/acces_admin.feature`.
+
+**Portée honnête.** L'entonnoir couvre les trente-et-une portes de `admin.js`
+(courriels, prix, annulation, notaires, journal, catalogue, fonctionnalités,
+cabinets, audiences, segments, campagnes, dossiers d'usager, CRM, soutien). Les
+gardes que `admin-handler.js` applique **lui-même** — `GET /admin/metrics/overview`
+(`analytics:read`), `/admin/permissions`, `/admin/permission-groups`,
+`/admin/groups`, `/admin/users` (`permissions:read`, `groups:*`, `users:*`) —
+restent muettes à ce jour. `refuserAcces` est exporté par `createAdmin()`
+précisément pour qu'elles puissent le rejoindre sans réécrire la règle.
+
+**Conséquence pour la console.** `acces_refuse` est une action neuve : la garde
+« chaque action que l'API écrit a un libellé » (`apps/admin/test/audit.test.mjs`)
+rougit tant que `AUDIT_LABELS` et `i18n.js` de la console ne la connaissent pas.
+C'est voulu — c'est exactement le filet posé le 2026-09-04.
+
+**Note.** Le §3 disait que « la moitié admin ne crie pas encore ». Ce n'est plus
+vrai depuis le 2026-09-05 : `appendAudit` de `admin.js` émet la ligne
+`audit_write_failed`, et le test de cet amendement vérifie qu'un puits cassé
+crie pour `acces_refuse` sans changer le 403.

@@ -14,7 +14,7 @@ const BRAND_SYMBOLS = (INDEX_HTML.match(/<svg class="svg-defs"[\s\S]*?<\/svg>/) 
 if (!BRAND_SYMBOLS.includes('id="nota-logomark"') || !BRAND_SYMBOLS.includes('id="nota-wordmark"')) {
   throw new Error('seo-pages: index.html no longer carries the #nota-logomark / #nota-wordmark symbols');
 }
-const LOCKUP = '<span class="brand-lockup" aria-hidden="true"><svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 0 92 42" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></span><span class="brand-sub">Québec</span>';
+const LOCKUP = '<span class="brand-lockup" aria-hidden="true"><svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></span><span class="brand-sub">Québec</span>';
 export const origin = 'https://gonota.ca';
 export const pages = [
   { slug: 'notaire-refinancement-quebec', en: 'mortgage-refinancing-notary-quebec-city',

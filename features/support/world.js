@@ -6,6 +6,9 @@ const { setWorldConstructor, World } = require('@cucumber/cucumber');
 // domain is pure CommonJS/UMD, the API app is transport-agnostic.
 const domain = require('../../packages/domain/index.js');
 const { createApp } = require('../../apps/api/src/handler.js');
+// La console d'administration — une Lambda distincte, son propre transport.
+const { createAdminApp } = require('../../apps/api/src/admin-handler.js');
+const { createAdmin } = require('../../apps/api/src/admin.js');
 const { createMemoryRepo } = require('../../apps/api/src/repo-memory.js');
 const { createNotifier } = require('../../apps/api/src/notifications.js');
 const { createFakeMailer } = require('../../apps/api/src/notify-port.js');
@@ -17,6 +20,8 @@ const { createBilling } = require('../../apps/api/src/billing.js');
 const TODAY = '2026-08-12';
 const BASE = 'https://nota.example';
 const OPERATOR_EMAIL = 'operateur@nota.ca';
+// L'origine de la console d'administration (CORS + lien magique).
+const ADMIN_BASE = 'https://admin.nota.example';
 // Le prénom que l'assistant nomme quand il passe la main (ADR 0046).
 const OPERATOR_NAME = 'Anthony';
 
@@ -155,6 +160,50 @@ class NotaWorld extends World {
     this.assistantPort = null;
     this.app = buildApp();
 
+    // --- LA CONSOLE D'ADMINISTRATION ----------------------------------------
+    // Une SECONDE application, celle de la Lambda admin.nota.ca : le même
+    // dépôt en mémoire, le même faux postier et la même horloge avançable que
+    // l'API publique — seul le transport change. Les scénarios d'accès
+    // traversent donc le vrai `admin-handler.js`, le vrai use-case `admin.js`
+    // et le vrai `rbac.js` ; rien n'est simulé, pas même la session.
+    //
+    // La liste blanche est la porte EXTÉRIEURE (seule une adresse inscrite
+    // peut demander un lien) : elle est laissée VIDE ici pour que ce soit le
+    // scénario, et non le World, qui nomme ses opérateurs. Un pas y inscrit
+    // une adresse puis rappelle `buildAdminApp()` — tout l'état (comptes,
+    // sessions, journal) vit dans le dépôt et survit à la reconstruction.
+    this.adminBaseUrl = ADMIN_BASE;
+    this.adminAllowlist = [];
+    let adminSeq = 0;
+    this.buildAdminApp = () => {
+      this.adminApp = createAdminApp(this.repo, {
+        admin: createAdmin({
+          repo: this.repo,
+          mailer: this.mailer,
+          notifier: this.notifier,
+          newId: () => 'adm-' + ++adminSeq,
+          now: () => new Date(this.nowMs).toISOString(),
+          nowMs: () => this.nowMs,
+          config: {
+            allowlist: this.adminAllowlist.slice(),
+            baseUrl: ADMIN_BASE,
+            siteUrl: BASE,
+            // Hors production : le lien magique revient dans la réponse, seule
+            // façon de traverser l'échange sans vraie boîte aux lettres.
+            devEcho: true,
+            // Un scénario ouvre plusieurs sessions d'affilée depuis la même IP ;
+            // le plafond anti-abus (5) n'est pas le sujet mesuré ici.
+            rlMax: 100,
+          },
+        }),
+        adminBaseUrl: ADMIN_BASE,
+        now: () => TODAY,
+        nowMs: () => this.nowMs,
+      });
+      return this.adminApp;
+    };
+    this.buildAdminApp();
+
     // ADR 0046 — brancher l'assistant sur un scénario en mémoire. Aucun SDK,
     // aucun réseau : le scénario DICTE ce que le modèle répond, et ce qu'on
     // observe est ce que le reste du système en fait.
@@ -184,6 +233,7 @@ class NotaWorld extends World {
     this.input = {};
     this.result = null;
     this.response = null;
+    this.adminResponse = null;
     this.lastBidId = null;
   }
 
@@ -194,6 +244,15 @@ class NotaWorld extends World {
     // queues so a following step observes what was captured.
     await this.flush();
     return this.response;
+  }
+
+  // Le miroir de `request`, côté console d'administration. La réponse est
+  // rangée à part (`adminResponse`) pour qu'un scénario puisse comparer les
+  // deux surfaces sans que l'une écrase l'autre.
+  async requestAdmin(req) {
+    this.adminResponse = await this.adminApp.handle(req);
+    await this.flush();
+    return this.adminResponse;
   }
 
   // Let any fire-and-forget notification promise settle before assertions run.
@@ -219,6 +278,10 @@ class NotaWorld extends World {
 
   get responseJson() {
     return JSON.parse(this.response.body);
+  }
+
+  get adminResponseJson() {
+    return JSON.parse(this.adminResponse.body);
   }
 
   // Every captured message sent to a given recipient.

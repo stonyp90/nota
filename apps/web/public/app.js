@@ -1854,24 +1854,29 @@
     }
   }
 
+  // Les marques des fournisseurs sont des CONSTANTES d'identité (Google,
+  // Microsoft, LinkedIn) : elles ne suivent pas le thème. Elles restent
+  // néanmoins des jetons nommés dans styles.css (--logo-* / --marque-*), comme
+  // les mêmes logos déjà inscrits dans index.html — aucun littéral de couleur
+  // ne vit dans le balisage (ADR 0048).
   var AUTH_PROVIDERS = {
     google: {
       nom: 'Google',
       svg: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
-        + '<path fill="#4285F4" d="M23.5 12.3c0-.9-.1-1.5-.2-2.2H12v4h6.6c-.1 1.1-.9 2.8-2.5 3.9l3.9 3c2.3-2.1 3.5-5.2 3.5-8.7z"/>'
-        + '<path fill="#34A853" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5l-3.9 3C3.4 21.3 7.4 24 12 24z"/>'
-        + '<path fill="#FBBC05" d="M5.3 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.6.4-2.4l-4-3C.5 8.3 0 10.1 0 12s.5 3.7 1.3 5.4l4-3z"/>'
-        + '<path fill="#EA4335" d="M12 4.7c2.2 0 3.6.9 4.5 1.7l3.4-3.3C17.9 1.2 15.2 0 12 0 7.4 0 3.4 2.7 1.3 6.6l4 3c.9-2.8 3.6-4.9 6.7-4.9z"/>'
+        + '<path fill="var(--logo-google-blue)" d="M23.5 12.3c0-.9-.1-1.5-.2-2.2H12v4h6.6c-.1 1.1-.9 2.8-2.5 3.9l3.9 3c2.3-2.1 3.5-5.2 3.5-8.7z"/>'
+        + '<path fill="var(--logo-google-green)" d="M12 24c3.2 0 5.9-1.1 7.9-2.9l-3.8-2.9c-1 .7-2.4 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5l-3.9 3C3.4 21.3 7.4 24 12 24z"/>'
+        + '<path fill="var(--logo-google-yellow)" d="M5.3 14.4c-.2-.7-.4-1.5-.4-2.4s.1-1.6.4-2.4l-4-3C.5 8.3 0 10.1 0 12s.5 3.7 1.3 5.4l4-3z"/>'
+        + '<path fill="var(--logo-google-red)" d="M12 4.7c2.2 0 3.6.9 4.5 1.7l3.4-3.3C17.9 1.2 15.2 0 12 0 7.4 0 3.4 2.7 1.3 6.6l4 3c.9-2.8 3.6-4.9 6.7-4.9z"/>'
         + '</svg>',
     },
     microsoft: {
       nom: 'Microsoft',
-      svg: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="#f25022" d="M1 1h10v10H1z"/><path fill="#7fba00" d="M13 1h10v10H13z"/><path fill="#00a4ef" d="M1 13h10v10H1z"/><path fill="#ffb900" d="M13 13h10v10H13z"/></svg>',
+      svg: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="var(--logo-microsoft-red)" d="M1 1h10v10H1z"/><path fill="var(--logo-microsoft-green)" d="M13 1h10v10H13z"/><path fill="var(--logo-microsoft-blue)" d="M1 13h10v10H1z"/><path fill="var(--logo-microsoft-yellow)" d="M13 13h10v10H13z"/></svg>',
     },
     linkedin: {
       nom: 'LinkedIn',
       svg: '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
-        + '<path fill="#0A66C2" d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.35V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.55V9h3.57v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/>'
+        + '<path fill="var(--marque-linkedin)" d="M20.45 20.45h-3.56v-5.57c0-1.33-.02-3.04-1.85-3.04-1.85 0-2.13 1.45-2.13 2.94v5.67H9.35V9h3.42v1.56h.05c.48-.9 1.64-1.85 3.37-1.85 3.6 0 4.27 2.37 4.27 5.46v6.28zM5.34 7.43a2.06 2.06 0 1 1 0-4.13 2.06 2.06 0 0 1 0 4.13zM7.12 20.45H3.55V9h3.57v11.45zM22.22 0H1.77C.79 0 0 .77 0 1.73v20.54C0 23.22.79 24 1.77 24h20.45c.98 0 1.78-.78 1.78-1.73V1.73C24 .77 23.2 0 22.22 0z"/>'
         + '</svg>',
     },
   };
@@ -10100,7 +10105,12 @@
           ? 'L’analyse IA reçue n’a pas pu être validée. Aucune nouvelle proposition n’a été enregistrée.'
           : code === 'autorisation_traitement_requise'
             ? 'Confirmez votre autorisation de transmettre ce document avant de relancer l’analyse IA.'
-            : fallback;
+            // Un refus d'accès (402) porte déjà sa cause en français — quota
+            // épuisé, paiement à mettre à jour, bêta non inscrite (ADR 0049) ;
+            // la répéter vaut mieux que le repli générique « réessayez ».
+            : status === 402 && body.errors[0].message
+              ? body.errors[0].message
+              : fallback;
       if (code === 'autorisation_traitement_requise') consent.checked = false;
       message(node, copy, true);
     }
@@ -12146,12 +12156,6 @@
   }
 
   function wire() {
-    var loopToggle = $('how-we-build') && $('how-we-build').querySelector('.build-loop-toggle');
-    if (loopToggle) loopToggle.addEventListener('click', function () {
-      var paused = loopToggle.getAttribute('aria-pressed') === 'true';
-      loopToggle.setAttribute('aria-pressed', paused ? 'false' : 'true');
-      loopToggle.textContent = paused ? 'Mettre l’animation en pause' : 'Reprendre l’animation';
-    });
     // Les sections écrites en dur reçoivent leur glyphe une fois pour toutes.
     paintStaticSectionIcons();
     document.querySelectorAll('[data-history="back"]').forEach(function (button) {
@@ -13008,19 +13012,11 @@
   // « cut rough » at the band's edges). The builder deals each copy its own
   // place, size, drift and tempo, and a negative delay starts every one
   // mid-flight so the scene is alive from the first frame. Decorative only:
-  // aria-hidden, pointer-blind. The mark is the #nota-logomark symbol's
-  // drawing, kept as a string because each die clones it six times — same
-  // the two Nota signal colours (styles.css --nota-blue-900 / --nota-blue-500).
+  // aria-hidden, pointer-blind. The mark is a <use> of the one #nota-logomark
+  // symbol (ADR 0048: drawn once, every copy a reference), kept as a string
+  // because each die clones it six times.
   var DRIFT_MARK_SVG =
-    '<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">' +
-    '<rect width="64" height="64" rx="12" fill="var(--nota-blue-900)"/>' +
-    '<g fill="#ffffff">' +
-    '<rect x="16" y="15" width="7.5" height="34" rx="2.5"/>' +
-    '<rect x="40.5" y="15" width="7.5" height="34" rx="2.5"/>' +
-    '<polygon points="16,15 24,15 48,49 40,49"/>' +
-    '</g>' +
-    '<circle cx="48" cy="16" r="8" fill="var(--nota-blue-500)" stroke="var(--nota-blue-900)" stroke-width="3"/>' +
-    '</svg>';
+    '<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg>';
   // A full die (owner: « they must look as a full dice ») — six logo faces
   // around one body; CSS folds them into a cube and tumbles the whole thing.
   var DRIFT_DIE_HTML = (function () {

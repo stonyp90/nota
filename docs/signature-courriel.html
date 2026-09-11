@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+<meta charset="utf-8">
+<meta name="color-scheme" content="light dark">
+<meta name="supported-color-schemes" content="light dark">
+<title>Signature courriel — Nota</title>
+<!--
+  Signature courriel personnelle — le lockup de production, exploration 01
+  « Monogramme lié » (ADR 0048, amendement du 2026-09-11), TYPESET : aucune
+  image, aucun SVG (les clients bloquent les images par défaut). Tuile bleu-
+  sarcelle profond + N blanc + point signal, puis O T A en capitales lourdes
+  et serrées, puis la pastille QUÉBEC pâle. Exactement la coiffe des courriels
+  transactionnels (apps/api/src/emails.js, logoHeader()).
+
+  Copier-coller : ouvrir ce fichier dans un navigateur, tout sélectionner (⌘A),
+  copier (⌘C), coller dans Mail › Réglages › Signatures (ou Outlook ›
+  Signatures). Puis remplacer le nom et le rôle. Tous les styles sont en ligne ;
+  le bloc <style> ne porte QUE la couche sombre — Apple Mail, iOS Mail et les
+  applications Outlook l'honorent, Gmail l'ignore et garde la version claire.
+
+  Chaque couleur est un jeton de apps/web/public/styles.css (commenté ci-dessous)
+  et apps/api/test/emails-brand.test.mjs épingle ce fichier à emails.js
+  PALETTE / DARK : une teinte inventée fait échouer la CI. La tuile
+  (--nota-blue-900) et la pastille (--nota-blue-50 / --nota-blue-800) sont des
+  constantes de la marque et ne changent pas en mode sombre ; le mot et le
+  texte prennent l'encre du thème.
+-->
+<style>
+  :root{color-scheme:light dark;supported-color-schemes:light dark;}
+  @media (prefers-color-scheme: dark){
+    .sig-ink{color:#f4f8fa !important;}   /* --ink (dark) */
+    .sig-muted{color:#afc2cf !important;} /* --ink-muted (dark) */
+    .sig-link{color:#78a9bf !important;}  /* --brand-bright (dark) = --nota-blue-400 */
+  }
+  [data-ogsc] .sig-ink{color:#f4f8fa !important;}
+  [data-ogsc] .sig-muted{color:#afc2cf !important;}
+  [data-ogsc] .sig-link{color:#78a9bf !important;}
+</style>
+</head>
+<body style="margin:0;padding:24px;">
+<!-- ↓ Le bloc à coller commence ici ↓ -->
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;">
+  <tr>
+    <td style="padding:0 0 12px;">
+      <table role="img" aria-label="Nota Québec" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;"><tr>
+        <!-- Variante C · design 02 · agencement 16 (ADR 0048) à une tuile de 40 px : mot .60 (33 px de police ≈ 24 px de capitales, centré), écart .12 (5 px), écart badge .16 (6 px), badge .16 (7 px) — mêmes constantes que LOCKUP dans apps/api/src/emails.js. -->
+        <!-- la tuile : --nota-blue-900, N blanc (--brand-ink), signal CARRÉ --nota-blue-500, rayon --radius-sm -->
+        <td width="40" height="40" align="center" valign="middle" aria-hidden="true" style="width:40px;height:40px;background-color:#264961;border-radius:6px;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;font-size:24px;line-height:40px;font-weight:800;color:#ffffff;text-align:center;">N<span style="display:inline-block;margin-left:-4px;vertical-align:top;font-size:11px;line-height:14px;color:#407598;">■</span></td>
+        <!-- le mot : O T A, même graisse que le N, tracking serré, encre --ink (bascule en sombre), centré sur la tuile ; le point final (« 27 ») en couleur du signal -->
+        <td valign="middle" class="sig-ink" style="padding-left:5px;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;font-size:33px;line-height:40px;font-weight:800;letter-spacing:-0.07em;color:#173b52;white-space:nowrap;">OTA<span style="color:#407598;">.</span></td>
+        <!-- la pastille : couleur du signal --nota-blue-500, texte blanc (--brand-ink), rayon --radius-xs -->
+        <td valign="middle" style="padding:0 0 0 6px;"><span style="display:inline-block;padding:4px 5px;background-color:#407598;border-radius:3px;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;font-size:7px;line-height:9px;font-weight:800;letter-spacing:0.1em;color:#ffffff;white-space:nowrap;">QUÉBEC</span></td>
+      </tr></table>
+    </td>
+  </tr>
+  <!-- --ink -->
+  <tr><td class="sig-ink" style="font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;font-size:15px;line-height:1.4;font-weight:700;color:#173b52;">Anthony Paquet</td></tr>
+  <!-- --ink-muted -->
+  <tr><td class="sig-muted" style="font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;font-size:13px;line-height:1.5;color:#526b78;">Fondateur · Founder</td></tr>
+  <!-- --ink-muted, lien --brand -->
+  <tr><td class="sig-muted" style="padding-top:6px;font-family:Inter, system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif;font-size:13px;line-height:1.5;color:#526b78;">Nota · <a href="https://brand.gonota.ca" class="sig-link" style="color:#386888;text-decoration:underline;">brand.gonota.ca</a></td></tr>
+</table>
+<!-- ↑ Le bloc à coller finit ici ↑ -->
+</body>
+</html>

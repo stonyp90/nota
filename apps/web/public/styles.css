@@ -37,23 +37,39 @@
      constantes appartenant à Google, Meta et LinkedIn : elles ne suivent pas
      le thème et ne se redéfinissent nulle part — mais elles restent des
      jetons nommés plutôt que des littéraux dispersés dans les règles. */
-  --marque-google-chip: #ffffff; /* le « G » doit rester sur fond blanc */
+  --marque-google-chip: var(--paper); /* le « G » doit rester sur fond blanc */
   --marque-facebook: #1877f2;
   --marque-linkedin: #0a66c2;
   --brand-bright: var(--nota-blue-500);
-  --brand-ink: #ffffff;
+  --brand-ink: var(--paper);
   --brand-hover: var(--nota-blue-800);
-  --on-accent: #ffffff; /* text/knob on saturated accents (tier pills, toggle) — white in every theme */
+  --on-accent: var(--paper); /* text/knob on saturated accents (tier pills, toggle) — white in every theme */
 
-  --bg: #eef5f7;
-  --surface: #fbfdfd;
-  --surface-inset: #e6f0f4;
-  --surface-hover: #dcecf2;
-  --ink: #173b52;
-  --ink-muted: #607986;
-  --subtitle-ink: #000000;
-  --border: #c5d8df;
-  --border-strong: #a9c3ce;
+  /* The LIGHT canvas, named once. Two blocks need these exact values: the
+     light theme itself, and the print block far below, which has to restate a
+     light canvas because both dark blocks outrank :root on paper. Naming them
+     here means the print block aliases instead of retyping — a light value
+     exists in exactly one place (ADR 0048). */
+  --canvas-bg: #eef5f7;
+  --canvas-surface: #fbfdfd;
+  --canvas-surface-inset: #e6f0f4;
+  --canvas-surface-hover: #dcecf2;
+  --canvas-ink: #173b52;
+  --canvas-ink-muted: #526b78; /* was #607986: 4.49:1 on the surface, 3.79 on the canvas — under AA for the 12–15px muted text it colours; #526b78 clears 4.6 everywhere (2026-09-11) */
+  --canvas-subtitle-ink: #000000;
+  --canvas-border: #c5d8df;
+  --canvas-border-strong: #a9c3ce;
+  --paper: #ffffff; /* true white — printed paper, and the ink on a brand fill */
+
+  --bg: var(--canvas-bg);
+  --surface: var(--canvas-surface);
+  --surface-inset: var(--canvas-surface-inset);
+  --surface-hover: var(--canvas-surface-hover);
+  --ink: var(--canvas-ink);
+  --ink-muted: var(--canvas-ink-muted);
+  --subtitle-ink: var(--canvas-subtitle-ink);
+  --border: var(--canvas-border);
+  --border-strong: var(--canvas-border-strong);
   --ring: var(--nota-blue-600);
 
   /* The arrival canvas is intentionally quieter than the product theme. It
@@ -65,7 +81,7 @@
   --intro-surface-inset: #e6f0f4;
   --intro-surface-hover: #dcecf2;
   --intro-ink: #173b52;
-  --intro-ink-muted: #607986;
+  --intro-ink-muted: #526b78;
   --intro-border: #c5d8df;
   --intro-border-strong: #a9c3ce;
   --intro-tint: rgb(64 117 152 / .06);
@@ -162,6 +178,7 @@
   --logo-shadow: 0 1px 2px rgb(16 27 38 / 0.15);       /* header brand mark */
   --focus-ring: rgb(var(--nota-blue-500-rgb) / 0.3);      /* brand focus glow (3px) */
   --backdrop: rgb(16 27 38 / 0.55);                    /* dialog scrim */
+  --backdrop-soft: rgb(16 27 38 / 0.16);               /* the tour's light scrim — it guides, it does not seal the page */
 
   --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
@@ -174,13 +191,20 @@
      One register for the whole app. No heading rule sets its own size, face
      or weight — it reads a step of this scale (typographie.test.mjs enforces
      it), so the three doors, the dialogs and the beta print one voice. */
-  --type-h1: clamp(42px, 4.25vw, 68px); --type-h1-lh: 1.02; --type-h1-ls: -.055em;
-  --type-h1-compact: clamp(42px, 9vw, 58px); /* the stacked (narrow) hero */
-  --type-h2: clamp(24px, 2.35vw, 34px); --type-h2-lh: 1.15; --type-h2-ls: -.045em;
+  --type-h1: clamp(30px, 2.6vw, 44px); --type-h1-lh: 1.02; --type-h1-ls: -.055em;
+  --type-h1-compact: clamp(28px, 8vw, 38px); /* the stacked (narrow) hero */
+  --type-h2: clamp(20px, 1.6vw, 26px); --type-h2-lh: 1.15; --type-h2-ls: -.045em;
   --type-h3: 17px; --type-h3-lh: 1.3; --type-h3-ls: -.02em;
   --type-h4: 15px; --type-h4-lh: 1.3; --type-h4-ls: -.01em; /* dense card kickers (.nc-h, .nc-live-h, .nc-conformite-h) — ADR 0050, addendum 2026-09-11 */
   --type-lead: 17px; --type-lead-lh: 1.7;
   --type-eyebrow: 12px; --type-eyebrow-ls: .1em;
+  /* Body register (owner, 2026-09-11: « every font size the same across ALL
+     applications »): the running-text size and leading, named so the brand
+     guide, the pitch deck and the business plan read the SAME step instead of
+     15 / 16.5 / browser-default. Mirrored verbatim in tokens.css,
+     signature.css, brand.html, pitch-deck.html, business-plan.html
+     (typographie.test.mjs compares every copy). */
+  --type-body: 16px; --type-body-lh: 1.5;
 
   --maxw: 1600px; /* maximized width — fills wide screens, side padding via .wrap */
   --gap: 20px;
@@ -219,12 +243,33 @@
      These are brand IDENTITY constants, NOT theme tokens: they must render
      identically in every theme and must never be restyled. Defined here only so
      no literal colour lives in markup — reference via var() in the SVG fills. */
+  /* --- Surfaces that stay dark in EVERY theme ------------------------------
+     The signing room (ADR 0047) and the video frames are a dark room by
+     design: they do not flip with the theme, so they cannot read --ink / --bg
+     / --danger-solid, which do. The roles they need are named ONCE here, with
+     the dark theme's own values, rather than retyped as literals in the rules
+     below (ADR 0048: a one-off hex in a component rule is a defect). */
+  --midnight-ink: #f4f8fa;                    /* = the dark theme's --ink */
+  --midnight-matte: #000000;                  /* letterbox behind a video frame */
+  --midnight-veil-soft: rgb(255 255 255 / 0.04);   /* block fill on the rail */
+  --midnight-veil: rgb(255 255 255 / 0.06);        /* quiet button fill */
+  --midnight-veil-strong: rgb(255 255 255 / 0.12); /* its hover */
+  --sheen: rgb(255 255 255 / 0.34);           /* inset top highlight on a raised panel */
+  --danger-solid-rgb: 180 35 24;              /* channels of --danger-solid, for alpha washes */
+  --danger-wash: rgb(var(--danger-solid-rgb) / 0.18); /* alert ground on a midnight surface */
+  --danger-pale: #ffe4e1;                     /* the ink that reads on --danger-wash */
+  --on-warn: #1b1300;                         /* ink on an --accent-warm fill */
+
   --logo-google-blue: #4285f4;
   --logo-google-green: #34a853;
   --logo-google-yellow: #fbbc05;
   --logo-google-red: #ea4335;
   --logo-outlook-blue: #0f6cbd;
-  --logo-on-brand: #ffffff;
+  --logo-microsoft-red: #f25022;
+  --logo-microsoft-green: #7fba00;
+  --logo-microsoft-blue: #00a4ef;
+  --logo-microsoft-yellow: #ffb900;
+  --logo-on-brand: var(--paper);
 }
 
 /* Dark theme — system preference.
@@ -361,7 +406,8 @@ body {
      margins flat black (owner: « clash with black margin »). */
   background: linear-gradient(180deg, var(--brand-tint), transparent 460px) no-repeat, var(--bg);
   color: var(--ink);
-  line-height: 1.5;
+  font-size: var(--type-body);
+  line-height: var(--type-body-lh);
   -webkit-font-smoothing: antialiased;
   transition: background-color .25s ease, color .25s ease;
 }
@@ -410,23 +456,40 @@ a:hover { text-decoration: underline; }
   height: var(--header-h);
   position: relative;
 }
+/* The lockup's geometry (ADR 0048, 2026-09-11: design 02 « Signal repris par
+   le badge », layout 16 « Centré à 60 % »): FIVE custom properties, declared
+   ONCE on every lockup root. A surface sets --lockup-tile alone; the word's
+   cap height, the two gaps and the badge follow as ratios of the tile, and the
+   word is centred on the tile. The wordmark symbol's viewBox is its cap band,
+   so a word box --lockup-word tall renders caps exactly that tall.
+   signature.css and admin.css declare the same five with the same ratios —
+   ux-nav.test.mjs (P2-19) keeps the three in lockstep. */
+.brand, .footer-brand, .ig-wordmark {
+  --lockup-tile: 30px;
+  --lockup-word: calc(var(--lockup-tile) * .60);
+  --lockup-gap: calc(var(--lockup-tile) * .12);
+  --lockup-badge-gap: calc(var(--lockup-tile) * .16);
+  --lockup-badge-size: max(9px, calc(var(--lockup-tile) * .16)); /* .16 of the tile, never under 9px: a 30px header tile gave 4.8px caps */
+}
 .brand {
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: var(--lockup-badge-gap);
   font-weight: 800; font-size: 18px; letter-spacing: -0.03em; color: var(--ink);
 }
 .brand:hover { text-decoration: none; }
 .brand-lockup {
-  display: inline-flex; align-items: center; gap: 0; flex: none;
+  display: inline-flex; align-items: center; gap: var(--lockup-gap); flex: none;
   color: var(--brand); line-height: 1;
 }
-.brand-mark-svg { display: block; width: 30px; height: 30px; flex: none; transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
-.brand-word { display: inline-flex; align-items: center; width: 64px; height: 30px; margin-left: -1px; color: var(--brand); line-height: 1; }
+.brand-mark-svg { display: block; width: var(--lockup-tile); height: var(--lockup-tile); flex: none; transition: transform .2s cubic-bezier(.2, .8, .2, 1); }
+.brand-word { display: inline-flex; align-items: center; width: calc(var(--lockup-word) * 91.8 / 28); height: var(--lockup-word); color: var(--brand); line-height: 1; }
 .brand-word-svg { display: block; width: 100%; height: 100%; overflow: visible; }
-.brand-mark { width: 30px; height: 30px; display: grid; place-items: center; }
-.brand-mark img { display: block; width: 30px; height: 30px; filter: drop-shadow(var(--logo-shadow)); }
+.brand-mark { width: var(--lockup-tile); height: var(--lockup-tile); display: grid; place-items: center; }
+.brand-mark img { display: block; width: 100%; height: 100%; filter: drop-shadow(var(--logo-shadow)); }
+/* The badge takes the SIGNAL colour (design 02): --nota-blue-500 ground, white
+   text in both themes (4.6:1), sized from the tile like the rest of the lockup. */
 .brand-sub {
-  color: var(--brand); font-weight: 700; font-size: 10px; text-transform: uppercase;
-  letter-spacing: .08em; padding: 2px 6px; background: var(--surface-inset); border-radius: var(--radius-sm);
+  color: var(--on-accent); font-weight: 800; font-size: var(--lockup-badge-size); text-transform: uppercase;
+  letter-spacing: .1em; padding: .55em .7em; background: var(--nota-blue-500); border-radius: var(--radius-xs);
 }
 .result-count { font-size: 12px; font-weight: 600; color: var(--ink-muted); white-space: nowrap; }
 /* Next-availability cue in the calendar toolbar — a live blue dot + soonest
@@ -2673,7 +2736,7 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
 .site-footer a:hover { color: var(--brand); text-decoration: none; }
 .footer-grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr); gap: 24px 32px; align-items: start; }
 .footer-id { min-width: 0; }
-.site-footer .footer-brand { color: var(--ink); font-weight: 700; }
+.site-footer .footer-brand { display: inline-flex; align-items: center; gap: var(--lockup-badge-gap); color: var(--ink); font-weight: 700; }
 .footer-tag { margin: 8px 0 0; max-width: 40ch; font-size: 12.5px; line-height: 1.55; }
 .footer-col { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .footer-col-h { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em; color: var(--ink); margin-bottom: 6px; }
@@ -2719,24 +2782,7 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
 
 /* The SDLC story: a compact, self-contained visual that communicates the
    discipline without pretending that models or compliance are magic. */
-.build-loop { margin-top: clamp(28px, 3vw, 40px); padding: clamp(24px, 3vw, 40px); border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--surface), var(--surface-inset)); display: grid; grid-template-columns: minmax(260px, .8fr) minmax(420px, 1.2fr); gap: clamp(30px, 6vw, 90px); align-items: center; overflow: hidden; }
-.build-loop h2 { margin-top: 12px; max-width: 15ch; }
-.build-loop-copy > p { margin-top: 18px; color: var(--ink-muted); max-width: 43ch; }
-.build-loop-toggle { margin-top: 24px; }
-.build-loop-graphic { min-height: 470px; position: relative; display: grid; place-items: center; }
-.build-loop-ring { position: absolute; width: min(440px, 85%); aspect-ratio: 1; border: 1px dashed var(--border-strong); border-radius: 50%; animation: build-loop-spin 26s linear infinite; }
-.build-loop-ring::after { content: '→'; position: absolute; top: -13px; left: 50%; color: var(--brand); font-size: 22px; background: var(--surface); padding: 0 8px; }
-.build-loop-nodes { position: absolute; inset: 0; margin: 0; padding: 0; list-style: none; }
-.build-loop-nodes li { position: absolute; width: 132px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: 0 8px 24px #00000012; font-size: 11px; animation: build-loop-pulse 4.5s ease-in-out infinite; }
-.build-loop-nodes li:nth-child(1){top:3%;left:calc(50% - 66px)} .build-loop-nodes li:nth-child(2){top:14%;right:2%} .build-loop-nodes li:nth-child(3){top:39%;right:0} .build-loop-nodes li:nth-child(4){bottom:11%;right:10%} .build-loop-nodes li:nth-child(5){bottom:0;left:calc(50% - 66px)} .build-loop-nodes li:nth-child(6){bottom:11%;left:10%} .build-loop-nodes li:nth-child(7){top:39%;left:0} .build-loop-nodes li:nth-child(8){top:14%;left:2%} .build-loop-nodes li:nth-child(9){top:48%;left:calc(50% - 66px)}
-.build-loop-nodes li:nth-child(2){animation-delay:.5s}.build-loop-nodes li:nth-child(3){animation-delay:1s}.build-loop-nodes li:nth-child(4){animation-delay:1.5s}.build-loop-nodes li:nth-child(5){animation-delay:2s}.build-loop-nodes li:nth-child(6){animation-delay:2.5s}.build-loop-nodes li:nth-child(7){animation-delay:3s}.build-loop-nodes li:nth-child(8){animation-delay:3.5s}.build-loop-nodes li:nth-child(9){animation-delay:4s}
-.build-loop-nodes span { display:block; color:var(--brand); font-variant-numeric:tabular-nums; } .build-loop-nodes strong { display:block; margin-top:2px; font-size:13px; } .build-loop-nodes small { display:block; color:var(--ink-muted); line-height:1.35; margin-top:3px; }
-.build-loop-core { position: relative; z-index: 1; width: 158px; aspect-ratio: 1; border-radius: 50%; display:grid; place-content:center; text-align:center; background:var(--brand); color:var(--brand-ink); box-shadow:0 0 0 12px color-mix(in srgb, var(--brand) 12%, transparent); } .build-loop-core span { font:800 25px var(--font-display); } .build-loop-core small { margin-top:8px; line-height:1.35; }
-.build-loop-note { grid-column: 1/-1; color:var(--ink-muted); font-size:12px; border-top:1px solid var(--border); padding-top:18px; }
-@keyframes build-loop-spin { to { transform:rotate(360deg); } } @keyframes build-loop-pulse { 50% { transform:translateY(-4px); border-color:var(--brand); } }
-.build-loop:has(.build-loop-toggle[aria-pressed="true"]) .build-loop-ring, .build-loop:has(.build-loop-toggle[aria-pressed="true"]) .build-loop-nodes li { animation-play-state:paused; }
-@media (max-width:760px){.build-loop{grid-template-columns:1fr;padding:25px 20px}.build-loop-graphic{min-height:450px;transform:scale(.9);margin:-20px -24px}.build-loop-note{grid-column:auto}}
-@media (prefers-reduced-motion:reduce){.build-loop-ring,.build-loop-nodes li,.onb-modal[open],#onb-view-role.is-entering,#onb-view-steps.is-entering,#onb-view-steps.is-entering .onb-step{animation:none!important}#onb-view-steps.is-entering .onb-step{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.onb-modal[open],#onb-view-role.is-entering,#onb-view-steps.is-entering,#onb-view-steps.is-entering .onb-step{animation:none!important}#onb-view-steps.is-entering .onb-step{opacity:1;transform:none}}
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* --- Dialog -------------------------------------------------------------- */
@@ -5078,11 +5124,6 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   -webkit-backdrop-filter: blur(18px) saturate(1.08);
   backdrop-filter: blur(18px) saturate(1.08);
 }
-.ig-chooser > .ig-wordmark .ig-word {
-  width: 2.2em;
-  margin-left: -.02em;
-  font-size: .58em;
-}
 .mark-drift--intro { opacity: .86; }
 .mark-drift--intro i { opacity: calc(var(--o, .025) * 1.18); }
 
@@ -5366,7 +5407,7 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   overflow: hidden;
   border-radius: var(--radius);
   background: linear-gradient(145deg, var(--surface-inset), color-mix(in srgb, var(--brand) 7%, var(--surface-inset)));
-  box-shadow: inset 0 1px 0 rgb(255 255 255 / .34);
+  box-shadow: inset 0 1px 0 var(--sheen);
 }
 
 #pane-beta .beta-preview-person::before {
@@ -5704,7 +5745,9 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   .site-footer a, .brand { min-height: 44px; display: inline-flex; align-items: center; }
   .mini-btn { width: 44px; height: 44px; }
   .cal-nav .btn { min-width: 44px; }
-  .icon-btn { width: 44px; height: 44px; }
+  /* flex:none — in the drawer head the lockup grew and squeezed the close
+     button to 32px wide (android lens, 2026-09-11); a thumb target does not shrink. */
+  .icon-btn { width: 44px; height: 44px; flex: none; }
 }
 @media (max-width: 420px) {
   .nav-tabs { gap: 0; }
@@ -5884,15 +5927,14 @@ html.ig-open, body.ig-open { overflow: hidden; }
    fixed, full-viewport layer) — a plain centred measure is enough. */
 .ig-inner { flex: none; position: relative; z-index: 1; width: min(1040px, 96vw); display: flex; flex-direction: column; align-items: center; }
 
-/* The introduction uses the mark alone, so the first visual is crisp at any
-   language and viewport size. */
-.ig-wordmark { display: inline-flex; align-items: center; justify-content: center; gap: .02em; color: var(--brand); font-family: var(--font-display); font-size: 32px; font-weight: 800; letter-spacing: -.02em; line-height: 1; }
-.ig-wordmark svg { width: 1em; height: 1em; flex: none; }
-.ig-wordmark .ig-mark { display: block; width: .9em; height: .9em; flex: none; }
-.ig-wordmark .ig-word { display: inline-flex; align-items: center; width: 2.18em; height: 1.08em; margin-left: -.055em; color: var(--brand); font-size: .50em; line-height: 1; }
+/* The introduction's lockup is the same parametric drawing as the header's,
+   sized in em so one font-size scales the whole thing: the tile is .9em and
+   the word, the gap and the centring follow from the five lockup properties. */
+.ig-wordmark { --lockup-tile: .9em; display: inline-flex; align-items: center; justify-content: center; gap: var(--lockup-gap); color: var(--brand); font-size: 32px; line-height: 1; }
+.ig-wordmark .ig-mark { display: block; width: var(--lockup-tile); height: var(--lockup-tile); flex: none; }
+.ig-wordmark .ig-word { display: inline-flex; align-items: center; width: calc(var(--lockup-word) * 91.8 / 28); height: var(--lockup-word); color: var(--brand); line-height: 1; }
 .ig-wordmark .brand-word-svg { width: 100%; height: 100%; }
 .ig-signature { position: relative; font-size: clamp(64px, 9vw, 112px); filter: drop-shadow(0 14px 24px rgb(var(--nota-blue-700-rgb) / .2)); }
-.ig-signature .ig-word { width: 2.18em; height: 1.08em; font-size: .50em; margin-top: .05em; }
 .ig-signature::before {
   content: ""; position: absolute; z-index: -1; width: 1.34em; height: 1.34em;
   border: 1px solid var(--brand-tint); border-radius: 50%;
@@ -6327,10 +6369,10 @@ html.ig-open, body.ig-open { overflow: hidden; }
 @media print {
   :root, :root[data-theme='dark'], :root:not([data-theme='light']) {
     color-scheme: light;
-    --brand: var(--nota-blue-700); --brand-bright: var(--nota-blue-500); --brand-ink: #ffffff; --brand-hover: var(--nota-blue-800);
-    --bg: #ffffff; --surface: #ffffff; --surface-inset: var(--nota-blue-50); --surface-hover: #dcecf2;
-    --ink: var(--nota-blue-950); --ink-muted: #607986; --border: #c5d8df; --border-strong: #a9c3ce; --ring: var(--nota-blue-600);
-    --subtitle-ink: #000000;
+    --brand: var(--nota-blue-700); --brand-bright: var(--nota-blue-500); --brand-ink: var(--paper); --brand-hover: var(--nota-blue-800);
+    --bg: var(--paper); --surface: var(--paper); --surface-inset: var(--nota-blue-50); --surface-hover: var(--canvas-surface-hover);
+    --ink: var(--nota-blue-950); --ink-muted: var(--canvas-ink-muted); --border: var(--canvas-border); --border-strong: var(--canvas-border-strong); --ring: var(--nota-blue-600);
+    --subtitle-ink: var(--canvas-subtitle-ink);
     --shadow-sm: none; --shadow: none; --shadow-lg: none; --shadow-brand: none;
   }
   .site-header, .site-footer nav, .guide-fab, .sup-wrap, .mark-drift, .mnav, .mnav-scrim,
@@ -6366,7 +6408,6 @@ html.ig-open, body.ig-open { overflow: hidden; }
   background: var(--surface);
   color: var(--ink);
 }
-#email-preferences-dialog::backdrop { background: rgb(0 0 0 / 55%); }
 #email-preferences-dialog .check-row { display: flex; align-items: center; gap: 12px; min-height: 44px; }
 #email-preferences-dialog input { width: 18px; height: 18px; accent-color: var(--brand); }
 #email-preferences-dialog button { margin-block: 12px; }
@@ -6402,10 +6443,10 @@ html.ig-open, body.ig-open { overflow: hidden; }
   width: min(460px, calc(100vw - 32px)); max-height: min(50dvh, 420px);
   box-sizing: border-box; overflow: auto; padding: 24px;
   color: var(--ink); background: var(--surface); border: 1px solid var(--brand);
-  border-radius: var(--radius); box-shadow: 0 12px 48px #0003;
+  border-radius: var(--radius); box-shadow: var(--shadow-lg);
 }
 .account-tour[open] { animation: account-tour-in .2s ease-out; }
-.account-tour::backdrop { background: rgb(0 0 0 / .16); }
+.account-tour::backdrop { background: var(--backdrop-soft); }
 .account-tour h2 { margin: 10px 0; }
 .account-tour p { margin: 0 0 20px; line-height: 1.6; }
 .account-tour-progress { color: var(--brand); font-size: 12px; font-weight: 700; }
@@ -6723,26 +6764,26 @@ html.ig-open, body.ig-open { overflow: hidden; }
    avant tout le reste. Le bandeau bêta est au-dessus de tout et ne se cache
    jamais.
    ========================================================================== */
-.salle { position: fixed; inset: 0; z-index: 11000; display: flex; flex-direction: column; background: var(--nota-blue-950); color: #f4f8fa; }
+.salle { position: fixed; inset: 0; z-index: 11000; display: flex; flex-direction: column; background: var(--nota-blue-950); color: var(--midnight-ink); }
 .salle[hidden] { display: none; }
 /* Le fond de la page ne défile plus derrière la salle. */
 body.salle-ouverte { overflow: hidden; }
 
 /* Le bandeau. Aucune règle ne le masque, aucun rendu ne le touche. */
-.salle-beta { margin: 0; padding: 10px 16px; text-align: center; font-size: 13px; line-height: 1.45; background: var(--warn); color: #1b1300; }
+.salle-beta { margin: 0; padding: 10px 16px; text-align: center; font-size: 13px; line-height: 1.45; background: var(--warn); color: var(--on-warn); }
 .salle-beta strong { font-weight: 700; }
 
 .salle-scene { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 380px; min-height: 0; }
 
-.salle-videos { position: relative; min-height: 0; background: #000; }
-.salle-video { display: block; width: 100%; height: 100%; object-fit: cover; background: #000; }
+.salle-videos { position: relative; min-height: 0; background: var(--midnight-matte); }
+.salle-video { display: block; width: 100%; height: 100%; object-fit: cover; background: var(--midnight-matte); }
 .salle-video-distant { width: 100%; height: 100%; }
 /* La vignette locale : assez grande pour se vérifier, assez petite pour ne pas
    voler l'attention de la personne d'en face. */
 .salle-video-local { position: absolute; right: 16px; bottom: 16px; width: 22%; min-width: 140px; max-width: 260px; height: auto; aspect-ratio: 4 / 3; border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: var(--shadow-lg); }
 
 .salle-rail { display: flex; flex-direction: column; gap: 14px; padding: 18px; overflow-y: auto; background: var(--nota-blue-900); border-left: 1px solid var(--nota-blue-800); }
-.salle-bloc { padding: 14px; background: rgb(255 255 255 / 0.04); border: 1px solid var(--nota-blue-800); border-radius: var(--radius); }
+.salle-bloc { padding: 14px; background: var(--midnight-veil-soft); border: 1px solid var(--nota-blue-800); border-radius: var(--radius); }
 .salle-etape-nom { margin: 0 0 8px; font-size: var(--type-h3); line-height: var(--type-h3-lh); letter-spacing: var(--type-h3-ls); }
 .salle-etape-conduite { margin: 0 0 8px; font-size: 15px; line-height: 1.5; }
 .salle-etape-constat { margin: 0; font-size: 13px; line-height: 1.45; color: var(--nota-blue-300); }
@@ -6768,17 +6809,17 @@ body.salle-ouverte { overflow: hidden; }
 
 .salle-statut { display: flex; flex-direction: column; gap: 8px; }
 .salle-statut-ligne { margin: 0; font-size: 13px; line-height: 1.45; color: var(--nota-blue-200); }
-.salle-statut-ligne.is-alerte { padding: 10px; background: rgb(180 35 24 / 0.18); border: 1px solid var(--danger); border-radius: var(--radius-sm); color: #ffe4e1; }
+.salle-statut-ligne.is-alerte { padding: 10px; background: var(--danger-wash); border: 1px solid var(--danger); border-radius: var(--radius-sm); color: var(--danger-pale); }
 .salle-statut-ligne.is-enregistre { color: var(--warn); font-weight: 600; }
 .salle-empreinte { display: block; overflow-wrap: anywhere; font-family: ui-monospace, "SFMono-Regular", "Menlo", "Consolas", monospace; font-size: 11px; line-height: 1.5; color: var(--nota-blue-300); }
 
-.salle-refus { display: flex; flex-direction: column; gap: 6px; padding: 10px; background: rgb(180 35 24 / 0.18); border: 1px solid var(--danger); border-radius: var(--radius-sm); }
+.salle-refus { display: flex; flex-direction: column; gap: 6px; padding: 10px; background: var(--danger-wash); border: 1px solid var(--danger); border-radius: var(--radius-sm); }
 .salle-refus[hidden] { display: none; }
-.salle-refus-ligne { margin: 0; font-size: 13px; line-height: 1.45; color: #ffe4e1; }
+.salle-refus-ligne { margin: 0; font-size: 13px; line-height: 1.45; color: var(--danger-pale); }
 
 .salle-actions { display: flex; flex-direction: column; gap: 8px; }
-.salle-btn { font: inherit; font-size: 14px; font-weight: 600; padding: 11px 14px; cursor: pointer; text-align: left; color: #f4f8fa; background: rgb(255 255 255 / 0.06); border: 1px solid var(--nota-blue-700); border-radius: var(--radius-sm); }
-.salle-btn:hover:not(:disabled) { background: rgb(255 255 255 / 0.12); }
+.salle-btn { font: inherit; font-size: 14px; font-weight: 600; padding: 11px 14px; cursor: pointer; text-align: left; color: var(--midnight-ink); background: var(--midnight-veil); border: 1px solid var(--nota-blue-700); border-radius: var(--radius-sm); }
+.salle-btn:hover:not(:disabled) { background: var(--midnight-veil-strong); }
 .salle-btn.is-primaire { background: var(--nota-blue-600); border-color: var(--nota-blue-500); }
 .salle-btn.is-primaire:hover:not(:disabled) { background: var(--nota-blue-500); }
 .salle-btn.is-discret { background: transparent; font-weight: 500; }
@@ -7447,7 +7488,14 @@ body.salle-ouverte { overflow: hidden; }
 /* Final visual pass: these rules intentionally sit after the responsive intro
    rules so the calm chooser treatment wins at every viewport size. */
 #pane-beta {
-  --beta-heading: #101820;
+  --beta-heading: var(--nota-blue-950); /* the wordmark ink (ADR 0048), not a stray near-black */
+}
+
+/* Both dark paths, like every other token pair in this file: the explicit
+   toggle AND the system preference. With only the toggle branch, a visitor on
+   system dark read a near-black heading on the near-black pane. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) #pane-beta { --beta-heading: var(--ink); }
 }
 
 html[data-theme='dark'] #pane-beta {
@@ -7525,11 +7573,6 @@ html[data-theme='dark'] #pane-beta {
   box-shadow: var(--shadow), 0 22px 56px -30px rgb(var(--nota-blue-700-rgb) / .36);
   -webkit-backdrop-filter: blur(18px) saturate(1.08);
   backdrop-filter: blur(18px) saturate(1.08);
-}
-.ig-chooser > .ig-wordmark .ig-word {
-  width: 2.2em;
-  margin-left: -.02em;
-  font-size: .58em;
 }
 .mark-drift--intro { opacity: .86; }
 .mark-drift--intro i { opacity: calc(var(--o, .025) * 1.18); }

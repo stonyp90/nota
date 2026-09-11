@@ -359,3 +359,37 @@ test('Dynamo writes condition on current ownership, state, version and unreviewe
   assert.match(calls[1].ConditionExpression, /financingAnalysis.id = :expected/);
   assert.match(calls[2].ConditionExpression, /attribute_not_exists\(financingAnalysis.review\)/);
 });
+
+// ADR 0049: the refusal must name the notary's real situation. An enrolled
+// notary at the cap is told the quota is spent, never asked to enrol again.
+test('entitlement refusals carry the honest code before any provider call', async () => {
+  const { createNotaryAIAccess } = require('../src/ai-access');
+  const env = { NOTA_AI_MONETIZATION_ENABLED: 'true' };
+  const repo = createMemoryRepo([{ ...bid }]);
+  await repo.putNotary({ id: 'owner', email: 'owner@example.ca', status: 'active' });
+  const a = setup({ env, repo });
+  const access = createNotaryAIAccess({ repo, env, nowMs: () => now });
+
+  const fresh = await a.request();
+  assert.equal(fresh.statusCode, 402);
+  assert.equal(fresh.data.errors[0].code, 'ai_access_required');
+  assert.equal(fresh.data.errors[0].message, 'Activez la bêta IA ou choisissez une formule pour continuer.');
+
+  await access.enroll('owner');
+  for (let i = 0; i < D.NOTARY_AI_BETA_TRIAL_USES; i += 1) assert.equal((await access.consume('owner')).ok, true);
+  assert.equal((await access.get('owner')).reason, 'quota_epuise');
+  const spent = await a.request();
+  assert.equal(spent.statusCode, 402);
+  assert.equal(spent.data.errors[0].code, 'quota_epuise');
+  assert.equal(spent.data.errors[0].message, 'Votre quota de préparation IA est épuisé. Choisissez une formule ou achetez des unités.');
+
+  await access.updateSubscription('owner', { status: 'past_due', planId: 'essentiel', used: 0 });
+  assert.equal((await access.get('owner')).reason, 'paiement_requis');
+  const unpaid = await a.request();
+  assert.equal(unpaid.statusCode, 402);
+  assert.equal(unpaid.data.errors[0].code, 'paiement_requis');
+  assert.equal(unpaid.data.errors[0].message, 'Votre abonnement IA nécessite une mise à jour du paiement.');
+
+  assert.equal(a.calls.length, 0, 'no refusal may reach the model');
+  assert.equal((await access.get('owner')).beta.used, D.NOTARY_AI_BETA_TRIAL_USES, 'a refusal consumes nothing');
+});

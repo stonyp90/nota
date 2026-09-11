@@ -23,15 +23,15 @@ const extraction = { fields: [
   { fieldId: 'beneficiaries', value: 'Alice Roy', evidence: [{ documentId: 'will', page: 1, quote: 'Bénéficiaires : Alice Roy' }] },
 ] };
 
-function setup() {
-  const repo = createMemoryRepo([{ ...bid }]);
+function setup({ env = {}, repo: injectedRepo } = {}) {
+  const repo = injectedRepo || createMemoryRepo([{ ...bid }]);
   repo.markActCompleted(bid.id, { bidId: bid.id, notaryId: 'owner', paye: true, netCents: 1,
     transferId: 'test-paid', completedAt: '2026-09-09T14:00:00.000Z' });
   const calls = [];
   const app = createApp(repo, {
     now: () => '2026-09-09',
     nowMs: () => now,
-    env: { NOTA_ACT_AI_ENABLED: 'true' },
+    env: { NOTA_ACT_AI_ENABLED: 'true', ...env },
     actAIPort: { model: 'test-act-model', async extract(input) { calls.push(input); return { extraction }; } },
   });
   const request = async (path, body = {}, owner = 'owner', method = 'POST', scope = SCOPES.SESSION) => {
@@ -110,4 +110,38 @@ test('act AI fails closed on malformed shared counters before provider work', as
   assert.equal(result.statusCode, 503);
   assert.deepEqual(result.data, { errors: [{ code: 'act_ai_unavailable' }] });
   assert.equal(a.calls.length, 0);
+});
+
+// ADR 0049: same honest refusal as the financing twin. An enrolled notary at
+// the cap hears « quota épuisé », never an invitation to enrol again.
+test('act AI entitlement refusals carry the honest code before any provider call', async () => {
+  const { createNotaryAIAccess } = require('../src/ai-access');
+  const env = { NOTA_AI_MONETIZATION_ENABLED: 'true' };
+  const repo = createMemoryRepo([{ ...bid }]);
+  await repo.putNotary({ id: 'owner', email: 'owner@example.ca', status: 'active' });
+  const a = setup({ env, repo });
+  const access = createNotaryAIAccess({ repo, env, nowMs: () => now });
+
+  const fresh = await a.request('/notary/acts/preparation');
+  assert.equal(fresh.statusCode, 402);
+  assert.equal(fresh.data.errors[0].code, 'ai_access_required');
+  assert.equal(fresh.data.errors[0].message, 'Activez la bêta IA ou choisissez une formule pour continuer.');
+
+  await access.enroll('owner');
+  for (let i = 0; i < D.NOTARY_AI_BETA_TRIAL_USES; i += 1) assert.equal((await access.consume('owner')).ok, true);
+  assert.equal((await access.get('owner')).reason, 'quota_epuise');
+  const spent = await a.request('/notary/acts/preparation');
+  assert.equal(spent.statusCode, 402);
+  assert.equal(spent.data.errors[0].code, 'quota_epuise');
+  assert.equal(spent.data.errors[0].message, 'Votre quota de préparation IA est épuisé. Choisissez une formule ou achetez des unités.');
+
+  await access.updateSubscription('owner', { status: 'past_due', planId: 'essentiel', used: 0 });
+  assert.equal((await access.get('owner')).reason, 'paiement_requis');
+  const unpaid = await a.request('/notary/acts/preparation');
+  assert.equal(unpaid.statusCode, 402);
+  assert.equal(unpaid.data.errors[0].code, 'paiement_requis');
+  assert.equal(unpaid.data.errors[0].message, 'Votre abonnement IA nécessite une mise à jour du paiement.');
+
+  assert.equal(a.calls.length, 0, 'no refusal may reach the model');
+  assert.equal((await access.get('owner')).beta.used, D.NOTARY_AI_BETA_TRIAL_USES, 'a refusal consumes nothing');
 });

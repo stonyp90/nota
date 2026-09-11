@@ -298,6 +298,40 @@ function createAdmin({
     }
   }
 
+  // --- UN ACCÈS REFUSÉ LAISSE UNE TRACE (ADR 0036, amendement 2026-09-11) ---
+  // Trouvé par l'audit BDD du 11 septembre : une opératrice qui ne détient que
+  // `analytics:read` et frappe au dossier d'une personne, au registre des
+  // notaires et au CRM est refusée trois fois — et le journal n'en dit RIEN. On
+  // écrivait sur chaque lecture sensible RÉUSSIE (`dossier_usager_consulte`) et
+  // sur aucun 403 : quelqu'un qui sonde les portes des dossiers était invisible
+  // au registre même qui existe pour rendre un accès reprochable.
+  //
+  // Un seul entonnoir, que TOUTE porte de ce fichier traverse (un test statique
+  // refuse tout `status: 403` écrit ailleurs). La trace est signée comme les
+  // autres gestes de la console — adminId, courriel, IP : des employés nommés,
+  // règle antérieure à l'ADR et inchangée — et nomme la PORTE (le use-case) et
+  // la PERMISSION qui manquait. Une porte à deux clés (support:read ET pii:read)
+  // les nomme toutes dans `manquantes` ; une porte à clé « l'une ou l'autre »
+  // (settings:write OU billing:write) nomme la principale et l'`equivalentes`.
+  //
+  // Ce que la trace ne porte JAMAIS : la ressource demandée, ni l'adresse du
+  // sujet. Le sujet d'un dossier Loi 25 est nommé par la même EMPREINTE que
+  // `dossier_usager_consulte` — le journal s'ouvre avec `audit:read` sans
+  // `pii:read`, il ne doit pas devenir un second annuaire. Le refus, lui, part
+  // exactement comme avant : même statut, même code, même message. Et comme
+  // partout ici, un puits d'audit cassé ne change rien à la réponse : il crie.
+  async function refuserAcces(p, { porte, permission, equivalentes, manquantes, sujet, ip, message }) {
+    const meta = { porte, permission };
+    if (equivalentes && equivalentes.length) meta.equivalentes = equivalentes;
+    if (manquantes && manquantes.length > 1) meta.manquantes = manquantes;
+    if (sujet !== undefined) {
+      const s = sujetDemande(sujet);
+      meta.sujet = s.adresse ? empreinteSujet(s.adresse) : null;
+    }
+    await appendAudit('acces_refuse', { adminId: p.adminId, email: p.email, ip, meta });
+    return { ok: false, status: 403, errors: [{ code: 'interdit', message }] };
+  }
+
   // Qui nommer dans le journal quand une adresse frappe à la porte. Un compte
   // de la liste blanche se journalise par son adresse : l'opérateur doit savoir
   // QUI est freiné. Un INCONNU, lui, n'est pas un compte — c'est la donnée
@@ -607,7 +641,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'notifications:write')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+      return refuserAcces(p, { porte: 'putEmailTemplate', permission: 'notifications:write', ip, message: 'Cette section demande la permission d’écrire les courriels.' });
     }
     const meta = emails.TEMPLATE_META[key];
     if (!meta) {
@@ -638,7 +672,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'notifications:write')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+      return refuserAcces(p, { porte: 'resetEmailTemplate', permission: 'notifications:write', ip, message: 'Cette section demande la permission d’écrire les courriels.' });
     }
     if (!emails.TEMPLATE_META[key]) {
       return { ok: false, status: 404, errors: [{ code: 'modele_inconnu', message: `Modèle de courriel inconnu : ${key}.` }] };
@@ -719,7 +753,7 @@ function createAdmin({
     // garde jusqu'au 2026-09-04, la première était une promesse, pas une
     // permission (revue de f45a2e1).
     if (!rbac.can(p.permissions, 'settings:write') && !rbac.can(p.permissions, 'billing:write')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+      return refuserAcces(p, { porte: 'putPrixNota', permission: 'settings:write', equivalentes: ['billing:write'], ip, message: 'Cette section demande la permission de modifier les réglages.' });
     }
     const v = prixCfg.validatePrix(body || {});
     if (!v.ok) return { ok: false, status: 422, errors: v.errors };
@@ -744,7 +778,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'settings:write') && !rbac.can(p.permissions, 'billing:write')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+      return refuserAcces(p, { porte: 'resetPrixNota', permission: 'settings:write', equivalentes: ['billing:write'], ip, message: 'Cette section demande la permission de modifier les réglages.' });
     }
     const before = prixView(await repo.getPrixNotaConfig());
     await repo.deletePrixNotaConfig();
@@ -799,7 +833,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'settings:write')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+      return refuserAcces(p, { porte: 'putCancellationSchedule', permission: 'settings:write', ip, message: 'Cette section demande la permission de modifier les réglages.' });
     }
     const v = cancellationCfg.validateSchedule(body || {});
     if (!v.ok) return { ok: false, status: 422, errors: v.errors };
@@ -820,7 +854,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'settings:write')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+      return refuserAcces(p, { porte: 'resetCancellationSchedule', permission: 'settings:write', ip, message: 'Cette section demande la permission de modifier les réglages.' });
     }
     const before = annulationView(await repo.getCancellationConfig());
     await repo.deleteCancellationConfig();
@@ -844,7 +878,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'pii:read')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+      return refuserAcces(p, { porte: 'listNotaries', permission: 'pii:read', ip, message: 'Cette section demande la permission de lire les renseignements personnels.' });
     }
     const profils = typeof repo.listNotaries === 'function'
       ? await repo.listNotaries()
@@ -932,7 +966,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'moderation:write')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Activation des notaires non autorisée.' }] };
+      return refuserAcces(p, { porte: 'activateNotary', permission: 'moderation:write', ip, message: 'Activation des notaires non autorisée.' });
     }
     const notaryId = String(id == null ? '' : id).trim();
     const n = notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(notaryId) : null;
@@ -1066,7 +1100,7 @@ function createAdmin({
     // l'anonymat d'un client sont deux capacités distinctes, et on doit pouvoir
     // ouvrir la première sans la seconde.
     if (!rbac.can(p.permissions, 'audit:read')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Réservé à l’administrateur principal.' }] };
+      return refuserAcces(p, { porte: 'readAudit', permission: 'audit:read', ip, message: 'Cette section demande la permission de lire le journal d’audit.' });
     }
     // UNE fenêtre, exprimée de deux façons. `jour` seul reste le comportement
     // d'origine (et celui de la console d'hier) ; `du`/`au` ouvrent l'intervalle
@@ -1256,7 +1290,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'analytics:read')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture du catalogue des services non autorisée.' }] };
+      return refuserAcces(p, { porte: 'getCatalogue', permission: 'analytics:read', ip, message: 'Lecture du catalogue des services non autorisée.' });
     }
     const grille = await prixCfg.resolveGrille(repo, process.env);
     return { ok: true, catalogue: domain.catalogueSnapshot({ grille }) };
@@ -1269,7 +1303,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'analytics:read')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture de l’inventaire des fonctionnalités non autorisée.' }] };
+      return refuserAcces(p, { porte: 'getFeatures', permission: 'analytics:read', ip, message: 'Lecture de l’inventaire des fonctionnalités non autorisée.' });
     }
     return { ok: true, ...featureSnapshot() };
   }
@@ -1485,7 +1519,7 @@ function createAdmin({
   async function listCabinets(token, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
-    if (!rbac.can(p.permissions, 'cabinets:read')) return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture des cabinets non autorisée.' }] };
+    if (!rbac.can(p.permissions, 'cabinets:read')) return refuserAcces(p, { porte: 'listCabinets', permission: 'cabinets:read', ip, message: 'Lecture des cabinets non autorisée.' });
     const records = typeof repo.listCabinets === 'function' ? await repo.listCabinets() : [];
     const plans = domain.CABINET_PLANS.map(domain.cabinetPlanPublic);
     const cabinets = [];
@@ -1496,7 +1530,7 @@ function createAdmin({
   async function putCabinet(token, id, payload = {}, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
-    if (!rbac.can(p.permissions, 'cabinets:write')) return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Modification des cabinets non autorisée.' }] };
+    if (!rbac.can(p.permissions, 'cabinets:write')) return refuserAcces(p, { porte: 'putCabinet', permission: 'cabinets:write', ip, message: 'Modification des cabinets non autorisée.' });
     const avant = typeof repo.getCabinet === 'function' ? await repo.getCabinet(id) : null;
     const v = validateCabinet(id, payload, avant);
     if (!v.ok) return { ok: false, status: 422, errors: v.errors };
@@ -1519,7 +1553,7 @@ function createAdmin({
   async function deleteCabinet(token, id, { ip } = {}) {
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
-    if (!rbac.can(p.permissions, 'cabinets:write')) return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Modification des cabinets non autorisée.' }] };
+    if (!rbac.can(p.permissions, 'cabinets:write')) return refuserAcces(p, { porte: 'deleteCabinet', permission: 'cabinets:write', ip, message: 'Modification des cabinets non autorisée.' });
     const avant = typeof repo.getCabinet === 'function' ? await repo.getCabinet(id) : null;
     if (!avant) return { ok: false, status: 404, errors: [{ code: 'cabinet_introuvable', message: 'Ce cabinet n’existe pas.' }] };
     if ((avant.notaires || []).length) return { ok: false, status: 409, errors: [{ code: 'cabinet_non_vide', message: 'Retirez d’abord les notaires avant de supprimer le cabinet.' }] };
@@ -1635,7 +1669,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'audiences:read')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture des groupes d’audience non autorisée.' }] };
+      return refuserAcces(p, { porte: 'listAudienceGroups', permission: 'audiences:read', ip, message: 'Lecture des groupes d’audience non autorisée.' });
     }
     const groupes = typeof repo.listAudienceGroups === 'function' ? await repo.listAudienceGroups() : [];
     return {
@@ -1649,7 +1683,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'audiences:write')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Modification des groupes d’audience non autorisée.' }] };
+      return refuserAcces(p, { porte: 'putAudienceGroup', permission: 'audiences:write', ip, message: 'Modification des groupes d’audience non autorisée.' });
     }
     const v = validateAudienceGroup(id, payload || {});
     if (!v.ok) return { ok: false, status: 422, errors: v.errors };
@@ -1668,7 +1702,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'audiences:write')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Modification des groupes d’audience non autorisée.' }] };
+      return refuserAcces(p, { porte: 'deleteAudienceGroup', permission: 'audiences:write', ip, message: 'Modification des groupes d’audience non autorisée.' });
     }
     const avant = typeof repo.getAudienceGroup === 'function' ? await repo.getAudienceGroup(id) : null;
     if (!avant) {
@@ -1837,7 +1871,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'analytics:read')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture des segments non autorisée.' }] };
+      return refuserAcces(p, { porte: 'listSegments', permission: 'analytics:read', ip, message: 'Lecture des segments non autorisée.' });
     }
     // `limites` voyage avec le catalogue : la console pose les `maxlength` du
     // compositeur depuis le serveur plutôt que de recopier des bornes qui
@@ -1979,7 +2013,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'analytics:read')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture des campagnes non autorisée.' }] };
+      return refuserAcces(p, { porte: 'previewCampaign', permission: 'analytics:read', ip, message: 'Lecture des campagnes non autorisée.' });
     }
 
     const payload = body || {};
@@ -2017,7 +2051,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'campaigns:send')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Envoi de campagnes non autorisé.' }] };
+      return refuserAcces(p, { porte: 'sendCampaign', permission: 'campaigns:send', ip, message: 'Envoi de campagnes non autorisé.' });
     }
 
     const payload = body || {};
@@ -2212,7 +2246,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'analytics:read')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture des campagnes non autorisée.' }] };
+      return refuserAcces(p, { porte: 'listCampaignRecipients', permission: 'analytics:read', ip, message: 'Lecture des campagnes non autorisée.' });
     }
     const id = String(campagneId || '').trim();
     if (!id) {
@@ -2268,7 +2302,7 @@ function createAdmin({
     const p = await requireAdmin(token, { ip });
     if (!p) return { ok: false, status: 401 };
     if (!rbac.can(p.permissions, 'analytics:read')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture des campagnes non autorisée.' }] };
+      return refuserAcces(p, { porte: 'listCampaigns', permission: 'analytics:read', ip, message: 'Lecture des campagnes non autorisée.' });
     }
     const demande = String(jour == null ? '' : jour).trim();
     const j = demande || jourCourant();
@@ -2557,11 +2591,8 @@ function createAdmin({
   // « publié == appliqué » (admin-permissions-gate.test.mjs), qui relit le code
   // à la recherche de `rbac.can(…, 'clé')`. C'est exactement ainsi que
   // `billing:write` est resté publié sans qu'aucune route ne l'applique.
-  const interditUsager = () => ({
-    ok: false,
-    status: 403,
-    errors: [{ code: 'interdit', message: 'Dossier d’usager non autorisé.' }],
-  });
+  const interditUsager = (garde, porte, permission, courriel, ip) =>
+    refuserAcces(garde.p, { porte, permission, sujet: courriel, ip, message: 'Dossier d’usager non autorisé.' });
 
   // La session se résout UNE SEULE FOIS par requête. Deux résolutions, c'est
   // deux lectures d'identité, deux lectures de session, et surtout DEUX
@@ -2592,7 +2623,7 @@ function createAdmin({
   async function getUserFile(token, courriel, { ip } = {}) {
     const garde = await porteUsager(token, ip);
     if (garde.error) return garde.error;
-    if (!rbac.can(garde.p.permissions, 'subjects:read')) return interditUsager();
+    if (!rbac.can(garde.p.permissions, 'subjects:read')) return interditUsager(garde, 'getUserFile', 'subjects:read', courriel, ip);
     const sujet = sujetDemande(courriel);
     if (sujet.error) return sujet.error;
     const dossier = await assemblerDossier(sujet.adresse, garde.enClair);
@@ -2623,7 +2654,7 @@ function createAdmin({
   async function exportUserFile(token, courriel, { ip } = {}) {
     const garde = await porteUsager(token, ip);
     if (garde.error) return garde.error;
-    if (!rbac.can(garde.p.permissions, 'subjects:read')) return interditUsager();
+    if (!rbac.can(garde.p.permissions, 'subjects:read')) return interditUsager(garde, 'exportUserFile', 'subjects:read', courriel, ip);
     const sujet = sujetDemande(courriel);
     if (sujet.error) return sujet.error;
     const dossier = await assemblerDossier(sujet.adresse, garde.enClair);
@@ -2676,7 +2707,7 @@ function createAdmin({
   async function eraseUserFile(token, courriel, { confirmer, ip } = {}) {
     const garde = await porteUsager(token, ip);
     if (garde.error) return garde.error;
-    if (!rbac.can(garde.p.permissions, 'subjects:erase')) return interditUsager();
+    if (!rbac.can(garde.p.permissions, 'subjects:erase')) return interditUsager(garde, 'eraseUserFile', 'subjects:erase', courriel, ip);
     const sujet = sujetDemande(courriel);
     if (sujet.error) return sujet.error;
     const { adresse } = sujet;
@@ -2806,7 +2837,7 @@ function createAdmin({
     const principal = await requireAdmin(token, { ip });
     if (!principal) return { ok: false, status: 401 };
     if (!rbac.can(principal.permissions, 'leads:read')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Lecture du CRM non autorisée.' }] };
+      return refuserAcces(principal, { porte: 'listCrmLeads', permission: 'leads:read', ip, message: 'Lecture du CRM non autorisée.' });
     }
     if (stage && !crm.stage(stage)) {
       return { ok: false, status: 422, errors: [{ code: 'etape_invalide', message: 'L’étape CRM est invalide.' }] };
@@ -2882,7 +2913,7 @@ function createAdmin({
     const principal = await requireAdmin(token, { ip });
     if (!principal) return { ok: false, status: 401 };
     if (!rbac.can(principal.permissions, 'leads:write')) {
-      return { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Écriture du CRM non autorisée.' }] };
+      return refuserAcces(principal, { porte: 'updateCrmLead', permission: 'leads:write', ip, message: 'Écriture du CRM non autorisée.' });
     }
     const id = String(bidId || '').trim();
     const dateISO = payload && payload.dateISO;
@@ -2931,14 +2962,17 @@ function createAdmin({
     };
   }
 
-  async function supportPrincipal(token, permission, ip) {
+  async function supportPrincipal(token, permission, ip, porte) {
     const principal = await requireAdmin(token, { ip });
     if (!principal) return { error: { ok: false, status: 401 } };
     const permitted = permission === 'support:write'
       ? rbac.can(principal.permissions, 'support:write')
       : rbac.can(principal.permissions, 'support:read');
-    if (!permitted || !rbac.can(principal.permissions, 'pii:read')) {
-      return { error: { ok: false, status: 403, errors: [{ code: 'interdit', message: 'Accès à la messagerie de soutien non autorisé.' }] } };
+    const pii = rbac.can(principal.permissions, 'pii:read');
+    if (!permitted || !pii) {
+      // Deux clés, pas une : la trace nomme chacune de celles qui manquent.
+      const manquantes = [permitted ? null : permission, pii ? null : 'pii:read'].filter(Boolean);
+      return { error: await refuserAcces(principal, { porte, permission: manquantes[0], manquantes, ip, message: 'Accès à la messagerie de soutien non autorisé.' }) };
     }
     return { principal };
   }
@@ -2953,7 +2987,7 @@ function createAdmin({
   });
   const supportUnavailable = () => ({ ok: false, status: 503, errors: [{ code: 'soutien_indisponible', message: 'La messagerie de soutien est momentanément indisponible.' }] });
   async function listSupport(token, { statut, limit, ip } = {}) {
-    const gate = await supportPrincipal(token, 'support:read', ip);
+    const gate = await supportPrincipal(token, 'support:read', ip, 'listSupport');
     if (gate.error) return gate.error;
     if (statut && !domain.SUPPORT_STATUTS.some(item => item.id === statut)) {
       return { ok: false, status: 422, errors: [{ code: 'statut_invalide', message: 'Le statut de conversation n’est pas valide.' }] };
@@ -2972,7 +3006,7 @@ function createAdmin({
     };
   }
   async function getSupport(token, id, { ip } = {}) {
-    const gate = await supportPrincipal(token, 'support:read', ip);
+    const gate = await supportPrincipal(token, 'support:read', ip, 'getSupport');
     if (gate.error) return gate.error;
     let thread;
     try { thread = await repo.getSupportThread(id); } catch { return supportUnavailable(); }
@@ -2981,7 +3015,7 @@ function createAdmin({
     return { ok: true, thread: supportDetail(thread), limites: { messageMax: domain.SUPPORT_MESSAGE_MAX } };
   }
   async function replySupport(token, id, payload, { ip } = {}) {
-    const gate = await supportPrincipal(token, 'support:write', ip);
+    const gate = await supportPrincipal(token, 'support:write', ip, 'replySupport');
     if (gate.error) return gate.error;
     let result;
     try {
@@ -3003,7 +3037,7 @@ function createAdmin({
     };
   }
   async function closeSupport(token, id, { ip } = {}) {
-    const gate = await supportPrincipal(token, 'support:write', ip);
+    const gate = await supportPrincipal(token, 'support:write', ip, 'closeSupport');
     if (gate.error) return gate.error;
     let result;
     try { result = await support.close({ threadId: id }); } catch { return supportUnavailable(); }
@@ -3016,6 +3050,10 @@ function createAdmin({
 
   return {
     listSupport, getSupport, replySupport, closeSupport,
+    // L'entonnoir des refus (ADR 0036, 2026-09-11) : exposé pour que les portes
+    // que admin-handler.js garde lui-même (groupes, utilisateurs, permissions,
+    // tableaux de bord) puissent laisser la même trace.
+    refuserAcces,
     requestLogin,
     login,
     verifyMagic,

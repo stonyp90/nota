@@ -8,7 +8,12 @@
 //   node docs/pitch-deck/rasterize-slides.mjs /tmp/slides
 //
 // Writes docs/pitch-deck/dark-slide-N.png and dark-slide-fr-N.png (N = 1…16),
-// 1600×900 at 2× (3200×1800), the geometry the deck page expects.
+// 1600×900 at 1×, the geometry the deck page expects (the same frame the
+// ImageMagick path of render-slides.py writes).
+//
+// The QUÉBEC badge of the lockup is the one element the SVG cannot size itself:
+// render-slides.py estimates the text width, and this script re-measures it
+// with the real Inter 800 glyphs and fits the ground (padding .55em .7em) to it.
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,7 +31,7 @@ if (frames.length !== 32) { console.error(`expected 32 frames in ${src}, found $
 const FONTS = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@700;800&display=block';
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 2 });
+const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
 let written = 0;
 for (const f of frames) {
   const svg = readFileSync(join(src, f), 'utf8');
@@ -38,6 +43,15 @@ for (const f of frames) {
     return document.fonts.check('800 40px Sora') && document.fonts.check('700 20px Inter');
   });
   if (!ok) { console.error(`${f}: Sora/Inter did not load — no frame written`); process.exit(1); }
+  await page.evaluate(() => {
+    for (const badge of document.querySelectorAll('g[data-badge]')) {
+      const text = badge.querySelector('text'); const ground = badge.querySelector('rect');
+      const size = parseFloat(text.getAttribute('font-size'));
+      const padX = .7 * size;
+      const box = text.getBBox();
+      ground.setAttribute('width', (box.width + 2 * padX).toFixed(2));
+    }
+  });
   const out = join(here, basename(f, '.svg') + '.png');
   await page.locator('svg').screenshot({ path: out, omitBackground: false });
   written++;

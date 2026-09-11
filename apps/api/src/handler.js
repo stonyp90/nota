@@ -8,6 +8,7 @@ const cote = require('./cote');
 const { createBilling, attendCaution } = require('./billing');
 const cancellationCfg = require('./cancellation-config');
 const { decodeUnsubToken, createConsentRegistry } = require('./notifications');
+const emails = require('./emails');
 const { signToken, signChallengeToken, verifyToken, notaryIdForEmail, SCOPES } = require('./notary-auth');
 const { buildNotaryFeed, buildCarnetFeed } = require('./ics');
 const { statsDeltasForOffer, statsDeltasForRetain, statsDeltasForNotaryOnboarding, statsDeltasForFunnel, statsDeltasForAssistant } = require('./stats');
@@ -1676,7 +1677,11 @@ function createApp(repo, opts = {}) {
   }
 
   // A minimal fr-CA confirmation page for the unsubscribe link (opened in a
-  // browser from an email footer, so HTML rather than JSON).
+  // browser from an email footer, so HTML rather than JSON). It is a SHIPPED
+  // surface, so it draws from the same flattened light-theme palette the mail
+  // itself uses (ADR 0048: one colour system everywhere) — an HTTP response
+  // cannot read a CSS variable, so PALETTE is the single source it shares with
+  // the email shell rather than a second set of literals.
   function htmlPage(statusCode, title, message) {
     const body =
       '<!doctype html><html lang="fr-CA"><head><meta charset="utf-8">' +
@@ -1684,11 +1689,11 @@ function createApp(repo, opts = {}) {
       '<title>' +
       title +
       ' — Nota</title></head>' +
-      '<body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#f2f1ec;margin:0;padding:48px 16px;">' +
-      '<div style="max-width:520px;margin:0 auto;background:#fcfbf8;border:1px solid #cbd8d5;border-top:3px solid #386888;border-radius:12px;padding:28px 24px;">' +
-      '<h1 style="margin:0 0 12px;font-size:20px;color:#101b26;">' +
+      '<body style="font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:' + emails.PALETTE.bg + ';margin:0;padding:48px 16px;">' +
+      '<div style="max-width:520px;margin:0 auto;background:' + emails.PALETTE.card + ';border:1px solid ' + emails.PALETTE.border + ';border-top:3px solid ' + emails.PALETTE.brand + ';border-radius:12px;padding:28px 24px;">' +
+      '<h1 style="margin:0 0 12px;font-size:20px;color:' + emails.PALETTE.ink + ';">' +
       title +
-      '</h1><p style="margin:0;font-size:15px;line-height:1.6;color:#5b6c72;">' +
+      '</h1><p style="margin:0;font-size:15px;line-height:1.6;color:' + emails.PALETTE.muted + ';">' +
       message +
       '</p></div></body></html>';
     return {
@@ -3978,6 +3983,9 @@ function createApp(repo, opts = {}) {
     if (route === '/client/bid' && method === 'GET') {
       const auth = requireClient(request, query.id);
       if (auth.error) return auth.error;
+      // The key is (date, id): without a valid date the store throws, and a
+      // client that forgot it would read a 500 where the answer is « not found ».
+      if (!domain.isISODate(query.dateISO)) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       const bid = await repo.get(query.id, query.dateISO);
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       // The client's half of the mise en relation (ADR 0010 §4): once the bid
@@ -4391,8 +4399,29 @@ function createApp(repo, opts = {}) {
         };
       }
 
-      const cancelled = { ...bid, status: domain.STATUS.ANNULEE, cancelledAt: now(), annulation };
+      // ADR 0032 — Nota est dépositaire, pas propriétaire : les pièces de la
+      // conversation meurent avec l'acte, par CETTE porte comme par le
+      // désistement du notaire (/notary/bids/release). L'accès se fermait déjà
+      // (toute lecture d'une offre annulée répond 410), mais les octets
+      // restaient dans le seau et les références `cle` sur l'offre — des
+      // documents qui survivaient à l'acte sans que personne ne puisse les
+      // atteindre. Les clés sont relevées AVANT le geste, les références
+      // tombent AVEC lui. Le fil texte, lui, reste : l'acte annulé demeure sur
+      // la console du notaire tant qu'une indemnité est à décider (ADR 0041),
+      // et l'échange est le contexte de sa réclamation — aucun confrère ne
+      // reprendra cette offre, l'art. 37 ne joue donc pas ici.
+      const clesAEffacer = domain.releasedDocumentKeys(bid);
+      const cancelled = { ...bid, status: domain.STATUS.ANNULEE, cancelledAt: now(), annulation, documents: [] };
       await repo.update(cancelled);
+      // Miroir de la porte du désistement, à dessein : au mieux, et jamais
+      // bloquant — un seau qui refuse n'empêche pas un client d'annuler (les
+      // octets sont secondaires, l'argent ne l'est pas), et le cycle de vie du
+      // seau reprendra la main.
+      if (storage && clesAEffacer.length) {
+        for (const cle of clesAEffacer) {
+          try { await storage.remove(cle); } catch { /* le seau expirera de toute façon */ }
+        }
+      }
       // --- ANGLES MORTS DE LA PISTE (2026-09-05) — 7/7 : L'ANNULATION --------
       // Le journal ne portait l'annulation QUE lorsqu'une somme avait bougé
       // (`annulation_frais`, ADR 0023) ou avait été refusée. Deux cas
@@ -5187,6 +5216,8 @@ function createApp(repo, opts = {}) {
       // the client's private courriel + file, so a feed token is rejected here.
       const notaryId = requireScope(bearer(request), SCOPES.SESSION);
       if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Jeton invalide ou expiré.' }] });
+      // Same composite key, same honest answer when the date is missing.
+      if (!domain.isISODate(query.dateISO)) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       const bid = await repo.get(query.id, query.dateISO);
       if (!bid) return json(404, { errors: [{ code: 'introuvable', message: 'Offre introuvable.' }] });
       // The dossier is released ONLY to the notary who retained the bid — and

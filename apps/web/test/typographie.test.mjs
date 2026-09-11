@@ -4,7 +4,7 @@
  * Propriétaire, 2026-09-10 : « the font is really not accurate across the
  * app » — chaque pane posait sa propre taille de titre (21/28 px au carnet,
  * 26/38 aux partenaires, 28/46 chez les notaires) pendant que la bêta titrait
- * en Sora 800 à 42–68 px. Le patron de la bêta devient la source de vérité :
+ * en Sora 800. Le patron de la bêta devient la source de vérité :
  * des jetons --type-* dans :root, et AUCUNE règle de titre ne pose sa propre
  * taille en px/clamp. Le calendrier, lui, ne remplit plus les nombres.
  */
@@ -21,6 +21,13 @@ const SIG_HTML = read('../public/signature.html');
 const ADMIN_CSS = read('../../admin/public/admin.css');
 const ADMIN_TOKENS = read('../../admin/public/tokens.css');
 const ADMIN_HTML = read('../../admin/public/index.html');
+// Les trois pages autonomes (elles n'héritent pas de styles.css) qui recopient l'échelle.
+const BRAND_HTML = read('../public/brand.html');
+const DECK_HTML = read('../../../docs/pitch-deck.html');
+const PLAN_HTML = read('../../../docs/business-plan.html');
+const COPIES = { 'styles.css': CSS, 'tokens.css': ADMIN_TOKENS, 'signature.css': SIG_CSS, 'brand.html': BRAND_HTML, 'pitch-deck.html': DECK_HTML, 'business-plan.html': PLAN_HTML };
+// Un jeton lu dans n'importe quelle copie, espaces normalisés (les feuilles minifiées n'en ont pas).
+const token = (src, name) => { const m = src.match(new RegExp('(^|[;{\\s])' + name + ':\\s*([^;}]+)')); return m ? m[2].replace(/\s+/g, '').trim() : null; };
 
 // Les blocs de règles dont le sélecteur se termine par h1/h2/h3 (ou une liste
 // de tels sélecteurs), avec leur numéro de ligne.
@@ -44,8 +51,8 @@ test('les jetons de l’échelle vivent dans :root, copiés de la bêta', () => 
     assert.match(CSS, new RegExp('(^|[;\\s])' + t + ':', 'm'), t + ' manque dans styles.css');
   }
   assert.match(CSS, /--font-display:\s*'Sora'/, 'la face d’affichage est Sora');
-  assert.match(CSS, /--type-h1:\s*clamp\(42px, 4\.25vw, 68px\)/, 'h1 = la taille de la bêta, verbatim');
-  assert.match(CSS, /--type-h2:\s*clamp\(24px, 2\.35vw, 34px\)/, 'h2 = la taille de la bêta, verbatim');
+  assert.match(CSS, /--type-h1:\s*clamp\(30px, 2\.6vw, 44px\)/, 'h1 = la taille de la bêta, verbatim');
+  assert.match(CSS, /--type-h2:\s*clamp\(20px, 1\.6vw, 26px\)/, 'h2 = la taille de la bêta, verbatim');
   assert.match(CSS, /--type-h3:\s*17px/, 'h3 = la taille de la bêta, verbatim');
   assert.match(CSS, /--type-lead:\s*17px/, 'lede = la taille de la bêta, verbatim');
   // Le barreau h4 (addendum 2026-09-11) : les kickers de carte, déclaré dans
@@ -53,6 +60,52 @@ test('les jetons de l’échelle vivent dans :root, copiés de la bêta', () => 
   const h4 = (src) => (src.match(/--type-h4:\s*([^;]+);\s*--type-h4-lh:\s*([^;]+);\s*--type-h4-ls:\s*([^;]+);/) || []).slice(1).map((v) => v.trim());
   assert.deepEqual(h4(CSS), ['15px', '1.3', '-.01em'], 'h4 = 15px / 1.3 / -.01em dans styles.css');
   assert.deepEqual(h4(ADMIN_TOKENS), h4(CSS), 'tokens.css porte le même barreau h4');
+});
+
+// Propriétaire, 2026-09-11 : « every font size, every font style must be the same
+// across ALL applications: admin, business plan, pitch deck, web ». Le barreau du
+// texte courant (--type-body) rejoint l'échelle, et CHAQUE copie de :root — la
+// feuille web, les jetons admin, la salle, le guide de marque, le deck, le plan —
+// porte les mêmes valeurs, barreau par barreau. Une copie qui dérive fait tomber
+// ce test, pas seulement la copie web.
+test('chaque copie de :root porte la même échelle, barreau par barreau', () => {
+  const rungs = ['--type-h1', '--type-h1-lh', '--type-h1-ls', '--type-h1-compact', '--type-h2', '--type-h2-lh', '--type-h2-ls',
+    '--type-h3', '--type-h3-lh', '--type-h3-ls', '--type-h4', '--type-h4-lh', '--type-h4-ls', '--type-lead', '--type-lead-lh',
+    '--type-eyebrow', '--type-eyebrow-ls', '--type-body', '--type-body-lh', '--weight-display'];
+  assert.equal(token(CSS, '--type-body'), '16px', 'le texte courant = 16px (la valeur effective du carnet)');
+  assert.equal(token(CSS, '--type-body-lh'), '1.5', 'interligne du texte courant = 1.5');
+  const drift = [];
+  for (const [name, src] of Object.entries(COPIES)) {
+    for (const rung of rungs) {
+      const got = token(src, rung);
+      if (got !== token(CSS, rung)) drift.push(`${name} ${rung} = ${got} (styles.css : ${token(CSS, rung)})`);
+    }
+  }
+  assert.deepEqual(drift, [], 'copies hors échelle :\n  ' + drift.join('\n  '));
+  // Et le corps de texte LIT le barreau, sur chaque surface qui pose sa taille.
+  assert.match(CSS, /^body \{[^}]*font-size: var\(--type-body\);\s*line-height: var\(--type-body-lh\)/m, 'styles.css body lit --type-body');
+  assert.match(ADMIN_CSS, /^body \{[^}]*font-size: var\(--type-body\);\s*line-height: var\(--type-body-lh\)/m, 'admin.css body lit --type-body');
+  assert.match(BRAND_HTML, /body \{[^}]*font: var\(--type-body\)\/var\(--type-body-lh\)/, 'brand.html body lit --type-body');
+  assert.match(DECK_HTML, /html,body\{[^}]*font-size:var\(--type-body\);line-height:var\(--type-body-lh\)/, 'pitch-deck.html body lit --type-body');
+  assert.match(PLAN_HTML, /body\{[^}]*font-size:var\(--type-body\);\s*line-height:var\(--type-body-lh\)/, 'business-plan.html body lit --type-body');
+  for (const [name, src] of Object.entries(COPIES)) {
+    assert.match(src, /(^|[;{\s])--font-display:\s*'?Sora/m, name + ' : la face d’affichage est Sora');
+  }
+});
+
+// Les trois pages autonomes portent les DEUX thèmes par le mécanisme du produit :
+// clair sur :root nu, sombre sous la requête média gardée, sombre sous
+// [data-theme="dark"] — et le même interrupteur que l'en-tête du carnet, sur la
+// même clé (nota.theme), pour qu'un choix suive le visiteur d'une surface à l'autre.
+test('le guide de marque, le deck et le plan portent les deux thèmes et l’interrupteur du site', () => {
+  for (const [name, src] of Object.entries({ 'brand.html': BRAND_HTML, 'pitch-deck.html': DECK_HTML, 'business-plan.html': PLAN_HTML })) {
+    assert.match(src, /@media \(prefers-color-scheme:\s*dark\)\s*\{\s*:root:not\(\[data-theme="light"\]\)/, name + ' : bloc sombre gardé contre un choix clair explicite');
+    assert.match(src, /:root\[data-theme="dark"\]\s*\{/, name + ' : bloc sombre explicite');
+    assert.match(src, /<button[^>]*class="tswitch"[^>]*id="theme-toggle"[^>]*role="switch"/, name + ' : l’interrupteur du site');
+    assert.match(src, /localStorage\.setItem\('nota\.theme', JSON\.stringify\(next\)\)/, name + ' : le choix est écrit sous nota.theme, encodé comme lsSave');
+    assert.match(src, /JSON\.parse\(localStorage\.getItem\('nota\.theme'\)/, name + ' : le thème est posé avant la première peinture');
+    assert.doesNotMatch(src, /:root\s*\{\s*color-scheme:\s*dark/, name + ' : aucun :root nu ne force le sombre');
+  }
 });
 
 test('h1, h2, h3 prennent la face et la graisse d’affichage globalement', () => {
@@ -144,7 +197,7 @@ test('les deux faces se chargent partout — le rendu ne dépend plus des police
   assert.match(SIG_HTML, both, 'signature.html charge Inter ET Sora');
   assert.match(ADMIN_HTML, both, 'admin charge Inter ET Sora');
   assert.match(SIG_CSS, /h1,h2,h3\{[^}]*font-family:var\(--font-display\)[^}]*font-weight:var\(--weight-display\)/, 'la salle titre en Sora 800');
-  assert.match(SIG_CSS, /--type-h1:clamp\(42px,4\.25vw,68px\)/, 'la salle porte la même échelle');
+  assert.match(SIG_CSS, /--type-h1:clamp\(30px,2\.6vw,44px\)/, 'la salle porte la même échelle');
   assert.match(ADMIN_TOKENS, /--font-display:\s*'Sora'/, 'admin porte la face d’affichage');
   assert.match(ADMIN_CSS, /^h1, h2, h3 \{[^}]*font-family: var\(--font-display\)/m, 'admin titre en Sora');
 });

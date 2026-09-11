@@ -29,6 +29,12 @@ variable "delegation_set_id" {
 # Retain the initially provisioned typo zone until the domain migration is verified.
 resource "aws_route53_zone" "legacy_gonata" {
   name = "gonata.ca"
+  # The live zone sits on the same reusable delegation set as the public zone
+  # (that is how the registrar's nameservers survived the domain correction).
+  # Declaring it here keeps the config equal to the account: without this line
+  # every plan wanted to replace the zone and prevent_destroy refused, which
+  # blocked every apply (found 2026-09-11 while adding brand.gonota.ca).
+  delegation_set_id = var.delegation_set_id
   lifecycle { prevent_destroy = true }
 }
 

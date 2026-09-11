@@ -145,7 +145,7 @@ test('le jeton rendu ouvre vraiment /client/bid — la couture est traversée', 
   const [offre] = parse(await verifier(app, devToken)).offres;
 
   const res = await app.handle({
-    method: 'GET', path: '/client/bid', query: { id: offre.id, date: offre.dateISO },
+    method: 'GET', path: '/client/bid', query: { id: offre.id, dateISO: offre.dateISO },
     headers: { authorization: `Bearer ${offre.clientToken}`, 'x-forwarded-for': '1.2.3.4' },
   });
   assert.equal(res.statusCode, 200, res.body);
@@ -194,7 +194,7 @@ test('le lien d’une adresse ne donne JAMAIS les offres d’une autre', async (
   assert.equal(offres.length, 1, 'seulement les siennes');
   assert.ok(offres.every((o) => o.id !== undefined));
   const autres = await app.handle({
-    method: 'GET', path: '/client/bid', query: { id: 'id-1', date: OFFRE.dateISO },
+    method: 'GET', path: '/client/bid', query: { id: 'id-1', dateISO: OFFRE.dateISO },
     headers: { authorization: `Bearer ${offres[0].clientToken}`, 'x-forwarded-for': '1.2.3.4' },
   });
   assert.equal(autres.statusCode, 403, 'le jeton d’une offre n’ouvre pas celle du voisin');
@@ -264,12 +264,12 @@ test('le dossier REVIENT dans /client/bid — la reprise n’est pas à moitié 
   // Le client répond depuis son premier appareil.
   const push = await app.handle({
     method: 'POST', path: '/client/dossier', query: {}, headers: auth,
-    body: JSON.stringify({ id: bid.id, date: bid.dateISO, dossier: { piece_identite: 'permis-2019.pdf' } }),
+    body: JSON.stringify({ id: bid.id, dateISO: bid.dateISO, dossier: { piece_identite: 'permis-2019.pdf' } }),
   });
   assert.equal(push.statusCode, 200, push.body);
 
   // …et le relit depuis un autre.
-  const res = await app.handle({ method: 'GET', path: '/client/bid', query: { id: bid.id, date: bid.dateISO }, headers: auth });
+  const res = await app.handle({ method: 'GET', path: '/client/bid', query: { id: bid.id, dateISO: bid.dateISO }, headers: auth });
   assert.equal(res.statusCode, 200, res.body);
   const j = parse(res);
   assert.ok(j.dossier, 'le dossier est rendu');
@@ -285,7 +285,7 @@ test('un dossier vide se rend comme un objet vide, jamais comme une absence', as
   const { devToken } = parse(await demander(app, COURRIEL));
   const [offre] = parse(await verifier(app, devToken)).offres;
   const res = await app.handle({
-    method: 'GET', path: '/client/bid', query: { id: bid.id, date: bid.dateISO },
+    method: 'GET', path: '/client/bid', query: { id: bid.id, dateISO: bid.dateISO },
     headers: { authorization: `Bearer ${offre.clientToken}`, 'x-forwarded-for': '1.2.3.4' },
   });
   assert.deepEqual(parse(res).dossier, {}, 'un objet, vide');

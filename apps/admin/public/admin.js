@@ -876,20 +876,45 @@
     var rail = el('nav', 'admin-rail');
     rail.setAttribute('aria-label', 'Sections de la console');
     rail.appendChild(el('span', 'admin-rail-label', 'Console'));
+    // Sur un téléphone, seize sections empilées au-dessus du contenu poussent
+    // la page d'un écran entier avant le premier chiffre. Sous 860 px, le rail
+    // se replie sur la section ouverte (CSS) : un geste l'ouvre, le choix le
+    // referme. La liste reste dans le DOM à toutes les tailles — un lecteur
+    // d'écran, un test et un écran large lisent le même rail.
+    var current = null;
+    ADMIN_SECTIONS.forEach(function (section) { if (section.key === active) current = section; });
+    var toggle = el('button', 'admin-rail-toggle');
+    toggle.type = 'button';
+    toggle.id = 'admin-rail-toggle';
+    toggle.setAttribute('aria-expanded', 'false');
+    toggle.setAttribute('aria-controls', 'admin-rail-sections');
+    if (current) toggle.appendChild(current.icon());
+    toggle.appendChild(el('span', 'admin-rail-toggle-label', current ? current.label : 'Console'));
+    toggle.appendChild(el('span', 'admin-rail-toggle-hint', 'Changer de section'));
+    rail.appendChild(toggle);
+    var sections = el('div', 'admin-rail-sections');
+    sections.id = 'admin-rail-sections';
     var searchLabel = el('label', 'admin-section-label', 'Trouver une section');
     searchLabel.htmlFor = 'admin-section-search';
     var search = el('input', 'input admin-section-search');
     search.id = 'admin-section-search'; search.type = 'search';
     search.placeholder = 'Rechercher une section';
-    rail.appendChild(searchLabel); rail.appendChild(search);
+    sections.appendChild(searchLabel); sections.appendChild(search);
+    toggle.addEventListener('click', function () {
+      var open = rail.getAttribute('data-open') === 'true';
+      rail.setAttribute('data-open', open ? 'false' : 'true');
+      toggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+      if (!open) search.focus();
+    });
     var links = [];
     ADMIN_SECTIONS.forEach(function (section) {
       var link = railLink(section.label, section.icon(), section.key, sectionHash(section), active,
         section.allowed ? !section.allowed() : false);
-      links.push(link); rail.appendChild(link);
+      links.push(link); sections.appendChild(link);
     });
     var empty = el('p', 'help', 'Aucune section trouvée. Effacez la recherche pour tout afficher.');
-    empty.hidden = true; empty.setAttribute('role', 'status'); rail.appendChild(empty);
+    empty.hidden = true; empty.setAttribute('role', 'status'); sections.appendChild(empty);
+    rail.appendChild(sections);
     search.addEventListener('input', function () {
       var query = search.value.trim().toLocaleLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       var visible = 0;
@@ -6232,6 +6257,8 @@
     // sans libellé : la garde d'audit.test.mjs ne lisait QUE le vocabulaire de
     // la porte publique. Elle lit désormais les deux, et une action de console
     // sans libellé la fait rougir comme une action publique.
+    // ADR 0036, amendement du 2026-09-11 : un accès refusé laisse une trace.
+    acces_refuse: 'Accès refusé',
     dossier_usager_consulte: 'Dossier d’usager consulté',
     dossier_usager_exporte: 'Dossier d’usager exporté',
     dossier_usager_efface: 'Dossier d’usager effacé',

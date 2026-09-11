@@ -75,6 +75,7 @@ Given(
     await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel, prefixe: 'G1R', pricing: PRICING_VALIDE[serviceId] }) });
     assert.equal(this.response.statusCode, 201, 'la publication de départ a échoué: ' + this.response.body);
     this.lastBidId = this.responseJson.bid.id;
+    this.lastBid = this.responseJson.bid;
   }
 );
 
@@ -99,14 +100,17 @@ When(
     await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, prefixe: 'G1R', pricing: PRICING_VALIDE[serviceId] }) });
     const j = this.responseJson;
     this.lastBidId = j.bid ? j.bid.id : null;
+    this.lastBid = j.bid || null;
   }
 );
 
 // Replay the notification for the *same* stored offer — what a retry or a
 // duplicate delivery of the fire-and-forget send would do. The SENT ledger must
-// keep it idempotent.
+// keep it idempotent. The repository is keyed by (id, dateISO) like DynamoDB:
+// an id alone reads nothing in production.
 When('la même offre est republiée', async function () {
-  const bid = await this.repo.get(this.lastBidId);
+  assert.ok(this.lastBid && this.lastBid.dateISO, 'aucune offre publiée');
+  const bid = await this.repo.get(this.lastBidId, this.lastBid.dateISO);
   assert.ok(bid, 'aucune offre à republier');
   await this.notifier.onOfferCreated(bid);
   await this.flush();
@@ -231,7 +235,8 @@ When(
 // fee kept, and that it is the notary's compensation. Driven through the
 // notifier with the stored bid, exactly as the route fires it.
 When("l'offre retenue est annulée avec des frais de {int} $ au taux de {int} % versés au notaire", async function (frais, taux) {
-  const bid = await this.repo.get(this.lastBidId);
+  assert.ok(this.lastBid && this.lastBid.dateISO, 'aucune offre publiée');
+  const bid = await this.repo.get(this.lastBidId, this.lastBid.dateISO);
   assert.ok(bid && bid.notaryId, "l'offre n'est pas retenue");
   const notary = await this.repo.getNotary(bid.notaryId);
   const cancelled = { ...bid, status: this.domain.STATUS.ANNULEE, cancelledAt: this.today, annulation: { taux: taux / 100, frais, joursAvant: 10, dedommagement: { notaire: true, verse: true, transferId: 'tr_' + bid.id } } };

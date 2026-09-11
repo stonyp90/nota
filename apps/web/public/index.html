@@ -190,24 +190,36 @@
          ux-nav.test.mjs keeps them in lockstep. -->
     <svg class="svg-defs" aria-hidden="true" focusable="false" width="0" height="0">
       <symbol id="nota-logomark" viewBox="0 0 64 64">
-        <rect width="64" height="64" rx="12" fill="#264961"/>
+        <rect width="64" height="64" rx="7" fill="#264961"/>
         <g fill="#ffffff">
-          <rect x="16" y="15" width="7.5" height="34" rx="2.5"/>
-          <rect x="40.5" y="15" width="7.5" height="34" rx="2.5"/>
+          <rect x="16" y="15" width="7.5" height="34" rx="1"/>
+          <rect x="40.5" y="15" width="7.5" height="34" rx="1"/>
           <polygon points="16,15 24,15 48,49 40,49"/>
         </g>
-        <circle cx="48" cy="16" r="8" fill="#407598" stroke="#264961" stroke-width="3"/>
+        <rect x="40" y="8" width="16" height="16" rx="3" fill="#407598" stroke="#264961" stroke-width="3"/>
       </symbol>
-      <symbol id="nota-wordmark" viewBox="0 0 92 42">
-        <g fill="none" stroke="currentColor" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round">
-          <!-- O: a rounded portal, echoing the soft corners of the N tile. -->
-          <path d="M16.5 6H10a7.5 7.5 0 0 0-7.5 7.5v8A7.5 7.5 0 0 0 10 29h6.5a7.5 7.5 0 0 0 7.5-7.5v-8A7.5 7.5 0 0 0 16.5 6Z"/>
-          <!-- T: the top bar turns into its stem through a rounded shoulder. -->
-          <path d="M30 6.5h23q2 0 2 2t-2 2h-9v18.5"/>
-          <!-- A: a softened apex and open, generous crossbar keep it light. -->
-          <path d="M60.5 29 70.2 7.2Q71 5.5 72 5.5t1.8 1.7L83.5 29M65 20.5h13.5"/>
-          <!-- A single rule: the legal-document / signature-line cue. -->
-          <path d="M0.5 36.5h86" stroke-width="1.8"/>
+      <symbol id="nota-wordmark" viewBox="0 3.5 91.8 28">
+        <!-- Exploration 01 « Monogramme lié » (brand-explorations.html, first
+             tile): O T A in SOLID, heavy letterforms carrying the same visual
+             weight as the tile's N, on tight tracking, and NO rule under the
+             word. Filled paths, not <text>: this drawing must be identical in
+             Chromium, Firefox and WebKit and must survive favicon.svg / og.svg,
+             which are opened without the page's web fonts. The cap band is
+             y 3.5-31.5 and the word spans x 0-91.8 (period included); the viewBox IS that cap
+             band, so a <svg class="brand-word-svg"> sized to --lockup-word
+             renders the caps exactly that tall (ADR 0048, variant C). -->
+        <g fill="currentColor" fill-rule="evenodd">
+          <!-- O: a square portal, echoing the square corners of the N tile (variant C). -->
+          <path d="M0 8.5a5 5 0 0 1 5-5H22a5 5 0 0 1 5 5V26.5a5 5 0 0 1-5 5H5a5 5 0 0 1-5-5ZM7.3 12.3v10.4a1.5 1.5 0 0 0 1.5 1.5h9.4a1.5 1.5 0 0 0 1.5-1.5V12.3a1.5 1.5 0 0 0-1.5-1.5H8.8a1.5 1.5 0 0 0-1.5 1.5Z"/>
+          <!-- T: a flat bar over a centred stem, same stem weight as the O; the
+               stem ends in a bevel that echoes the N's diagonal (« 22 · Le T signé »). -->
+          <path d="M28.4 3.5H55V10.8H45.35V27.3L38.05 31.5V10.8H28.4Z"/>
+          <!-- A: splayed legs, a solid apex and a counter closed by the bar. -->
+          <path d="M66.5 3.5H72.5L84.1 31.5H76.3L74.68 26.25H64.32L62.7 31.5H54.9ZM69.5 9.5L72.73 19.95H66.27Z"/>
+          <!-- The period (« 27 · Le point final »): a signal square closes the word.
+               The ONE colour literal inside the wordmark — the signal token's value,
+               the same as the tile's signal; ux-nav.test.mjs allows exactly this one. -->
+          <rect x="87.4" y="27.1" width="4.4" height="4.4" rx="1" fill="#407598"/>
         </g>
       </symbol>
     </svg>
@@ -228,7 +240,7 @@
               <button type="button" class="mini-seg-btn" data-set-lang="fr">FR</button>
               <button type="button" class="mini-seg-btn" data-set-lang="en">EN</button>
             </div>
-          <div class="ig-wordmark ig-lockup ig-signature" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 92 42" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
+          <div class="ig-wordmark ig-lockup ig-signature" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
           <h2 class="ig-title" id="ig-title">Votre projet. Votre notaire.</h2>
           <p class="ig-lede">Nota met en relation clients et notaires.</p>
           <div class="ig-doors">
@@ -249,11 +261,11 @@
         <div class="ig-frame" id="ig-frame" hidden>
           <div class="ig-stage" id="ig-stage-client">
             <div class="ig-masthead">
-              <div class="ig-wordmark ig-lockup" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 92 42" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
+              <div class="ig-wordmark ig-lockup" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
               <span class="ig-audience">Pour votre projet</span>
             </div>
             <section class="ig-scene ig-c1">
-              <div class="ig-wordmark ig-lockup ig-signature" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 92 42" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
+              <div class="ig-wordmark ig-lockup ig-signature" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
               <p class="ig-h">Trouvez votre notaire avec Nota.</p>
               <p class="ig-sub">Pour faire avancer votre projet.</p>
             </section>
@@ -271,7 +283,7 @@
             </section>
 
             <section class="ig-scene ig-c4">
-              <div class="ig-wordmark ig-lockup ig-signature" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 92 42" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
+              <div class="ig-wordmark ig-lockup ig-signature" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
               <p class="ig-h">Votre projet commence ici.</p>
               <p class="ig-sub">Vérifiez le prix total avant de publier.</p>
               <button type="button" class="ig-cta" data-ig-goto="carnet">Choisir ma date →</button>
@@ -285,11 +297,11 @@
 
           <div class="ig-stage" id="ig-stage-notaire" hidden>
             <div class="ig-masthead">
-              <div class="ig-wordmark ig-lockup" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 92 42" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
+              <div class="ig-wordmark ig-lockup" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
               <span class="ig-audience">Pour votre pratique</span>
             </div>
             <section class="ig-scene ig-n1">
-              <div class="ig-wordmark ig-lockup ig-signature" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 92 42" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
+              <div class="ig-wordmark ig-lockup ig-signature" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
               <p class="ig-h">Trouvez votre prochain dossier.</p>
               <p class="ig-sub">Avec Nota, choisissez les demandes qui vous conviennent.</p>
             </section>
@@ -307,7 +319,7 @@
             </section>
 
             <section class="ig-scene ig-n4">
-              <div class="ig-wordmark ig-lockup ig-signature" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 83 39" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
+              <div class="ig-wordmark ig-lockup ig-signature" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
               <p class="ig-h">Faites place à votre prochain client.</p>
               <p class="ig-sub">Inscrivez-vous gratuitement sur Nota.</p>
               <button type="button" class="ig-cta" data-ig-goto="notaires">Voir les demandes →</button>
@@ -334,7 +346,7 @@
       <div class="wrap">
         <a class="brand goto-link" href="#t=carnet" data-goto="carnet" aria-label="Nota, accueil — retour au menu">
           <span class="brand-lockup" aria-hidden="true" data-i18n-skip>
-            <svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 0 92 42" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span>
+            <svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span>
           </span>
           <span class="brand-sub">Québec</span>
         </a>
@@ -639,31 +651,6 @@
             </div>
 
           </div>
-
-          <section class="build-loop" id="how-we-build" aria-labelledby="build-loop-title">
-            <div class="build-loop-copy">
-              <span class="eyebrow">Notre façon de construire</span>
-              <h2 id="build-loop-title">Une idée. Une boucle complète. Un produit qui apprend.</h2>
-              <p>Chaque fonctionnalité suit le même cycle : planifier, choisir, tester, livrer, écouter et améliorer. Rien ne passe à l’étape suivante sans notre définition de fini.</p>
-              <button type="button" class="btn btn-ghost build-loop-toggle" aria-pressed="false" aria-controls="build-loop-graphic">Mettre l’animation en pause</button>
-            </div>
-            <div class="build-loop-graphic" id="build-loop-graphic" role="img" aria-label="Boucle de développement : concept, plan, technologie, tests, sécurité, CI/CD, production, feedback et amélioration des modèles">
-              <div class="build-loop-ring" aria-hidden="true"></div>
-              <ol class="build-loop-nodes">
-                <li><span>01</span><strong>Concept</strong><small>L’idée devient intention.</small></li>
-                <li><span>02</span><strong>Plan</strong><small>Une mise en œuvre claire.</small></li>
-                <li><span>03</span><strong>Technologie</strong><small>Les bons outils, au bon endroit.</small></li>
-                <li><span>04</span><strong>Tests</strong><small>Unitaires, contrat et comportement.</small></li>
-                <li><span>05</span><strong>Sécurité</strong><small>Conformité intégrée au cycle.</small></li>
-                <li><span>06</span><strong>CI/CD</strong><small>Chaque changement est vérifié.</small></li>
-                <li><span>07</span><strong>Production</strong><small>Livrer, puis vérifier.</small></li>
-                <li><span>08</span><strong>Feedback</strong><small>Écouter les personnes qui l’utilisent.</small></li>
-                <li><span>09</span><strong>Modèles</strong><small>Chaque fournisseur itère dans sa boucle.</small></li>
-              </ol>
-              <div class="build-loop-core"><span>Nota</span><small>Relier la date,<br>la confiance<br>et la capacité.</small></div>
-            </div>
-            <p class="build-loop-note">La petite boucle des modèles est testée localement, puis en bêta, avant de rejoindre la grande boucle.</p>
-          </section>
 
 
         </div>
@@ -1724,7 +1711,7 @@
     <footer class="site-footer">
       <div class="wrap footer-grid">
         <div class="footer-id">
-        <span class="footer-brand"><span class="brand-lockup" aria-hidden="true" data-i18n-skip><svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 0 92 42" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></span><span class="brand-sub">Québec</span></span>
+        <span class="footer-brand"><span class="brand-lockup" aria-hidden="true" data-i18n-skip><svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></span><span class="brand-sub">Québec</span></span>
           <p class="footer-tag">Le carnet public des actes notariés à Québec. Vous proposez la date et le prix — un notaire retient votre demande.</p>
           <!-- Contact actions (courriel, and phone only when a line is configured
                in @nota/domain CONTACT). Filled by renderContact(). -->

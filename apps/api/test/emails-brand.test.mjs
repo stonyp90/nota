@@ -62,10 +62,11 @@ const names = Object.keys(emails.TEMPLATES);
 const META = emails.TEMPLATE_META;
 const byAudience = (a) => names.filter((n) => META[n] && META[n].audience === a);
 
-// The text a human reads: the HTML without its tags, plus the alternative
-// and the subject. Attribute values (an href, a width) are not copy.
+// The text a human reads: the HTML without its tags and without the dark-layer
+// stylesheet (a rule set, not copy — its « }} » is CSS, not a mustache), plus
+// the alternative and the subject. Attribute values (an href, a width) are not copy.
 function visible(out) {
-  return out.html.replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ') + ' ' + out.text + ' ' + out.subject;
+  return out.html.replace(/<style[\s>][\s\S]*?<\/style>/gi, ' ').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ') + ' ' + out.text + ' ' + out.subject;
 }
 // The two CTA anchors of a message (the bulletproof buttons): [{ href, label }].
 function ctas(html) {
@@ -99,6 +100,41 @@ function webTokens() {
 }
 const WEB = webTokens();
 const BRAND = WEB['--brand'];
+// The dark theme, from the SAME file: the standalone
+// `@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) {…} }`
+// block (the explicit `[data-theme='dark']` twin restates the same set). A
+// var() the block does not redefine (the blue ramp, --paper, --on-accent)
+// resolves through the light map, exactly as the browser cascades it.
+function webDarkTokens(light) {
+  const css = readFileSync(WEB_TOKENS, 'utf8');
+  const media = css.indexOf('@media (prefers-color-scheme: dark) {');
+  assert.ok(media !== -1, 'styles.css must carry the system-dark media block');
+  const start = css.indexOf(":root:not([data-theme='light']) {", media);
+  const end = css.indexOf('\n  }', start);
+  const block = css.slice(start, end);
+  const raw = {};
+  for (const [, k, v] of block.matchAll(/(--[a-z0-9-]+):\s*([^;]+);/g)) raw[k] = v.trim();
+  const resolve = (v) => {
+    const m = v && v.match(/^var\((--[a-z0-9-]+)\)$/);
+    return m ? resolve(raw[m[1]] ?? light[m[1]]) : v;
+  };
+  const out = { ...light };
+  for (const k of Object.keys(raw)) out[k] = resolve(raw[k]);
+  return out;
+}
+const WEB_DARK = webDarkTokens(WEB);
+// WCAG 2.2 relative luminance + contrast ratio (sRGB), for the pairs below.
+function luminance(hex) {
+  const c = hex.replace('#', '');
+  const [r, g, b] = [0, 2, 4]
+    .map((i) => parseInt(c.slice(i, i + 2), 16) / 255)
+    .map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrast(a, b) {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
 
 test('the email palette mirrors the web light-theme tokens, key by key', () => {
   const P = emails.PALETTE;
@@ -111,9 +147,37 @@ test('the email palette mirrors the web light-theme tokens, key by key', () => {
   assert.equal(P.card, WEB['--surface'], 'card = --surface');
   assert.equal(P.bg, WEB['--bg'], 'bg = --bg (the page canvas the card floats on)');
   assert.equal(P.border, WEB['--border'], 'border = --border');
-  assert.equal(P.tint, WEB['--nota-blue-50'], 'tint = nota-blue-50 (the callout wash)');
+  assert.equal(P.tint, WEB['--nota-blue-50'], 'tint = nota-blue-50 (the callout wash, the QUÉBEC badge ground)');
+  // The lockup's own two constants (ADR 0048: mark square + signal square — also the QUÉBEC badge ground).
+  assert.equal(P.markBg, WEB['--nota-blue-900'], 'markBg = --nota-blue-900 (the tile)');
+  assert.equal(P.brandBright, WEB['--nota-blue-500'], 'brandBright = --nota-blue-500 (the signal square, the badge ground)');
+  assert.equal(P.brandDark, WEB['--nota-blue-800'], 'the QUÉBEC badge text is --nota-blue-800 (ADR 0048)');
   // The web radius scale (owner: « tout garder le même style carré »).
   for (const k of ['--radius', '--radius-sm', '--radius-xs', '--radius-lg']) assert.match(WEB[k], /^\d+px$/, k);
+  assert.equal(emails.RADIUS.card, WEB['--radius-lg'], 'the card = --radius-lg');
+  assert.equal(emails.RADIUS.control, WEB['--radius'], 'the button = --radius');
+  assert.equal(emails.RADIUS.panel, WEB['--radius-sm'], 'the callout and the tile = --radius-sm (variant C: 7/64 of a 40 px tile)');
+  assert.equal(emails.RADIUS.badge, WEB['--radius-xs'], 'the QUÉBEC badge = --radius-xs');
+});
+
+test('the dark layer mirrors the web dark-theme tokens, key by key — and uses the product canvas, not the wordmark midnight', () => {
+  const D = emails.DARK;
+  assert.equal(D.bg, WEB_DARK['--bg'], 'bg = --bg (dark)');
+  assert.notEqual(D.bg, WEB['--nota-blue-950'], 'the dark canvas is --bg, not --nota-blue-950 (the product has two midnights)');
+  assert.equal(D.card, WEB_DARK['--surface'], 'card = --surface (dark)');
+  assert.equal(D.panel, WEB_DARK['--surface-inset'], 'panel = --surface-inset (dark)');
+  assert.equal(D.border, WEB_DARK['--border'], 'border = --border (dark)');
+  assert.equal(D.ink, WEB_DARK['--ink'], 'ink = --ink (dark)');
+  assert.equal(D.muted, WEB_DARK['--ink-muted'], 'muted = --ink-muted (dark)');
+  assert.equal(D.brand, WEB_DARK['--brand'], 'brand = --brand (dark)');
+  assert.equal(D.link, WEB_DARK['--brand-bright'], 'link = --brand-bright (dark)');
+  assert.equal(D.brandInk, WEB_DARK['--on-accent'], 'brandInk = --on-accent (white on a saturated fill in every theme)');
+  // Every dark value differs from its light twin — a copy that drifted to
+  // light would pass the mirror test above and paint a light card in dark.
+  for (const k of ['bg', 'card', 'border', 'ink', 'muted', 'brand']) {
+    const lightKey = k === 'brand' ? 'brand' : k;
+    assert.notEqual(D[k], emails.PALETTE[lightKey], `DARK.${k} must not equal the light value`);
+  }
 });
 
 test('the registry is the full lifecycle set', () => {
@@ -216,22 +280,28 @@ test('every template shares the branded, email-safe layout wrapper', () => {
     // Hidden preheader span at the top of the body.
     assert.ok(html.includes('display:none'), `${name}: missing hidden preheader`);
 
-    // No <style> blocks — clients strip them; all CSS must be inline.
-    assert.ok(!/<style[\s>]/i.test(html), `${name}: uses a <style> block`);
+    // ONE <style> block, and it is the dark layer and nothing else — clients
+    // strip <style>, so every light style must still be inline (the dark-layer
+    // suite below reads the block; here: count, and the light truth outside it).
+    const styles = html.match(/<style[\s>][\s\S]*?<\/style>/gi) || [];
+    assert.equal(styles.length, 1, `${name}: exactly one <style> block (the dark layer)`);
+    const outside = html.replace(styles[0], '');
+    assert.ok(outside.includes('background-color:' + emails.PALETTE.card), `${name}: the light card must be painted inline`);
+    assert.ok(outside.includes('color:' + emails.PALETTE.ink), `${name}: the light ink must be set inline`);
 
     // Inter-first font stack (brand type).
     assert.ok(html.includes('Inter'), `${name}: missing the Inter font stack`);
 
-    // The "N" logo mark square is rendered in institutional cobalt — no image of any
-    // kind, external or inline, and no background-image either.
+    // The lockup is typeset — no image of any kind, external or inline, and no
+    // background-image either.
     assert.ok(!/<img/i.test(html), `${name}: relies on an external <img>`);
     assert.ok(!/<svg/i.test(html), `${name}: relies on an inline <svg>`);
     assert.ok(!/url\(/i.test(html), `${name}: relies on a background image`);
 
-    // The card is deliberately light-only; the color-scheme metas tell Apple
-    // Mail (and friends) not to auto-invert it in dark mode.
-    assert.ok(html.includes('name="color-scheme" content="light"'), `${name}: missing color-scheme meta`);
-    assert.ok(html.includes('name="supported-color-schemes" content="light"'), `${name}: missing supported-color-schemes meta`);
+    // Both schemes are declared, so Apple Mail (and friends) apply the dark
+    // layer instead of auto-inverting the light card.
+    assert.ok(html.includes('name="color-scheme" content="light dark"'), `${name}: missing color-scheme meta (light dark)`);
+    assert.ok(html.includes('name="supported-color-schemes" content="light dark"'), `${name}: missing supported-color-schemes meta (light dark)`);
 
     // Screen readers: the document is fr-CA; the English block switches lang.
     assert.ok(html.includes('lang="fr-CA"'), `${name}: missing fr-CA document lang`);
@@ -241,12 +311,15 @@ test('every template shares the branded, email-safe layout wrapper', () => {
 
 // --- brand invariants (2026-09-03 pass) ----------------------------------------
 
-test('every colour in a rendered message is a palette value — no stray hex literal', () => {
-  const allowed = new Set(Object.values(emails.PALETTE).map((c) => c.toLowerCase()));
+test('every colour in a rendered message is a palette value — light inline, dark in the layer — no stray hex literal', () => {
+  const light = new Set(Object.values(emails.PALETTE).map((c) => c.toLowerCase()));
+  const dark = new Set(Object.values(emails.DARK).map((c) => c.toLowerCase()));
   for (const name of names) {
     const { html } = emails.TEMPLATES[name](CTX);
-    const seen = new Set((html.match(/#[0-9a-fA-F]{6}\b/g) || []).map((c) => c.toLowerCase()));
-    for (const c of seen) assert.ok(allowed.has(c), `${name}: colour ${c} is not a PALETTE token`);
+    const style = html.match(/<style[\s>][\s\S]*?<\/style>/i)[0];
+    const inline = html.replace(style, '');
+    for (const c of new Set((inline.match(/#[0-9a-fA-F]{6}\b/g) || []).map((c) => c.toLowerCase()))) assert.ok(light.has(c), `${name}: inline colour ${c} is not a PALETTE token`);
+    for (const c of new Set((style.match(/#[0-9a-fA-F]{6}\b/g) || []).map((c) => c.toLowerCase()))) assert.ok(dark.has(c), `${name}: dark-layer colour ${c} is not a DARK token`);
     // Brand ink on the brand fill, never white on white: the button pairs
     // brandInk with a brand bgcolor, and the card sits on the page canvas.
     assert.ok(html.includes('bgcolor="' + emails.PALETTE.brand + '"'), `${name}: CTA fill is not the brand`);
@@ -264,13 +337,140 @@ test('every radius sits on the web square scale — no pills, no circles', () =>
   }
 });
 
-test('the logo header: the reference mark and signal stay hidden from screen readers, with the Nota wordmark and bilingual tagline', () => {
+// ADR 0048, 2026-09-11 (variant C · design 02 · layout 16 · details 22 + 27):
+// the tile on the square 6 px step with a SQUARE signal (■), the word OTA
+// closed by a period in the signal colour, and the QUÉBEC badge ON the signal
+// colour with white text, 800, .1em tracking. The geometry is one constant set
+// (emails.LOCKUP) carrying the web's five --lockup-* ratios at a 40 px tile.
+test('the logo header spells the variant-C lockup — tile N■ + OTA. + QUÉBEC badge on the signal colour — as one accessible image, with the bilingual tagline', () => {
+  const P = emails.PALETTE;
+  const rx = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   for (const name of names) {
     const { html } = emails.TEMPLATES[name](CTX);
-    assert.ok(/aria-hidden="true"[^>]*>N<span[\s\S]*>●<\/span><\/td>/.test(html), name + ': the N mark and signal must be aria-hidden (the wordmark carries the name)');
-    assert.ok(/>Nota<\/div>/.test(html), `${name}: the wordmark`);
+    const m = html.match(/<table role="img" aria-label="Nota Québec"[\s\S]*?<\/table>/);
+    assert.ok(m, `${name}: the lockup is one table named « Nota Québec »`);
+    const h = m[0];
+    // The tile: --nota-blue-900 ground on --radius, a white N at 800, the
+    // signal dot in --nota-blue-500 at its top-right — hidden from screen readers.
+    assert.ok(
+      new RegExp('aria-hidden="true"[^>]*background-color:' + rx(P.markBg) + ';border-radius:' + rx(emails.RADIUS.panel) + ';[^>]*font-weight:800;color:' + rx(P.brandInk) + ';[^>]*>N<span[^>]*vertical-align:top;[^>]*color:' + rx(P.brandBright) + ';">■</span></td>').test(h),
+      `${name}: the tile (N + SQUARE signal on the deep blue-teal square, on the 6 px step)`
+    );
+    // The word: O T A — solid, the SAME 800 weight as the N, tight tracking,
+    // deep ink — never « Nota », never « nota. », no rule under it.
+    const L = emails.LOCKUP;
+    assert.equal(L.tile, 40, 'the tile is 40 px');
+    assert.ok(Math.abs(L.word * 0.73 - L.tile * 0.6) <= 1.5, 'the word’s caps (Inter ≈ .73 em) are .60 of the tile');
+    assert.equal(L.gap, Math.round(L.tile * 0.12), 'tile→word gap = .12 × tile');
+    assert.equal(L.badgeGap, Math.round(L.tile * 0.16), 'word→badge gap = .16 × tile');
+    assert.equal(L.badgeSize, Math.ceil(L.tile * 0.16), 'badge font-size = .16 × tile (rounded up to stay legible)');
+    assert.ok(new RegExp('class="nm-ink"[^>]*padding-left:' + L.gap + 'px;[^>]*font-size:' + L.word + 'px;line-height:' + L.tile + 'px;font-weight:800;letter-spacing:-0\\.07em;color:' + rx(P.ink) + ';white-space:nowrap;">OTA<span style="color:' + rx(P.brandBright) + ';">\\.</span></td>').test(h), `${name}: the word OTA. (800, -0.07em, ink, centred on the tile, the period in the signal colour)`);
+    assert.ok(!/●/.test(h), `${name}: the round signal is retired (variant C)`);
+    assert.ok(!/>Nota</.test(h) && !/nota\./i.test(h), `${name}: the header must not spell « N Nota » or « nota. »`);
+    assert.ok(!/border-bottom|border-top|text-decoration:underline/.test(h), `${name}: no rule under the word (ADR 0048 amendment)`);
+    // The badge: QUÉBEC on the SIGNAL colour (design 02) — --nota-blue-500
+    // ground, white text, 800, .1em, --radius-xs, written in capitals (Outlook
+    // ignores text-transform), centred on the tile after a .16 × tile gap.
+    assert.ok(new RegExp('<td valign="middle" style="padding:0 0 0 ' + L.badgeGap + 'px;"><span style="[^"]*background-color:' + rx(P.brandBright) + ';border-radius:' + rx(emails.RADIUS.badge) + ';[^"]*font-size:' + L.badgeSize + 'px;[^"]*font-weight:800;letter-spacing:0\\.1em;color:' + rx(P.brandInk) + ';[^"]*">QUÉBEC</span>').test(h), `${name}: the QUÉBEC badge on the signal colour`);
+    assert.ok(!new RegExp('background-color:' + rx(P.tint) + '[^>]*>QUÉBEC').test(h), `${name}: the pale badge is retired (design 02)`);
+    // Order: tile, word, badge. The tile and the badge are constants of the
+    // mark — no dark hook — only the word carries nm-ink.
+    assert.ok(h.indexOf('>N<span') < h.indexOf('>OTA<') && h.indexOf('>OTA<') < h.indexOf('>QUÉBEC<'), `${name}: tile, then word, then badge`);
+    assert.ok(!/class="nm-[a-z-]+"[^>]*>N<span/.test(h), `${name}: the tile does not flip in dark`);
+    assert.ok(!/class="nm-[a-z-]+"[^>]*>QUÉBEC</.test(h), `${name}: the badge does not flip in dark`);
+    assert.ok(!/text-transform/.test(h), `${name}: the letters are written in capitals, not transformed`);
+    // The tagline, under the lockup.
     assert.ok(html.includes('La place de marché notariale · The notarial marketplace'), `${name}: the tagline`);
   }
+});
+
+test('the dark layer: one <style> block that only overrides for dark, twice (prefers-color-scheme + Outlook.com [data-ogsc]), every declaration !important, every hook present', () => {
+  const D = emails.DARK;
+  const preamble = ':root{color-scheme:light dark;supported-color-schemes:light dark;}';
+  for (const name of names) {
+    const { html } = emails.TEMPLATES[name](CTX);
+    const css = html.match(/<style>([\s\S]*?)<\/style>/)[1];
+    assert.ok(css.startsWith(preamble), `${name}: the block opens by declaring both schemes`);
+    const rest = css.slice(preamble.length);
+    const m = rest.match(/^@media \(prefers-color-scheme: dark\)\{([\s\S]*?)\}(\[data-ogsc\] [\s\S]*)$/);
+    assert.ok(m, `${name}: a media block followed by its [data-ogsc] twin, nothing else`);
+    const [, media, ogsc] = m;
+    assert.equal(ogsc.split('[data-ogsc] ').join(''), media, `${name}: the Outlook.com twin is the same rule set, prefixed`);
+    // EVERY member of every selector list in the twin carries the prefix — a
+    // bare `.nm-canvas` after a comma would apply in every client, in light
+    // mode too, and paint the light card's canvas dark (a screenshot caught it).
+    for (const sel of ogsc.match(/[^{}]+(?=\{)/g) || []) for (const s of sel.split(',')) assert.ok(s.trim().startsWith('[data-ogsc] '), `${name}: bare selector « ${s.trim()} » outside the dark scope`);
+    const decls = media.match(/[a-z-]+:[^;{}]+;/g) || [];
+    assert.ok(decls.length >= 12, `${name}: the dark layer carries the canvas, card, hairlines, ink, muted, link, CTA and callout`);
+    for (const d of decls) assert.ok(d.endsWith(' !important;'), `${name}: ${d} must be !important to beat the inline light style`);
+    // What the layer paints: the product's dark canvas and card, the dark
+    // ink, links on --brand-bright, the CTA on the dark --brand with white ink.
+    assert.ok(media.includes('body,.nm-canvas{background-color:' + D.bg + ' !important;}'), `${name}: canvas → --bg dark`);
+    assert.ok(media.includes('.nm-card{background-color:' + D.card + ' !important;border-color:' + D.border + ' !important;border-top-color:' + D.brand + ' !important;}'), `${name}: card → --surface dark`);
+    assert.ok(media.includes('.nm-ink{color:' + D.ink + ' !important;}'), `${name}: ink → --ink dark`);
+    assert.ok(media.includes('.nm-muted{color:' + D.muted + ' !important;}'), `${name}: muted → --ink-muted dark`);
+    assert.ok(media.includes('.nm-link{color:' + D.link + ' !important;}'), `${name}: links → --brand-bright dark`);
+    assert.ok(media.includes('.nm-cta{background-color:' + D.brand + ' !important;}') && media.includes('.nm-cta a{color:' + D.brandInk + ' !important;border-color:' + D.link + ' !important;}'), `${name}: CTA → dark --brand, white label`);
+    assert.ok(media.includes('.nm-callout{background-color:' + D.panel + ' !important;'), `${name}: callout → --surface-inset dark`);
+    // Every hook the shell always paints is in the body.
+    const body = html.slice(html.indexOf('<body'));
+    for (const cls of ['nm-canvas', 'nm-card', 'nm-hr', 'nm-ink', 'nm-muted', 'nm-cta']) assert.ok(new RegExp('class="[^"]*\\b' + cls + '\\b').test(body), `${name}: hook .${cls} missing from the body`);
+  }
+});
+
+test('the tile, the word, the badge, buttons and links clear WCAG 4.5:1 in BOTH modes (light inline, dark layer)', () => {
+  const P = emails.PALETTE;
+  const D = emails.DARK;
+  const pairs = [
+    // light
+    ['light: N on the tile', P.brandInk, P.markBg],
+    ['light: OTA on the card', P.ink, P.card],
+    ['light: QUÉBEC on the badge', P.brandDark, P.tint],
+    ['light: CTA label on the CTA', P.brandInk, P.brand],
+    ['light: link on the card', P.brand, P.card],
+    ['light: heading/body on the card', P.ink, P.card],
+    ['light: callout text on the callout', P.ink, P.tint],
+    // dark — the tile and the badge are constants and sit on the dark card
+    ['dark: N on the tile', P.brandInk, P.markBg],
+    ['dark: OTA on the card', D.ink, D.card],
+    ['dark: QUÉBEC on the badge', P.brandDark, P.tint],
+    ['dark: CTA label on the CTA', D.brandInk, D.brand],
+    ['dark: link on the card', D.link, D.card],
+    ['dark: heading/body on the card', D.ink, D.card],
+    ['dark: muted on the card', D.muted, D.card],
+    ['dark: callout text on the callout', D.ink, D.panel],
+  ];
+  for (const [label, fg, bg] of pairs) {
+    const r = contrast(fg, bg);
+    assert.ok(r >= 4.5, `${label}: ${fg} on ${bg} is ${r.toFixed(2)}:1 (< 4.5)`);
+  }
+  // The tile and the badge are non-text boundaries on the LIGHT card (3:1);
+  // on the dark card the tile's white N is the boundary that matters (above).
+  assert.ok(contrast(P.markBg, P.card) >= 3, 'light: the tile against the card');
+  assert.ok(contrast(P.brandBright, P.card) >= 3, 'light: the signal badge against the card');
+  assert.ok(contrast(P.brandBright, D.card) >= 3, 'dark: the signal badge against the dark card');
+  assert.ok(contrast(P.brandInk, P.brandBright) >= 4.5, 'the badge’s white text on the signal colour (design 02) reads AA');
+});
+
+test('the personal email signature (docs/signature-courriel.html) carries the same 01 lockup on the same tokens, both modes, no image', () => {
+  const sig = readFileSync(path.join(HERE, '..', '..', '..', 'docs', 'signature-courriel.html'), 'utf8');
+  const P = emails.PALETTE;
+  const D = emails.DARK;
+  const allowed = new Set([...Object.values(P), ...Object.values(D)].map((c) => c.toLowerCase()));
+  for (const c of new Set((sig.match(/#[0-9a-fA-F]{6}\b/g) || []).map((c) => c.toLowerCase()))) assert.ok(allowed.has(c), `signature: colour ${c} is neither a PALETTE nor a DARK token`);
+  assert.ok(!/<img|<svg|url\(/i.test(sig), 'signature: no image of any kind');
+  // The lockup, in order, on the lockup's constants.
+  const L = emails.LOCKUP;
+  assert.ok(new RegExp('background-color:' + P.markBg + ';border-radius:' + emails.RADIUS.panel + ';[^>]*>N<span[^>]*color:' + P.brandBright + '[^>]*>■</span>').test(sig), 'signature: the tile N■ on the 6 px step');
+  assert.ok(new RegExp('padding-left:' + L.gap + 'px;[^"]*font-size:' + L.word + 'px;line-height:' + L.tile + 'px;font-weight:800;letter-spacing:-0\\.07em;color:' + P.ink + ';[^"]*">OTA<span style="color:' + P.brandBright + ';">\\.</span><').test(sig), 'signature: the word OTA. on the LOCKUP constants');
+  assert.ok(new RegExp('padding:0 0 0 ' + L.badgeGap + 'px;"><span style="[^"]*background-color:' + P.brandBright + ';[^"]*font-size:' + L.badgeSize + 'px;[^"]*font-weight:800;letter-spacing:0\\.1em;color:' + P.brandInk + '[^"]*">QUÉBEC<').test(sig), 'signature: the QUÉBEC badge on the signal colour');
+  assert.ok(!/●/.test(sig), 'signature: the round signal is retired');
+  assert.ok(sig.indexOf('>N<span') < sig.indexOf('>OTA<') && sig.indexOf('>OTA<') < sig.indexOf('>QUÉBEC<'), 'signature: tile, word, badge');
+  assert.ok(!/>Nota<\/td>|nota\.<\/td>/.test(sig), 'signature: never « N Nota » or « nota. »');
+  // The dark layer, on the dark tokens, and the required lines.
+  assert.ok(sig.includes('@media (prefers-color-scheme: dark)') && sig.includes(D.ink) && sig.includes(D.muted) && sig.includes(D.link), 'signature: the dark layer on the dark tokens');
+  assert.ok(sig.includes('brand.gonota.ca'), 'signature: « Nota · brand.gonota.ca »');
+  assert.ok(/Inter/.test(sig), 'signature: the Inter-first stack');
 });
 
 test('one preheader per message: FR ≤ 110 characters, then EN, and it adds to the subject instead of repeating it', () => {

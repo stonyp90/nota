@@ -606,7 +606,7 @@ test('P2-18: « Comment ça marche » in the footer is a button, not a dead link
   assert.equal($(doc, 'onboarding-dialog').open, true);
 });
 
-test('P2-19: the logomark is drawn once as a <symbol>; every inline copy is a <use>', () => {
+test('P2-19: the lockup is drawn once as <symbol>s; every inline copy is a <use>', () => {
   const dom = new JSDOM(HTML_SRC);
   DOMS.push(dom);
   const doc = dom.window.document;
@@ -617,8 +617,8 @@ test('P2-19: the logomark is drawn once as a <symbol>; every inline copy is a <u
     assert.ok(m.querySelector('use[href="#nota-logomark"]'), 'a mark is a <use>');
     assert.equal(m.querySelector('rect, polygon, circle'), null, 'no shapes inlined again');
   }
-  const outside = HTML_SRC.replace(/<symbol[\s\S]*?<\/symbol>/, '');
-  assert.ok(!/fill="#[0-9a-fA-F]{3,6}"/.test(outside), 'no hardcoded fill outside the symbol');
+  const outside = HTML_SRC.replace(/<symbol[\s\S]*?<\/symbol>/g, '');
+  assert.ok(!/fill="#[0-9a-fA-F]{3,6}"/.test(outside), 'no hardcoded fill outside the two symbols');
   // The mark's two brand colors are the stylesheet's Nota ramp — every asset
   // (symbol, favicon.svg, og.svg, manifests, theme-color) stays in lockstep.
   const ramp = (step) => /--nota-blue-STEP:\s*(#[0-9a-fA-F]{6})/.source.replace('STEP', step);
@@ -627,7 +627,7 @@ test('P2-19: the logomark is drawn once as a <symbol>; every inline copy is a <u
   const mark = new RegExp(ramp('900')).exec(CSS_SRC)[1].toLowerCase();
   const symbol = /<symbol[\s\S]*?<\/symbol>/.exec(HTML_SRC)[0].toLowerCase();
   assert.ok(symbol.includes('fill="' + mark + '"'), 'the symbol’s square is --nota-blue-900');
-  assert.ok(symbol.includes('fill="' + bright + '"'), 'the symbol’s dot is --nota-blue-500');
+  assert.ok(symbol.includes('fill="' + bright + '"'), 'the symbol’s signal is --nota-blue-500');
   for (const f of ['../public/favicon.svg', '../public/og.svg']) {
     const svg = read(f).toLowerCase();
     assert.ok(svg.includes(mark) && svg.includes(bright) && !svg.includes('#2c5f34') && !svg.includes('#50b848'), f + ' carries the current Nota blue-teal mark');
@@ -636,6 +636,143 @@ test('P2-19: the logomark is drawn once as a <symbol>; every inline copy is a <u
   assert.equal(light.getAttribute('content').toLowerCase(), brand, 'the light theme-color is the brand token');
   for (const f of ['../public/manifest.webmanifest', '../public/manifest.en.webmanifest']) {
     assert.equal(JSON.parse(read(f)).theme_color.toLowerCase(), brand, f + ' theme_color is the brand token');
+  }
+
+  // ADR 0048 amendment (2026-09-11) — « 01 is the right one »: the word is
+  // exploration 01's O T A, SOLID and heavy, on tight tracking, with NO rule
+  // under it. The outline word (fill:none + stroke) and the signature-line rule
+  // are retired; nothing may bring either back on any surface.
+  const word = /<symbol id="nota-wordmark"[\s\S]*?<\/symbol>/.exec(HTML_SRC)[0];
+  assert.equal((HTML_SRC.match(/<symbol id="nota-wordmark"/g) || []).length, 1, 'one wordmark symbol');
+  assert.match(word, /fill="currentColor"/, 'the word is filled, not stroked');
+  assert.ok(!/stroke=|fill="none"/.test(word), 'no outline letterforms left in the wordmark');
+  const letters = [...word.matchAll(/ d="([^"]+)"/g)].map((m) => m[1]);
+  assert.equal(letters.length, 3, 'exactly three letterforms: O, T and A');
+
+  // ADR 0048 amendment (2026-09-11, later the same day) — variant C « square
+  // tile, square signal », then design 02 « Signal repris par le badge », layout
+  // 16 « Centré à 60 % » and the letter details 22 « Le T signé » + 27 « Le
+  // point final ». The drawing is pinned by path signature: every copy (symbol,
+  // signing room, admin, favicons, og.svg) must carry these exact strings, and
+  // the round signal, the rx="12" tile, the rounded O and the straight T may
+  // not return anywhere.
+  const C = {
+    tile: '<rect width="64" height="64" rx="7" fill="#264961"/>',
+    stems: ['<rect x="16" y="15" width="7.5" height="34" rx="1"/>', '<rect x="40.5" y="15" width="7.5" height="34" rx="1"/>'],
+    n: '<polygon points="16,15 24,15 48,49 40,49"/>',
+    signal: '<rect x="40" y="8" width="16" height="16" rx="3" fill="#407598" stroke="#264961" stroke-width="3"/>',
+    o: 'M0 8.5a5 5 0 0 1 5-5H22a5 5 0 0 1 5 5V26.5a5 5 0 0 1-5 5H5a5 5 0 0 1-5-5ZM7.3 12.3v10.4a1.5 1.5 0 0 0 1.5 1.5h9.4a1.5 1.5 0 0 0 1.5-1.5V12.3a1.5 1.5 0 0 0-1.5-1.5H8.8a1.5 1.5 0 0 0-1.5 1.5Z',
+    t: 'M28.4 3.5H55V10.8H45.35V27.3L38.05 31.5V10.8H28.4Z',
+    a: 'M66.5 3.5H72.5L84.1 31.5H76.3L74.68 26.25H64.32L62.7 31.5H54.9ZM69.5 9.5L72.73 19.95H66.27Z',
+    period: '<rect x="87.4" y="27.1" width="4.4" height="4.4" rx="1" fill="#407598"/>',
+    // The wordmark's viewBox IS its cap band (y 3.5–31.5, 28 tall; the period
+    // sits inside x 0–91.8), so a word box --lockup-word tall renders caps
+    // exactly that tall; every <svg class="brand-word-svg"> that <use>s it is
+    // the same 91.8 × 28 box.
+    wordView: 'viewBox="0 3.5 91.8 28"',
+    useView: 'viewBox="0 0 91.8 28"',
+  };
+  const RETIRED = [
+    ['the round signal', /<circle cx="48"/],
+    ['the rx="12" tile', /rx="12"/],
+    ['the rx="2.5" stems', /rx="2\.5"/],
+    ['the rounded O', /M11 3\.5H16a11/],
+    ['the retired outline O', /M16\.5 6H10a7\.5/],
+    ['the straight T', /H45\.35V31\.5H38\.05/],
+    ['the retired signature-line rule', /M0\.5 36\.5h86/],
+  ];
+  const markOf = (src) => src.replace(/<!--[\s\S]*?-->/g, '').replace(/\s*\/>/g, '/>').replace(/" \/>/g, '"/>');
+  assert.deepEqual(letters, [C.o, C.t, C.a], 'the O is the square portal, the T carries the bevelled stem, the A is unchanged');
+  assert.ok(word.includes(C.period), 'the period (a signal square, rx 1) closes the word');
+  assert.deepEqual([...word.matchAll(/fill="(#[0-9a-fA-F]{6})"/g)].map((m) => m[1].toLowerCase()), [bright], 'the ONE colour literal inside the wordmark is the signal token’s value (the period)');
+  assert.ok(word.includes('<symbol id="nota-wordmark" ' + C.wordView), 'the wordmark viewBox is the cap band (0 3.5 91.8 28)');
+  const logomark = /<symbol id="nota-logomark"[\s\S]*?<\/symbol>/.exec(HTML_SRC)[0];
+  for (const shape of [C.tile, ...C.stems, C.n, C.signal]) assert.ok(logomark.includes(shape), 'the logomark carries ' + shape.slice(0, 40));
+  assert.ok(logomark.includes('<symbol id="nota-logomark" viewBox="0 0 64 64">'), 'the logomark viewBox is the tile');
+
+  // The word travels by reference on the page, and by an identical copy into
+  // og.svg — which is opened without the page's CSS, so it may not depend on a
+  // web font and may not <use> anything.
+  const words = doc.querySelectorAll('svg.brand-word-svg');
+  assert.ok(words.length >= 1, 'the page renders the shared word');
+  for (const w of words) {
+    assert.ok(w.querySelector('use[href="#nota-wordmark"]'), 'a word is a <use>');
+    assert.equal(w.querySelector('path, text'), null, 'no letterform inlined again');
+    assert.equal(w.getAttribute('viewBox'), '0 0 91.8 28', 'a word box is the symbol’s cap band, so its CSS height is the cap height');
+  }
+  const og = read('../public/og.svg');
+  for (const d of letters) assert.ok(og.includes(d), 'og.svg carries the same letterform: ' + d.slice(0, 12));
+  const ogWord = /<g id="og-word"[\s\S]*?<\/g>/.exec(og)[0];
+  assert.ok(!/<text|font-family/.test(ogWord), 'og.svg opens without the page CSS: its word may not need a web font');
+  assert.ok(!/<use/.test(ogWord), 'og.svg is standalone: it may not reference a symbol');
+  assert.ok(ogWord.includes(C.period), 'og.svg closes the word with the period');
+  const ogTile = /<g id="og-tile"[\s\S]*?<\/g>\s*<\/g>/.exec(og)[0];
+  for (const shape of [C.tile, ...C.stems, C.n, C.signal]) assert.ok(ogTile.includes(shape), 'og.svg carries the logomark verbatim: ' + shape.slice(0, 40));
+  const ogBadge = /<g id="og-badge"[\s\S]*?<\/g>/.exec(og)[0];
+  assert.ok(ogBadge.includes('fill="' + bright + '"') && /<text[^>]*fill="#ffffff"/.test(ogBadge) && ogBadge.includes('>QUÉBEC<'), 'og.svg: the QUÉBEC badge is on the signal colour with white text (design 02)');
+  assert.ok(!/<text|font-family/.test(read('../public/favicon.svg')), 'favicon.svg is drawn, not typeset');
+  const signature = read('../public/signature.html');
+  const admin = read('../../admin/public/index.html');
+  for (const [name, src] of [['index.html', HTML_SRC], ['signature.html', signature], ['admin/index.html', admin], ['og.svg', og], ['favicon.svg', read('../public/favicon.svg')], ['admin/favicon.svg', read('../../admin/public/favicon.svg')]]) {
+    for (const [what, re] of RETIRED) assert.ok(!re.test(src), name + ': ' + what + ' is back');
+  }
+  // The favicons are the mark alone — the same five shapes, byte for byte.
+  for (const fav of ['../public/favicon.svg', '../../admin/public/favicon.svg']) {
+    const m = markOf(read(fav));
+    for (const shape of [C.tile, ...C.stems, C.n, C.signal]) assert.ok(m.includes(shape), fav + ' carries ' + shape.slice(0, 40));
+  }
+  // The admin console inlines its own copy of the word: same paths, same period, same box.
+  assert.ok(admin.includes('<svg class="admin-brand-word-svg" ' + C.useView), 'admin: the word box is the cap band');
+  for (const d of [C.o, C.t, C.a]) assert.ok(admin.includes('d="' + d + '"'), 'admin carries the same letterform: ' + d.slice(0, 12));
+  assert.ok(admin.includes(C.period), 'admin closes the word with the period');
+  assert.ok(signature.includes('<symbol id="nota-wordmark" ' + C.wordView), 'signing room: the wordmark viewBox is the cap band');
+  assert.ok(!signature.includes('viewBox="0 0 92 42"'), 'signing room: no word box is left on the old 92 × 42 frame');
+
+  // Layout 16 « Centré à 60 % » — the lockup's GEOMETRY is five custom
+  // properties, declared ONCE per surface stylesheet on its lockup root, with
+  // the SAME ratios in the carnet, the signing room and the admin console. A
+  // surface sets --lockup-tile alone; the word (centred on the tile), the two
+  // gaps and the badge follow. Nothing else may size a tile or a word in px.
+  const LOCKUP = {
+    '--lockup-word': 'calc(var(--lockup-tile) * .60)',
+    '--lockup-gap': 'calc(var(--lockup-tile) * .12)',
+    '--lockup-badge-gap': 'calc(var(--lockup-tile) * .16)',
+    '--lockup-badge-size': 'max(9px, calc(var(--lockup-tile) * .16))',
+  };
+  const SHEETS = [
+    ['styles.css', CSS_SRC, '.brand-sub', ['.brand-word', '.brand-mark-svg', '.ig-mark', '.ig-word']],
+    ['signature.css', read('../public/signature.css'), '.brand-sub', ['.brand-word', '.brand-mark-svg']],
+    ['admin.css', read('../../admin/public/admin.css'), '.admin-brand-sub', ['.admin-brand-word', '.admin-brand-mark']],
+  ];
+  for (const [name, css, badge, sized] of SHEETS) {
+    const blocks = [...css.matchAll(/([^{}]+)\{([^{}]*--lockup-tile:[^{}]*)\}/g)];
+    const roots = blocks.filter((b) => /--lockup-word:/.test(b[2]));
+    assert.equal(roots.length, 1, name + ': the five lockup properties are declared in exactly ONE block (its lockup root)');
+    const decl = roots[0][2];
+    for (const [k, v] of Object.entries(LOCKUP)) {
+      const hit = new RegExp(k.replace(/-/g, '\\-') + ':\\s*([^;]+);').exec(decl);
+      assert.ok(hit, name + ': declares ' + k);
+      assert.equal(hit[1].trim(), v, name + ': ' + k + ' carries layout 16’s ratio');
+      assert.equal((css.match(new RegExp(k.replace(/-/g, '\\-') + ':', 'g')) || []).length, 1, name + ': ' + k + ' is declared once — a surface re-sets --lockup-tile only');
+    }
+    assert.match(decl, /--lockup-tile:\s*\d+px;/, name + ': the root sets its tile in px');
+    // Every tile and word box is sized from the properties — no literal px.
+    for (const sel of sized) {
+      const re = new RegExp(sel.replace(/[.]/g, '\\.') + '(?![\\w-])[^{}]*\\{[^}]*(?:width|height):\\s*\\d+(?:\\.\\d+)?px', 'g');
+      assert.ok(!re.test(css), name + ': ' + sel + ' is sized in px instead of the lockup properties');
+    }
+    assert.ok(css.includes('width: calc(var(--lockup-word) * 91.8 / 28); height: var(--lockup-word);'), name + ': the word box is --lockup-word tall and keeps the cap band’s ratio');
+    assert.ok(css.includes('width: var(--lockup-tile); height: var(--lockup-tile);'), name + ': the tile is --lockup-tile square');
+    // Design 02: the badge takes the SIGNAL colour with white text, sized from the tile.
+    const badgeRule = [...css.matchAll(new RegExp(badge.replace(/[.]/g, '\\.') + '\\s*\\{([^}]*)\\}', 'g'))].find((m) => /background:/.test(m[1]));
+    assert.ok(badgeRule, name + ': a ' + badge + ' rule that paints the badge');
+    assert.match(badgeRule[1], /background:\s*var\(--nota-blue-500\)/, name + ': the badge ground is --nota-blue-500 (design 02)');
+    assert.match(badgeRule[1], /color:\s*var\(--on-accent\)/, name + ': the badge text is --on-accent (white in both themes)');
+    assert.match(badgeRule[1], /font-size:\s*var\(--lockup-badge-size\)/, name + ': the badge is sized from the tile');
+    assert.match(badgeRule[1], /font-weight:\s*800/, name + ': the badge is 800');
+    assert.match(badgeRule[1], /letter-spacing:\s*\.1em/, name + ': the badge tracks .1em');
+    assert.match(badgeRule[1], /padding:\s*\.55em \.7em/, name + ': the badge pads .55em .7em');
+    assert.match(badgeRule[1], /border-radius:\s*var\(--radius-xs\)/, name + ': the badge sits on the 3 px step of the square register');
   }
 });
 

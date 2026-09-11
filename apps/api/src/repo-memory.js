@@ -28,6 +28,10 @@ const {
   CLIENT_BID_PAGE_MAX,
   encodeCursor,
   decodeCursor,
+  auditPK,
+  auditSK,
+  learningSignalPK,
+  learningSignalSK,
 } = require('./keys');
 const { randomUUID } = require('node:crypto');
 const { STATUS, normalizeReferralCode, auditRetentionTtl, isOfferExpired } = require('@nota/domain');
@@ -209,6 +213,40 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
   const crmLeads = new Map(); // bidId -> operator workflow metadata
   const challenges = new Map(); // challengeId -> record
   const sessions = new Map(); // sessionId -> record
+  // Les clés déjà écrites des flux append-only (audit, transactions, signaux
+  // d'apprentissage), par table. repo-dynamo.js pose chacune de ces lignes
+  // avec `ConditionExpression: 'attribute_not_exists(PK) OR
+  // attribute_not_exists(SK)'` (appendTxAudit, appendAudit,
+  // appendLearningSignal) et AVALE la ConditionalCheckFailedException dans
+  // le `.catch` qui suit — « never let audit block » : la collision est
+  // SILENCIEUSE pour l'appelant, et la PREMIÈRE ligne reste. C'est la promesse
+  // append-only de l'ADR 0036. Un `push` nu ici la rendait invisible à toute
+  // la pyramide de tests : une clé rejouée faisait deux lignes en mémoire, une
+  // seule en production.
+  //
+  // La table fait partie de la clé parce que les trois flux vivent dans DEUX
+  // tables là-bas (transactions et signaux dans la principale, gestes admin
+  // dans la table admin) : une même (jour, ts, id) posée dans chacune n'y
+  // entre pas en collision.
+  const dejaEcrit = new Set();
+  function poserUneFois(table, flux, pk, sk, entry) {
+    // Le seau du journal est le JOUR OUVRABLE québécois quand l'appelant le
+    // nomme (le handler public le fait : un règlement du soir appartient à la
+    // journée d'affaires en cours, pas au lendemain UTC) ; sinon, la date de
+    // l'horodatage. L'instant, lui, reste toujours vrai. Même règle que
+    // repo-dynamo (`day = entry.day || ts.slice(0, 10)`) — le jour compose la
+    // clé, donc deux entrées qui le nomment ou le déduisent visent la même.
+    const day = entry.day || String(entry.ts || '').slice(0, 10);
+    const cle = table + '|' + pk(day) + '|' + sk(entry.ts, entry.id);
+    if (dejaEcrit.has(cle)) return; // collision avalée, comme là-bas
+    dejaEcrit.add(cle);
+    // La borne de conservation (sept ans — politique §1) est posée ICI comme
+    // dans l'adaptateur DynamoDB : si elle ne vivait que là-bas, les tests
+    // mentiraient sur la production. Rien n'est posé quand l'appelant a déjà
+    // décidé, ni quand l'horodatage est illisible.
+    const ttl = entry.ttl != null ? entry.ttl : auditRetentionTtl(Date.parse(entry.ts || ''));
+    flux.push({ ...entry, day, ...(ttl == null ? {} : { ttl }) });
+  }
   const audit = []; // { id, ts, action, adminId, email, ip, meta }
   const learningSignals = []; // minimized notary-learning events, separate from transaction audit
   const rateCounters = new Map(); // `${scope}#${key}#${windowStart}` -> count
@@ -254,11 +292,18 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
         .filter((b) => monthOf(b.dateISO) === month)
         .sort((a, b) => a.dateISO.localeCompare(b.dateISO) || String(a.id).localeCompare(String(b.id)));
     },
-    // `dateISO` is accepted (and ignored) so this adapter's signature matches
-    // repo-dynamo's `get(id, dateISO)`, which needs it to build the composite key.
+    // Same contract as repo-dynamo.get(id, dateISO) — which THROWS without a
+    // date (`if (!dateISO) throw new Error('dynamo get requires dateISO for
+    // the key')`) because the date composes the key: PK = BID#<month>,
+    // SK = BID#<dateISO>#<id>. A caller that forgets the date, or sends it
+    // under another name, passed here and fell to a 500 in production (BDD
+    // audit, 2026-09-11). And a date that is not the offer's reads ANOTHER
+    // key over there — no Item, `fromItem(undefined)` → null — so it is null
+    // here too, never a lookup by id alone.
     async get(id, dateISO) {
-      void dateISO;
-      return byId.get(id) || null;
+      if (!dateISO) throw new Error('memory get requires dateISO for the key');
+      const b = byId.get(id);
+      return b && b.dateISO === dateISO ? b : null;
     },
     async put(bid) {
       byId.set(bid.id, bid);
@@ -1264,27 +1309,13 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
     // L'adaptateur DynamoDB, lui, les range dans la table PRINCIPALE — la
     // Lambda publique n'a aucun accès à la table admin.
     async appendTxAudit(entry) {
-      return this.appendAudit(entry);
+      return poserUneFois('main', audit, auditPK, auditSK, entry);
     },
     async queryTxAuditByDay(dayISO) {
       return this.queryAuditByDay(dayISO);
     },
     async appendAudit(entry) {
-      // Le seau du journal est le JOUR OUVRABLE québécois quand l'appelant le
-      // nomme (le handler public le fait : un règlement du soir appartient à la
-      // journée d'affaires en cours, pas au lendemain UTC) ; sinon, la date de
-      // l'horodatage. L'instant, lui, reste toujours vrai.
-      //
-      // La borne de conservation (sept ans — politique §1) est posée ICI comme
-      // dans l'adaptateur DynamoDB : si elle ne vivait que là-bas, les tests
-      // mentiraient sur la production. Rien n'est posé quand l'appelant a déjà
-      // décidé, ni quand l'horodatage est illisible.
-      const ttl = entry.ttl != null ? entry.ttl : auditRetentionTtl(Date.parse(entry.ts || ''));
-      audit.push({
-        ...entry,
-        day: entry.day || String(entry.ts || '').slice(0, 10),
-        ...(ttl == null ? {} : { ttl }),
-      });
+      return poserUneFois('admin', audit, auditPK, auditSK, entry);
     },
     async queryAuditByDay(dayISO) {
       return audit.filter((e) => e.day === dayISO).map((e) => ({ ...e }));
@@ -1294,12 +1325,7 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
     // notary message metadata. The Dynamo adapter uses LEARNING#<day> for the
     // same boundary.
     async appendLearningSignal(entry) {
-      const ttl = entry.ttl != null ? entry.ttl : auditRetentionTtl(Date.parse(entry.ts || ''));
-      learningSignals.push({
-        ...entry,
-        day: entry.day || String(entry.ts || '').slice(0, 10),
-        ...(ttl == null ? {} : { ttl }),
-      });
+      return poserUneFois('main', learningSignals, learningSignalPK, learningSignalSK, entry);
     },
     async queryNotaryLearningByDay(dayISO, limit) {
       const max = limit == null ? learningSignals.length : Math.max(0, Math.floor(Number(limit) || 0));

@@ -20,7 +20,7 @@ test('server stamps deadline and ignores a caller-supplied extension', async () 
   assert.equal(res.statusCode, 201, res.body);
   const { bid } = JSON.parse(res.body);
   assert.equal(bid.expiresOn, '2026-09-16');
-  assert.equal((await repo.get(bid.id)).expiresOn, bid.expiresOn);
+  assert.equal((await repo.get(bid.id, bid.dateISO)).expiresOn, bid.expiresOn);
 });
 
 test('legacy and expired offers leave public listings and cannot be accepted or negotiated', async () => {
@@ -36,7 +36,7 @@ test('legacy and expired offers leave public listings and cannot be accepted or 
       assert.equal(res.statusCode, 410, path + ': ' + res.body);
       assert.equal(JSON.parse(res.body).errors[0].code, 'offre_expiree');
     }
-    assert.equal((await repo.get('b')).status, 'ouverte');
+    assert.equal((await repo.get('b', base.dateISO)).status, 'ouverte');
   }
 });
 
@@ -88,7 +88,7 @@ test('cleanup paginates, skips retained/live bids and conditionally archives onl
 test('conditional retention checks the stored deadline, including a concurrent expiry change', async () => {
   const repo = createMemoryRepo([{ ...base, expiresOn: '2026-09-08' }]);
   assert.equal(await repo.retain({ ...base, status: 'retenue', expiresOn: '2026-09-16' }, 'n', '2026-09-09'), null);
-  assert.equal((await repo.get('b')).status, 'ouverte');
+  assert.equal((await repo.get('b', base.dateISO)).status, 'ouverte');
   const { createDynamoRepo } = require('../src/repo-dynamo');
   let transaction;
   const dynamo = createDynamoRepo({ tableName: 't', doc: { send: async cmd => { transaction = cmd.input; return {}; } } });
