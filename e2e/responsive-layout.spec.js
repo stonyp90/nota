@@ -370,6 +370,10 @@ test.describe('notary inventory keeps its footprint', () => {
           }
           expect(geometry['notary-carnet'].top, `${count} offers: agenda follows the inventory`).toBeGreaterThanOrEqual(Math.max(geometry['notary-live-grid'].bottom, geometry['notary-console'].bottom) - 1);
           expect(geometry['nc-conformite'].top, `${count} offers: compliance follows the columns`).toBeGreaterThanOrEqual(Math.max(geometry['notary-carnet'].bottom, geometry['notary-console'].bottom) - 1);
+          if (!stacked) {
+            expect(Math.abs(geometry['notary-carnet'].left - geometry['notary-live-grid'].left), `${count} offers: agenda starts on the landing rail`).toBeLessThan(2);
+            expect(Math.abs(geometry['notary-carnet'].right - geometry['nc-conformite'].right), `${count} offers: agenda closes the full content rail`).toBeLessThan(2);
+          }
           if (count === 0) {
             const empty = page.locator('.nc-live-empty');
             await expect(empty.locator('strong')).toHaveText(lang === 'fr' ? 'Pas d’offres' : 'No offers');
