@@ -57,3 +57,38 @@ rouge. Un nombre rempli se lit comme un bouton ; une date est un fait.
   la question ne se pose plus de la même façon.
 - Le test de style bloque le retour des tailles en dur ; un pane qui aurait
   besoin d'un barreau qui n'existe pas doit d'abord l'ajouter à l'échelle.
+
+## Addendum — 2026-09-11 : les classes de titre retirées, barreau h4 optionnel
+
+L'inventaire de marque du 2026-09-11 a trouvé le trou du test : la règle
+d'élément `h2` passait pendant que douze classes posées sur des `<h2>` de
+`index.html` (`.auth-title`, `.onb-title`, `.pr-how-title`, `.pr-faq-title`,
+`.h-sub` et ses trois surcharges, `.nc-live-h`, `.nc-ai-title`, `.nc-h`,
+`.ig-title` et ses trois variantes, `.nc-conformite-h`, `.salle-etape-nom`)
+posaient 15–21 px, une graisse 700 ou leur propre approche.
+
+1. **Aucune classe posée sur un titre ne pose sa propre taille, graisse, face
+   ou approche.** `typographie.test.mjs` relit les classes de tout h1/h2/h3
+   de `index.html` et refuse toute règle dont le dernier composé porte l'une
+   d'elles avec un `font-size` / `font-weight` / `font-family` /
+   `letter-spacing` hors `var(--type-*)`, `var(--weight-display)`,
+   `var(--font-display)`. Une classe ne fait que colorer, aligner, espacer.
+2. **Où chaque titre s'assoit.** Titres de dialogue (`.auth-title`,
+   `.onb-title`) et porte de connexion notaire (`.nc-gate .h-sub`) : barreau
+   h2 (le titre hérite de la règle d'élément, la classe ne dit plus rien).
+   Titres de carte et de section (`.h-sub`, `.pr-*-title`, `.nc-ai-title`,
+   `.salle-etape-nom`) : barreau h3. Titre de la porte d'entrée (`.ig-title`) :
+   `--type-h1-compact`, et le barreau h2 sur les téléphones courts, où le film
+   doit tenir sous la ligne de flottaison.
+3. **Barreau h4, optionnel : `--type-h4: 15px; --type-h4-lh: 1.3;
+   --type-h4-ls: -.01em`.** Les kickers denses de carte (`.nc-h`, `.nc-live-h`,
+   `.nc-conformite-h`) avaient besoin d'un barreau sous h3 ; il est déclaré
+   dans les DEUX `:root` (`styles.css`, `tokens.css`) avec les mêmes valeurs,
+   le test compare les deux, et la feuille de la salle le porte aussi. La
+   graisse reste `--weight-display` : un titre de 15 px en 800 est un kicker,
+   pas un libellé.
+4. **La salle de signature** ne porte plus aucune couleur hors de ses deux
+   blocs de jetons — la palette verte retirée survivait sur la ligne minifiée
+   de `signature.css` et teintait encore la scène vidéo, les plaques et le
+   document — et son titre de document (`.paper h3`) passe de Georgia 25 px au
+   barreau h2 en Sora 800.

@@ -91,6 +91,7 @@
   --type-h1: clamp(42px, 4.25vw, 68px); --type-h1-lh: 1.02; --type-h1-ls: -.055em;
   --type-h2: clamp(24px, 2.35vw, 34px); --type-h2-lh: 1.15; --type-h2-ls: -.045em;
   --type-h3: 17px; --type-h3-lh: 1.3; --type-h3-ls: -.02em;
+  --type-h4: 15px; --type-h4-lh: 1.3; --type-h4-ls: -.01em; /* dense card kickers (.nc-h, .nc-live-h, .nc-conformite-h) — ADR 0050, addendum 2026-09-11 */
   --type-eyebrow: 12px; --type-eyebrow-ls: .1em;
 
   --maxw: 1600px; /* maximized width — fills wide screens, side padding via .wrap */

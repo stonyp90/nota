@@ -16,10 +16,10 @@
       <path d="M60.5 29 70.2 7.2Q71 5.5 72 5.5t1.8 1.7L83.5 29M65 20.5h13.5" />
       <path d="M0.5 36.5h86" stroke-width="0.7" />
     </g>
-    <rect x="370" y="27" width="250" height="36" rx="18" fill="#f1f7fb" />
+    <rect x="370" y="27" width="250" height="36" rx="18" fill="#ebf1f5" />
     <text x="388" y="53" font-family="Inter, sans-serif" font-size="24" font-weight="700" fill="#386888" letter-spacing="1">QUÉBEC</text>
   </g>
-  <text x="96" y="380" font-family="Inter, sans-serif" font-size="72" font-weight="800" fill="#101b26" letter-spacing="-2">Un notaire, à la date qu’il</text>
-  <text x="96" y="462" font-family="Inter, sans-serif" font-size="72" font-weight="800" fill="#101b26" letter-spacing="-2">vous faut.</text>
-  <text x="96" y="536" font-family="Inter, sans-serif" font-size="30" font-weight="500" fill="#5B6C72">Refinancement · Financement hypothécaire — publier est gratuit</text>
+  <text x="96" y="380" font-family="'Sora', Inter, sans-serif" font-size="72" font-weight="800" fill="#101b26" letter-spacing="-2">Un notaire, à la date qu’il</text>
+  <text x="96" y="462" font-family="'Sora', Inter, sans-serif" font-size="72" font-weight="800" fill="#101b26" letter-spacing="-2">vous faut.</text>
+  <text x="96" y="536" font-family="Inter, sans-serif" font-size="30" font-weight="500" fill="#607986">Refinancement · Financement hypothécaire — publier est gratuit</text>
 </svg>

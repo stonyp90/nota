@@ -40,7 +40,7 @@ function headingBlocks(src) {
 
 test('les jetons de l’échelle vivent dans :root, copiés de la bêta', () => {
   for (const t of ['--font-display', '--weight-display', '--type-h1', '--type-h1-lh', '--type-h1-ls',
-    '--type-h2', '--type-h3', '--type-lead', '--type-lead-lh', '--type-eyebrow', '--type-eyebrow-ls']) {
+    '--type-h2', '--type-h3', '--type-h4', '--type-h4-lh', '--type-h4-ls', '--type-lead', '--type-lead-lh', '--type-eyebrow', '--type-eyebrow-ls']) {
     assert.match(CSS, new RegExp('(^|[;\\s])' + t + ':', 'm'), t + ' manque dans styles.css');
   }
   assert.match(CSS, /--font-display:\s*'Sora'/, 'la face d’affichage est Sora');
@@ -48,6 +48,11 @@ test('les jetons de l’échelle vivent dans :root, copiés de la bêta', () => 
   assert.match(CSS, /--type-h2:\s*clamp\(24px, 2\.35vw, 34px\)/, 'h2 = la taille de la bêta, verbatim');
   assert.match(CSS, /--type-h3:\s*17px/, 'h3 = la taille de la bêta, verbatim');
   assert.match(CSS, /--type-lead:\s*17px/, 'lede = la taille de la bêta, verbatim');
+  // Le barreau h4 (addendum 2026-09-11) : les kickers de carte, déclaré dans
+  // les DEUX :root avec les mêmes valeurs — jamais dans un seul.
+  const h4 = (src) => (src.match(/--type-h4:\s*([^;]+);\s*--type-h4-lh:\s*([^;]+);\s*--type-h4-ls:\s*([^;]+);/) || []).slice(1).map((v) => v.trim());
+  assert.deepEqual(h4(CSS), ['15px', '1.3', '-.01em'], 'h4 = 15px / 1.3 / -.01em dans styles.css');
+  assert.deepEqual(h4(ADMIN_TOKENS), h4(CSS), 'tokens.css porte le même barreau h4');
 });
 
 test('h1, h2, h3 prennent la face et la graisse d’affichage globalement', () => {
@@ -60,19 +65,61 @@ test('h1, h2, h3 prennent la face et la graisse d’affichage globalement', () =
   assert.match(CSS, /^h3 \{[^}]*font-size: var\(--type-h3\)/m, 'h3 lit son jeton');
 });
 
-test('aucune règle de titre ne pose sa propre taille, graisse ou face', () => {
+// Les quatre propriétés qu'une règle de titre n'a pas le droit de poser
+// elle-même : seul un barreau de l'échelle (h1…h4, ou la variante empilée
+// --type-h1-compact) passe.
+function offScale(b) {
   const bad = [];
-  for (const b of headingBlocks(CSS)) {
-    const size = b.body.match(/font-size:\s*([^;]+);/);
-    if (size && !/^var\(--type-h[123]/.test(size[1].trim())) bad.push(b.line + ' ' + b.sel + ' → font-size: ' + size[1].trim());
-    const weight = b.body.match(/font-weight:\s*([^;]+);/);
-    if (weight && weight[1].trim() !== 'var(--weight-display)') bad.push(b.line + ' ' + b.sel + ' → font-weight: ' + weight[1].trim());
-    const family = b.body.match(/font-family:\s*([^;]+);/);
-    if (family && family[1].trim() !== 'var(--font-display)') bad.push(b.line + ' ' + b.sel + ' → font-family: ' + family[1].trim());
-    const ls = b.body.match(/letter-spacing:\s*([^;]+);/);
-    if (ls && !/^var\(--type-h[123]-ls\)$/.test(ls[1].trim())) bad.push(b.line + ' ' + b.sel + ' → letter-spacing: ' + ls[1].trim());
-  }
+  const size = b.body.match(/font-size:\s*([^;]+);/);
+  if (size && !/^var\(--type-h[1-4](-compact)?\)$/.test(size[1].trim())) bad.push(b.line + ' ' + b.sel + ' → font-size: ' + size[1].trim());
+  const weight = b.body.match(/font-weight:\s*([^;]+);/);
+  if (weight && weight[1].trim() !== 'var(--weight-display)') bad.push(b.line + ' ' + b.sel + ' → font-weight: ' + weight[1].trim());
+  const family = b.body.match(/font-family:\s*([^;]+);/);
+  if (family && family[1].trim() !== 'var(--font-display)') bad.push(b.line + ' ' + b.sel + ' → font-family: ' + family[1].trim());
+  const ls = b.body.match(/letter-spacing:\s*([^;]+);/);
+  if (ls && !/^var\(--type-h[1-4]-ls\)$/.test(ls[1].trim())) bad.push(b.line + ' ' + b.sel + ' → letter-spacing: ' + ls[1].trim());
+  return bad;
+}
+
+test('aucune règle de titre ne pose sa propre taille, graisse ou face', () => {
+  const bad = headingBlocks(CSS).flatMap(offScale);
   assert.deepEqual(bad, [], 'titres hors échelle :\n  ' + bad.join('\n  '));
+});
+
+// Les classes posées sur un h1/h2/h3 de index.html. Une règle .auth-title ou
+// .nc-h contournait l'échelle aussi sûrement qu'une règle h2 : le 2026-09-11,
+// onze d'entre elles posaient 15–21 px et leur propre graisse pendant que la
+// règle d'élément passait le test. Une règle compte dès que son DERNIER
+// composé porte une de ces classes (.nc-h .nc-h-amt vise un span, pas le titre).
+function headingClasses(html) {
+  const out = new Set();
+  for (const m of html.matchAll(/<h[123]\b[^>]*\bclass="([^"]+)"/g)) for (const c of m[1].trim().split(/\s+/)) out.add(c);
+  return out;
+}
+function headingClassBlocks(src, classes) {
+  const out = [];
+  const re = /([^{}]+)\{([^{}]*)\}/g;
+  let m;
+  while ((m = re.exec(src))) {
+    const sel = m[1].trim().split('\n').pop().trim();
+    const hit = sel.split(',').some((s) => {
+      const last = s.trim().split(/\s*[>+~\s]\s*/).pop() || '';
+      return [...last.matchAll(/\.([A-Za-z0-9_-]+)/g)].some((c) => classes.has(c[1]));
+    });
+    if (!hit) continue;
+    const line = src.slice(0, m.index).split('\n').length;
+    out.push({ sel, body: m[2], line });
+  }
+  return out;
+}
+
+test('aucune classe posée sur un titre ne pose sa propre taille, graisse ou face', () => {
+  const classes = headingClasses(HTML);
+  assert.ok(classes.size >= 10, 'index.html porte des titres classés (' + classes.size + ')');
+  const blocks = headingClassBlocks(CSS, classes);
+  assert.ok(blocks.length >= 10, 'les classes de titre ont des règles (' + blocks.length + ')');
+  const bad = blocks.flatMap(offScale);
+  assert.deepEqual(bad, [], 'classes de titre hors échelle :\n  ' + bad.join('\n  '));
 });
 
 test('les ledes et surtitres des trois portes lisent les mêmes jetons que la bêta', () => {
