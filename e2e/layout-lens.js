@@ -69,18 +69,27 @@ function measure({ rootSel, touch, vw, vh, allowOverlap }) {
   // landing leaves one column short by design. Only a strip that spans the
   // whole column, with nothing in it, is a band.
   const bands = [];
-  const rr = root.getBoundingClientRect();
   const boxes = [];
   // Leaf coverage only: a wrapper's box spans its whole extent and would hide
   // a band inside it, so a box counts only when it has no block-level child
   // of its own (or sits at the depth cap). Padding inside a card with nothing
   // near its bottom edge is then, rightly, blank space.
+  // Coverage also counts what is absolutely positioned inside the column (a
+  // decorative ring, a floating label): the eye sees it, so the strip it
+  // occupies is not blank — only `fixed` layers are ignored.
+  const paintedKids = (el) => flatten(el).filter((k) => vis(k) && BLOCKISH.test(getComputedStyle(k).display) && getComputedStyle(k).position !== 'fixed');
+  // An element that carries its own text (a flex row whose only element child
+  // is a 13px icon, a button with a bare label) paints its whole box, so it
+  // counts even when it also has children to descend into.
+  const ownText = (el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
   const collect = (el, depth) => {
-    for (const k of blockKids(el)) {
-      const inner = depth < 6 ? blockKids(k) : [];
-      if (inner.length) { collect(k, depth + 1); continue; }
+    for (const k of paintedKids(el)) {
       const r = k.getBoundingClientRect();
-      if (r.width >= 24 && r.height >= 4) boxes.push({ top: r.top, bottom: r.bottom, el: k });
+      const inner = depth < 6 ? paintedKids(k) : [];
+      if (ownText(k) || !inner.length) {
+        if (r.width >= 24 && r.height >= 4) boxes.push({ top: r.top, bottom: r.bottom, el: k });
+      }
+      if (inner.length) collect(k, depth + 1);
     }
   };
   collect(root, 0);
@@ -98,10 +107,8 @@ function measure({ rootSel, touch, vw, vh, allowOverlap }) {
       bands.push(`${Math.round(gap)}px between ${above} and ${below}`);
     }
   }
-  // A dead tail: the column's box runs on past its last content.
-  if (merged.length && rr.bottom - merged[merged.length - 1][1] > GAP) {
-    bands.push(`${Math.round(rr.bottom - merged[merged.length - 1][1])}px under ${label(boxes.find((b) => Math.abs(b.bottom - merged[merged.length - 1][1]) < 1).el)} (end of ${rootSel})`);
-  }
+  // No « dead tail » rule: a sign-in screen centres one card in a full-height
+  // column on purpose; the strips between content are what an eye reads.
 
   // Overlaps: two block-level, statically placed siblings covering each other.
   const overlaps = [];
@@ -160,7 +167,7 @@ function measure({ rootSel, touch, vw, vh, allowOverlap }) {
 
   return {
     sideways: de.scrollWidth > de.clientWidth + 1,
-    scrollW: de.scrollWidth, clientW: de.clientWidth, pageH: Math.round(de.scrollHeight), rootH: Math.round(rr.height),
+    scrollW: de.scrollWidth, clientW: de.clientWidth, pageH: Math.round(de.scrollHeight), rootH: Math.round(root.getBoundingClientRect().height),
     offenders: offenders.slice(0, 6), bands: bands.slice(0, 6), overlaps: overlaps.slice(0, 6), small: small.slice(0, 10), clippedText: clippedText.slice(0, 6),
     headingFonts: [...new Set([...root.querySelectorAll('h1, h2, h3')].filter(vis).map((h) => getComputedStyle(h).fontFamily.split(',')[0].replace(/"/g, '').trim()))],
     theme: de.getAttribute('data-theme'),
