@@ -78,9 +78,20 @@ const app = createApp(repo, {
   // todayISO() — otherwise every evening (UTC-4/-5) the handler's UTC default
   // is already "tomorrow" and rejects same-day bookings as date_passee.
   now: () => today,
-  // The one E2E-specific tweak: don't let the shared-IP suite hit the throttle.
+  // The one E2E-specific tweak: don't let the shared-IP suite hit a throttle.
+  // EVERY per-IP throttle the handler exposes is raised, not just the two
+  // sign-in ones: the funnel beacon (/events, 120/window in production) was
+  // the first to trip once the suite grew past ~30 specs — every spec's
+  // `visite` / `jour_ouvert` / `formulaire` beacons come from 127.0.0.1, and
+  // no-console-errors.spec.js then read the 429s as a product regression.
   notaryLoginRlMax: RL_MAX,
   partnerClaimRlMax: RL_MAX,
+  notarySignupRlMax: RL_MAX,
+  notaryVerifyRlMax: RL_MAX,
+  clientLoginRlMax: RL_MAX,
+  supportRlMax: RL_MAX,
+  chatRlMax: RL_MAX,
+  funnelRlMax: RL_MAX,
 });
 // Exercise the real local shared-store composition: admin replies must become
 // visible in the public widget without a test-only messaging implementation.
