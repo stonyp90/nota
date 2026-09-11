@@ -107,7 +107,7 @@ const SURFACES = [
     open: async (p) => { await p.evaluate(() => (document.getElementById('header-login') || document.getElementById('mnav-login')).click()); await p.waitForSelector('#auth-dialog[open]'); }, root: '#auth-dialog' },
   { key: 'mobile drawer', url: '/?lang=fr', seed: seenBoth, wait: '#pulse-rows .pulse-row', maxWidth: 899,
     open: async (p) => { await p.click('#nav-burger'); await expect(p.locator('#mobile-nav')).toBeVisible(); }, root: '#mobile-nav' },
-  { key: 'notary console (signed in)', url: '/?lang=fr#t=notaires', seed: seenBoth, wait: '#nc-email, #notary-authed:not([hidden])',
+  { key: 'notary console (signed in)', url: '/?lang=fr#t=notaires', seed: seenBoth, wait: '#nc-email, #notary-authed:not([hidden])', preservePage: true,
     open: async (p) => {
       // The session survives a reload (ncRestore): sign in once, then only resize.
       if (!(await p.locator('#notary-authed:not([hidden])').count())) {
@@ -119,10 +119,19 @@ const SURFACES = [
     }, root: '#pane-notaires' },
   { key: 'support chat', url: '/?lang=fr', seed: seenBoth, wait: '#pulse-rows .pulse-row',
     open: async (p) => {
-      await p.evaluate(() => { const f = document.getElementById('chat-fab'); if (f && f.offsetParent) f.click(); else { document.getElementById('nav-burger').click(); document.getElementById('mnav-messagerie').click(); } });
+      await p.evaluate(() => {
+        const panel = document.getElementById('chat-panel');
+        if (panel && !panel.hidden) return;
+        const f = document.getElementById('chat-fab');
+        const shown = f && getComputedStyle(f).display !== 'none' && f.getBoundingClientRect().width > 0;
+        if (shown) f.click();
+        else { document.getElementById('nav-burger').click(); document.getElementById('mnav-messagerie').click(); }
+      });
       await expect(p.locator('#chat-panel')).toBeVisible();
     }, root: '#chat-panel' },
   { key: 'signing room · welcome', url: '/signature.html?lang=fr', seed: () => {}, wait: '#welcome', root: 'body' },
+  { key: 'acquisition page · refinancement (fr)', url: '/notaire-refinancement-quebec.html', seed: () => {}, wait: '.search-page h1', root: '.search-page' },
+  { key: 'acquisition page · financing (en)', url: '/mortgage-financing-notary-quebec-city.html', seed: () => {}, wait: '.search-page h1', root: '.search-page' },
   { key: 'admin · sign-in', url: `${ADMIN}/?lang=fr`, seed: () => {}, wait: '#auth-email', root: '#app' },
   { key: 'admin · aperçu', admin: '', root: '#app' },
   { key: 'admin · courriels', admin: 'courriels', root: '#app' },
@@ -159,9 +168,18 @@ async function sweep(page, request, surface, testInfo) {
     try {
       if (surface.admin !== undefined) await adminInto(page, request, surface.admin);
       else {
-        await page.goto(surface.url);
-        await page.waitForSelector(surface.wait, { timeout: 20_000 });
-        if (surface.open) await surface.open(page);
+        const firstVisit = !surface.preservePage || vp === sizes[0];
+        if (firstVisit) {
+          await page.goto(surface.url);
+          await page.waitForSelector(surface.wait, { timeout: 20_000 });
+          if (surface.open) await surface.open(page);
+        } else {
+          // Responsive checks for an authenticated surface must resize the
+          // same live session; a navigation would race ncRestore and can hide
+          // the console while its bid request is still resolving.
+          await expect(page.locator('#notary-authed:not([hidden])')).toBeVisible();
+          await expect(page.locator('#notary-open-list .nc-card, #notary-open-empty:not([hidden])').first()).toBeVisible();
+        }
       }
       await settle(page);
       const m = await page.evaluate(measure, { rootSel: surface.root, touch, vw: vp.width, vh: vp.height, allowOverlap: ['.pulse-row', '.mini-reserver'] });

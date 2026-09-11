@@ -55,11 +55,20 @@ for (const [path, lang] of [
   ['/mortgage-financing-notary-quebec-city.html', 'en'],
   ['/mortgage-refinancing-notary-quebec-city.html', 'en'],
 ]) {
-  test(`retired page returns to the localized carnet: ${path}`, async ({ page }) => {
+  test(`localized acquisition page keeps its SEO surface: ${path}`, async ({ page }) => {
     await page.goto(path);
-    await expect(page).toHaveURL(new RegExp('/\\?lang=' + lang + '#t=carnet'));
+    await expect(page).toHaveURL(new RegExp(path.replace('.', '\\.')));
     await expect(page.locator('html')).toHaveAttribute('lang', lang + '-CA');
-    await expect(page.locator('#pane-carnet')).toBeVisible();
-    await expect(page.locator('.site-footer a[href*="notaire-financement-quebec"]')).toHaveCount(0);
+    await expect(page.locator('.search-page h1')).toBeVisible();
+    await expect(page.locator(`a[href="/?lang=${lang}#t=carnet"]`).first()).toBeVisible();
+    await expect(page.locator('.site-footer')).toHaveCount(0);
+    // One brand everywhere: the same lockup, the same display face, the same
+    // browser chrome as the carnet — and nothing the app cannot wire.
+    await expect(page.locator('header .brand .brand-mark-svg')).toBeVisible();
+    expect(await page.locator('meta[name="theme-color"]:not([media])').getAttribute('content')).toBe('#386888');
+    expect(await page.locator('.search-page h1').evaluate((h) => getComputedStyle(h).fontFamily)).toMatch(/Sora/);
+    expect(await page.locator('select, [data-palette]').count()).toBe(0);
+    const w = await page.evaluate(() => ({ inner: innerWidth, scroll: document.documentElement.scrollWidth }));
+    expect(w.scroll).toBeLessThanOrEqual(w.inner + 1);
   });
 }

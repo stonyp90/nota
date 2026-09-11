@@ -30,7 +30,7 @@ function measure({ rootSel, touch, vw, vh, allowOverlap }) {
   const root = document.querySelector(rootSel) || document.body;
   const vis = (el) => {
     const cs = getComputedStyle(el);
-    if (cs.display === 'none' || cs.visibility === 'hidden' || el.hidden) return false;
+    if (cs.display === 'none' || cs.visibility === 'hidden' || cs.opacity === '0' || el.hidden) return false;
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
   };
@@ -82,15 +82,36 @@ function measure({ rootSel, touch, vw, vh, allowOverlap }) {
   // is a 13px icon, a button with a bare label) paints its whole box, so it
   // counts even when it also has children to descend into.
   const ownText = (el) => [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+  // Text that lives in an inline element beside block siblings (a <span>
+  // paragraph next to a <strong> title in a flex panel) is still text the eye
+  // reads: count its box too. Inside a paragraph it is harmless — the
+  // paragraph's own box already covers it.
+  const inlineText = (el) => flatten(el).filter((k) => vis(k) && !BLOCKISH.test(getComputedStyle(k).display) && getComputedStyle(k).position !== 'fixed' && ownText(k));
+  // Returns how many boxes the subtree contributed. A container whose only
+  // block children are too small to count (a round button holding a 1px
+  // screen-reader label and an inline icon, a 5px progress bar holding a
+  // thinner fill) still paints its own box, so it counts as a whole.
   const collect = (el, depth) => {
+    let pushed = 0;
     for (const k of paintedKids(el)) {
       const r = k.getBoundingClientRect();
       const inner = depth < 6 ? paintedKids(k) : [];
+      let mine = 0;
       if (ownText(k) || !inner.length) {
-        if (r.width >= 24 && r.height >= 4) boxes.push({ top: r.top, bottom: r.bottom, el: k });
+        if (r.width >= 24 && r.height >= 4) { boxes.push({ top: r.top, bottom: r.bottom, el: k }); mine++; }
       }
-      if (inner.length) collect(k, depth + 1);
+      if (inner.length) {
+        const below = collect(k, depth + 1);
+        mine += below;
+        if (!mine && r.width >= 24 && r.height >= 4) { boxes.push({ top: r.top, bottom: r.bottom, el: k }); mine++; }
+      }
+      for (const t of inlineText(k)) {
+        const tr = t.getBoundingClientRect();
+        if (tr.width >= 24 && tr.height >= 4) { boxes.push({ top: tr.top, bottom: tr.bottom, el: t }); mine++; }
+      }
+      pushed += mine;
     }
+    return pushed;
   };
   collect(root, 0);
   const intervals = boxes.map((b) => [b.top, b.bottom]).sort((a, b) => a[0] - b[0]);
@@ -104,7 +125,7 @@ function measure({ rootSel, touch, vw, vh, allowOverlap }) {
     if (gap > GAP) {
       const above = boxes.filter((b) => Math.abs(b.bottom - merged[i - 1][1]) < 1).map((b) => label(b.el))[0] || '?';
       const below = boxes.filter((b) => Math.abs(b.top - merged[i][0]) < 1).map((b) => label(b.el))[0] || '?';
-      bands.push(`${Math.round(gap)}px between ${above} and ${below}`);
+      bands.push(`${Math.round(gap)}px between ${above} and ${below} (y ${Math.round(merged[i - 1][1] + scrollY)}–${Math.round(merged[i][0] + scrollY)})`);
     }
   }
   // No « dead tail » rule: a sign-in screen centres one card in a full-height

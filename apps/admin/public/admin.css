@@ -145,10 +145,13 @@ a:hover { text-decoration: underline; }
 }
 .input {
   font: inherit; width: 100%; min-width: 0;
-  padding: 9px 11px; border: 1px solid var(--border-strong);
+  min-height: 44px; padding: 9px 11px; border: 1px solid var(--border-strong);
   border-radius: var(--radius); background: var(--surface); color: var(--ink);
 }
 .input::placeholder { color: var(--ink-muted); }
+/* WebKit sizes a <select> from `height`, not `min-height`: the 44px promise
+   has to be stated as a height for the filter dropdowns to keep it on iOS. */
+select.input { height: 44px; }
 .input:focus { border-color: var(--ring); outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
 
 /* --- Segmented control (date-range presets) -------------------------------

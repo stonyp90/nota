@@ -2719,7 +2719,7 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
 
 /* The SDLC story: a compact, self-contained visual that communicates the
    discipline without pretending that models or compliance are magic. */
-.build-loop { margin-top: clamp(36px, 4vw, 56px); padding: clamp(24px, 4vw, 56px); border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--surface), var(--surface-inset)); display: grid; grid-template-columns: minmax(260px, .8fr) minmax(420px, 1.2fr); gap: clamp(30px, 6vw, 90px); align-items: center; overflow: hidden; }
+.build-loop { margin-top: clamp(28px, 3vw, 40px); padding: clamp(24px, 3vw, 40px); border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--surface), var(--surface-inset)); display: grid; grid-template-columns: minmax(260px, .8fr) minmax(420px, 1.2fr); gap: clamp(30px, 6vw, 90px); align-items: center; overflow: hidden; }
 .build-loop h2 { margin-top: 12px; max-width: 15ch; }
 .build-loop-copy > p { margin-top: 18px; color: var(--ink-muted); max-width: 43ch; }
 .build-loop-toggle { margin-top: 24px; }
@@ -5569,6 +5569,17 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
     grid-template-columns: 1fr;
     gap: 9px;
   }
+
+  /* One column: the preview is a small portrait beside the paper, not a tile
+     stretched to the paper's height, and the cards keep their text close to
+     their edges — no strip the eye reads as blank (layout lens, 320/390). */
+  #pane-beta .beta-preview-scene { min-height: 0; align-items: start; gap: 14px; margin: 16px 0 8px; }
+  #pane-beta .beta-preview-person { aspect-ratio: 4 / 5; align-self: start; }
+  #pane-beta .beta-preview-paper { padding: 18px 14px 14px; }
+  #pane-beta .beta-preview-paper svg { margin-top: 14px; }
+  #pane-beta .beta-preview-steps { padding-top: 10px; }
+  #pane-beta .beta-features li { padding: 18px 18px 18px; }
+  #pane-beta .beta-features h3 { margin-top: 4px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -6812,7 +6823,7 @@ body.salle-ouverte { overflow: hidden; }
 .beta-preview-paper i { display: block; height: 4px; background: var(--border); margin: 11px 0; }
 .beta-preview-paper i:nth-of-type(2) { width: 80%; }
 .beta-preview-paper i:nth-of-type(4) { width: 60%; }
-.beta-preview-paper svg { width: 100%; margin-top: 16px; stroke: var(--brand); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.beta-preview-paper svg { display: block; width: 100%; margin-top: 16px; stroke: var(--brand); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .beta-preview-steps { list-style: none; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; padding: 16px 0 0; margin: 0; border-top: 1px solid var(--border); font-size: 11px; color: var(--ink-muted); }
 .beta-preview-steps li { flex: 1 1 0; }
 .beta-preview-steps li:not(:last-child) { position: relative; }
@@ -6821,13 +6832,14 @@ body.salle-ouverte { overflow: hidden; }
 .beta-boundary p { margin: 0; color: var(--ink-muted); }
 .beta-experience { margin-top: clamp(32px, 4vw, 52px); }
 .beta-section-heading h2, .beta-access-grid h2 { margin: 0 0 16px; }
-.beta-features { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(16px, 2.5vw, 28px); margin: 24px 0 0; padding: 0; }
-.beta-features li { min-width: 0; padding: 18px 18px 20px; border: 1px solid var(--border); border-top: 3px solid var(--brand); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-sm); }
-.beta-step { font-size: 13px; font-weight: 700; color: var(--ink-muted); }
-.beta-features h3 { margin: 10px 0 8px; }
+.beta-features { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: clamp(16px, 2.5vw, 28px); margin: 16px 0 0; padding: 0; }
+.beta-features li { min-width: 0; padding: 18px 18px 18px; border: 1px solid var(--border); border-top: 3px solid var(--brand); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow-sm); }
+.beta-step { display: block; line-height: 1.2; margin-bottom: 6px; font-size: 13px; font-weight: 700; color: var(--ink-muted); }
+.beta-features h3 { margin: 4px 0 6px; }
+.beta-features li p { margin: 0; }
 .beta-features p, .beta-access-grid p, .beta-demo p { font-size: 14px; color: var(--ink-muted); line-height: 1.7; }
-.beta-access-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(18px, 3vw, 32px); margin-top: clamp(32px, 4vw, 48px); }
-.beta-access, .beta-upcoming { min-width: 0; border: 1px solid var(--border); background: var(--surface); padding: clamp(20px, 3vw, 30px); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
+.beta-access-grid { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(18px, 3vw, 32px); margin-top: clamp(20px, 2.5vw, 32px); }
+.beta-access, .beta-upcoming { min-width: 0; border: 1px solid var(--border); background: var(--surface); padding: clamp(20px, 2.5vw, 26px); border-radius: var(--radius); box-shadow: var(--shadow-sm); }
 .beta-upcoming { background: var(--surface-inset); }
 .beta-access-grid .beta-eyebrow { color: var(--ink-muted); font-size: 12px; }
 .beta-access-grid .btn { margin-top: 12px; min-height: 44px; white-space: normal; text-align: center; }
@@ -6846,13 +6858,17 @@ body.salle-ouverte { overflow: hidden; }
   .beta-page { padding-top: 30px; padding-bottom: 44px; }
   .beta-hero { grid-template-columns: 1fr; gap: 30px; }
   .beta-preview { max-width: 480px; width: 100%; box-sizing: border-box; }
-  .beta-preview-scene { min-height: 200px; }
+  .beta-preview-scene { min-height: 0; align-items: start; margin: 16px 0 8px; }
+  .beta-preview-paper { padding: 18px 14px 14px; }
+  .beta-preview-steps { padding-top: 10px; }
+  .beta-preview-person { aspect-ratio: 4 / 5; align-self: start; }
+  .beta-preview-person svg { width: 62%; }
   .beta-boundary { grid-template-columns: 1fr; gap: 8px; margin-top: 28px; padding: 20px; }
   .beta-experience { margin-top: 40px; }
-  .beta-features, .beta-access-grid, .beta-security-grid { grid-template-columns: 1fr; gap: 22px; }
-  .beta-features h3 { margin-top: 10px; }
+  .beta-features, .beta-access-grid, .beta-security-grid { grid-template-columns: 1fr; gap: 16px; }
+  .beta-features h3 { margin-top: 4px; }
   .beta-access, .beta-upcoming { padding: 24px; }
-  .beta-access-grid { margin-top: 28px; }
+  .beta-access-grid { margin-top: 20px; }
   .beta-lead { font-size: 16px; }
 }
 
@@ -7446,9 +7462,9 @@ html[data-theme='dark'] #pane-beta {
 
 #pane-beta .beta-eyebrow { color: var(--subtitle-ink); }
 
-#pane-beta .beta-experience { margin-top: clamp(56px, 7vw, 104px); }
-#pane-beta .beta-access-grid { margin-top: clamp(48px, 6vw, 80px); }
-#pane-beta .beta-demo { margin-top: clamp(36px, 4vw, 56px); }
+#pane-beta .beta-experience { margin-top: clamp(32px, 4vw, 52px); }
+#pane-beta .beta-access-grid { margin-top: clamp(20px, 2.5vw, 32px); }
+#pane-beta .beta-demo { margin-top: clamp(24px, 3vw, 36px); }
 
 #pane-beta .beta-preview,
 #pane-beta .beta-features li,
@@ -7680,3 +7696,32 @@ html[data-theme='dark'] #pane-beta {
     grid-area: carnet;
     margin-top: var(--space-10);
   }
+
+}
+
+/* Touch targets apply at every width; keep these outside the wide-only
+   authenticated landing layout above. */
+.nc-conformite-link,
+.sup-mail-open {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+.sup-text { min-height: 44px; }
+
+@media (max-width: 899.98px) {
+  /* The compact phone inventory is followed immediately by its calendar
+     subscription rail; the previous 40px margin plus 48px inset created a
+     conspicuous dead band after a one-column sparse grid. */
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet {
+    margin-top: var(--space-6);
+    padding-top: var(--space-6);
+  }
+}
+
+@media (max-width: 640px) {
+  /* On a one-column phone inventory the overflow tile follows the last real
+     card. Top-aligning its message keeps the tile useful without a centered
+     dead pocket between two consecutive demand rows. */
+  #pane-notaires .nc-live-more { justify-content: flex-start; }
+}

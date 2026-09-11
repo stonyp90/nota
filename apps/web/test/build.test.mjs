@@ -67,8 +67,17 @@ for (const page of pages) {
       assert.equal(doc.querySelector('a.btn').getAttribute('href'), `/?lang=${lang}#t=carnet`);
       for (const el of doc.querySelectorAll('script[src],link[rel="stylesheet"]')) {
         const path = el.getAttribute('src') || el.getAttribute('href');
+        // The two type faces load from Google Fonts exactly as on index.html
+        // (ADR 0050); every same-origin asset must be a built file.
+        if (/^https?:/.test(path)) { assert.match(path, /^https:\/\/fonts\.googleapis\.com\//, `unexpected external asset ${path}`); continue; }
         assert.ok(files.includes(path.slice(1)), `missing built asset ${path}`);
       }
+      // One brand: the acquisition page carries the same lockup as the carnet.
+      assert.ok(doc.querySelector('symbol#nota-logomark') && doc.querySelector('symbol#nota-wordmark'), 'brand symbols inlined');
+      assert.ok(doc.querySelector('header .brand .brand-lockup use[href="#nota-logomark"]'), 'header lockup uses the mark');
+      assert.equal(doc.querySelector('meta[name="theme-color"]:not([media])').getAttribute('content'), '#386888');
+      assert.match(doc.querySelector('link[rel="stylesheet"][href*="fonts.googleapis.com"]').getAttribute('href'), /family=Inter.*family=Sora/);
+      assert.doesNotMatch(source, /#315b43|#50b848|#2c5f34/i, 'no retired green anywhere on the page');
       for (const el of doc.querySelectorAll('script[type="application/ld+json"]')) assert.equal(JSON.parse(el.textContent).url, url);
       if (lang === 'en') {
         assert.match(doc.querySelector('h1').textContent, /Notary for mortgage/);
