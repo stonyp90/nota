@@ -8490,14 +8490,7 @@
       .sort(function (a, b) { return a.dateISO < b.dateISO ? -1 : a.dateISO > b.dateISO ? 1 : 0; });
     if (!gate || gate.hidden) { box.hidden = true; return; }
     var grid = $('notary-live-grid'); clear(grid);
-    grid.classList.remove('nc-live-grid--empty');
-    if (!open.length) {
-      grid.classList.add('nc-live-grid--empty');
-      var empty = el('div', 'nc-live-empty');
-      empty.setAttribute('role', 'status');
-      empty.appendChild(el('strong', null, 'Pas d’offres'));
-      grid.appendChild(empty);
-    }
+    grid.classList.toggle('nc-live-grid--empty', !open.length);
     var shown = open.length > NC_LIVE_MAX ? NC_LIVE_MAX - 1 : open.length;
     open.slice(0, shown).forEach(function (b) { grid.appendChild(ncLiveCard(b)); });
     var extra = open.length - shown;
