@@ -59,14 +59,22 @@ resource "aws_iam_role_policy" "api_sms" {
   policy = data.aws_iam_policy_document.sms_publish[0].json
 }
 
+# The reminders Lambda texts too (the J-1 reminder, a refused hold).
+resource "aws_iam_role_policy" "reminders_sms" {
+  count  = var.sms_enabled ? 1 : 0
+  name   = "nota-reminders-sms"
+  role   = aws_iam_role.reminders.id
+  policy = data.aws_iam_policy_document.sms_publish[0].json
+}
+
 # Account-wide SMS preferences: the spend ceiling and the transactional
 # default. One per account/region — declared here because Nota is the only
 # SMS sender in this account.
 resource "aws_sns_sms_preferences" "nota" {
-  count                   = var.sms_enabled ? 1 : 0
-  default_sms_type        = "Transactional"
-  default_sender_id       = var.sms_sender_id
-  monthly_spend_limit     = var.sms_monthly_spend_limit_usd
-  usage_report_s3_bucket  = null
+  count                        = var.sms_enabled ? 1 : 0
+  default_sms_type             = "Transactional"
+  default_sender_id            = var.sms_sender_id
+  monthly_spend_limit          = var.sms_monthly_spend_limit_usd
+  usage_report_s3_bucket       = null
   delivery_status_iam_role_arn = null
 }

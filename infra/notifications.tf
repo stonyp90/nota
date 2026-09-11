@@ -199,8 +199,11 @@ resource "aws_lambda_function" "reminders" {
       NOTA_REQUIRED_SECRETS      = var.stripe_mode == "unconfigured" ? "NOTA_NOTARY_SECRET" : "NOTA_NOTARY_SECRET,STRIPE_SECRET_KEY,STRIPE_WEBHOOK_SECRET"
       TABLE_NAME                 = aws_dynamodb_table.main.name
       NOTA_FROM_EMAIL            = var.from_email
-      NOTA_OPERATOR_EMAIL        = var.operator_email
-      NOTA_BASE_URL              = var.base_url
+      # SMS leg of the reminders (dateApproaching, cautionRefusee) — same opt-in as the API.
+      NOTA_SMS_ENABLED    = tostring(var.sms_enabled)
+      NOTA_SMS_SENDER_ID  = var.sms_sender_id
+      NOTA_OPERATOR_EMAIL = var.operator_email
+      NOTA_BASE_URL       = var.base_url
 
       # ADR 0033 §2.7 — le lien signé qui ouvre L'ACTE du client est le bouton de
       # tous ces courriels. Ce lot le frappe lui-même, donc il lui faut l'origine

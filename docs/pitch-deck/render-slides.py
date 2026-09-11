@@ -394,19 +394,33 @@ SLIDES = [slide_1, slide_2, slide_3, slide_4, slide_5, slide_6, slide_7, slide_8
           slide_9, slide_10, slide_11, slide_12, slide_13, slide_14, slide_15, slide_16]
 
 
-def render(lang: str) -> None:
+def render(lang: str, svg_dir: Path | None = None) -> None:
+    """Rasterize with ImageMagick (needs Sora + Inter in fontconfig), or — with
+    `svg_dir` — only write the SVGs there for rasterize-slides.mjs, which draws
+    them in a headless Chromium that loads the faces from Google Fonts. The
+    second path is what regenerates the committed PNGs on a machine without the
+    fonts installed; both produce the same 1600×900 frames."""
     prefix = "dark-slide-fr-" if lang == "fr" else "dark-slide-"
     for number, fn in enumerate(SLIDES, 1):
-        svg_path = OUT / f"{prefix}{number}.svg"
-        png_path = OUT / f"{prefix}{number}.png"
+        svg_path = (svg_dir or OUT) / f"{prefix}{number}.svg"
         svg_path.write_text("\n".join(fn(lang)), encoding="utf-8")
+        if svg_dir is not None:
+            continue
+        png_path = OUT / f"{prefix}{number}.png"
         subprocess.run(["magick", "-background", "none", str(svg_path), "-density", "144", str(png_path)], check=True)
         svg_path.unlink()
 
 
 if __name__ == "__main__":
-    require_fonts()
-    OUT.mkdir(parents=True, exist_ok=True)
-    render("en")
-    render("fr")
-    print(f"wrote concise English and French slides to {OUT}")
+    if len(sys.argv) > 2 and sys.argv[1] == "--svg-out":
+        target = Path(sys.argv[2]).resolve()
+        target.mkdir(parents=True, exist_ok=True)
+        render("en", target)
+        render("fr", target)
+        print(f"wrote 32 SVG frames to {target} — rasterize with: node docs/pitch-deck/rasterize-slides.mjs {target}")
+    else:
+        require_fonts()
+        OUT.mkdir(parents=True, exist_ok=True)
+        render("en")
+        render("fr")
+        print(f"wrote concise English and French slides to {OUT}")
