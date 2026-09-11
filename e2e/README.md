@@ -36,10 +36,13 @@ npx playwright show-report                         # open the last HTML report (
 | `partner-claim.spec.js` | A referral partner claims a code and gets the shareable `?ref=CODE` link. |
 | `language-preferences.spec.js` | Browser language defaults, desktop/mobile menu choice, API language propagation, blocked storage, invalid URL overrides, and authenticated email preference updates. |
 | `no-console-errors.spec.js` | Home + booking load with no severe console errors, no uncaught page errors, and no failed / 5xx same-origin requests. |
+| `every-surface.spec.js` | **Every surface at every size, on every engine.** One test per surface (31: public doors, booking steps, dialogs, drawer, notary console, support chat, signing room, admin views, pitch deck, business plan, brand guide). Chromium walks 320/390/768/1024/1280/1440/1920; firefox, webkit, iPhone 13, Pixel 7 and iPad measure at their own size. The lens (`layout-lens.js`) reports sideways scroll, blank bands, overlaps, touch targets under 44 px, truncated headings, page errors and headings off the display face — every offending viewport in one message. |
+| `menu-accessibility.spec.js` | Header controls reachable at 900/1024/1280; the phone drawer keeps its history buttons aligned, its two preference controls (language, theme) and no orphan dropdown, traps focus, closes on Escape and hands focus back to the burger. |
+| `responsive-layout.spec.js` | Shape assertions at seven sizes for the three public doors, the partners pane and the contact dialog. |
 
 ## How the servers are wired
 
-The config (`../playwright.config.js`) starts two servers on fixed, overridable
+The config (`../playwright.config.js`) starts four servers on fixed, overridable
 ports:
 
 - **API** — `e2e/servers/api-server.js` on `:8811` (override `E2E_API_PORT`).
@@ -52,6 +55,11 @@ ports:
   link flows complete with no mailbox.
 - **Web** — `apps/web/run-local.mjs` on `:4311` (override `E2E_WEB_PORT`), served
   with `NOTA_API_BASE` pointed at the API above. `baseURL` is this server.
+- **Admin** — `apps/admin/run-local.mjs` on `:4312` (override `E2E_ADMIN_PORT`),
+  pointed at the API above (which routes `/admin/*` to the local admin app).
+- **Docs** — `e2e/servers/docs-server.js` on `:4313` (override `E2E_DOCS_PORT`)
+  serves `docs/` as the deploy ships it, so the pitch deck and the business plan
+  are measured like any other page.
 
 The ports are deliberately off the usual dev ports (8788 / 4173) so a running
 `npm run dev` never collides with a test run.

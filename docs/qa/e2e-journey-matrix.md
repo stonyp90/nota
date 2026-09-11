@@ -25,6 +25,9 @@ Stripe adapter fakes and never contact Stripe.
 | Retention/referral earnings and cancellation recovery | `features/parrainage.feature`, `apps/api/test/analytics-parrainage-payable.test.mjs` | covered |
 | Empty, malformed, stale, duplicate, unauthorized and already-completed requests | `apps/api/test/*.test.mjs`, `features/validation_api.feature`, `features/annulation.feature` | covered |
 | Responsive layout, no blank cards/gaps, console/network regressions | `e2e/responsive-layout.spec.js`, `e2e/no-console-errors.spec.js` | covered |
+| **Every surface at every size, on every engine** — 31 surfaces (public doors, 4 booking steps, dialogs, drawer, signed-in notary console, support chat, signing room, 6 admin views, pitch deck, business plan, brand guide) × 7 viewports on chromium (320 → 1920) and once per device project (firefox, webkit, iPhone 13, Pixel 7, iPad): no sideways scroll, no blank band, no overlap, 44 px touch targets, no truncated heading, no page error, headings on the display face | `e2e/every-surface.spec.js` + `e2e/layout-lens.js` (docs served by `e2e/servers/docs-server.js`) | covered (2026-09-11) |
+| First-visit surfaces with motion allowed (intro films, onboarding guide) | `e2e/every-surface.spec.js` (« motion allowed » block) | covered (2026-09-11) |
+| Mobile drawer: no orphan control, keyboard focus, Escape, history buttons | `e2e/menu-accessibility.spec.js` | covered |
 
 ## Language and email coverage (2026-09-08)
 
