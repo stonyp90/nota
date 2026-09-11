@@ -44,10 +44,10 @@ test('les jetons de l’échelle vivent dans :root, copiés de la bêta', () => 
     assert.match(CSS, new RegExp('(^|[;\\s])' + t + ':', 'm'), t + ' manque dans styles.css');
   }
   assert.match(CSS, /--font-display:\s*'Sora'/, 'la face d’affichage est Sora');
-  assert.match(CSS, /--type-h1:\s*clamp\(32px, 3\.6vw, 56px\)/, 'h1 = échelle Nota de production');
-  assert.match(CSS, /--type-h2:\s*clamp\(22px, 2\.1vw, 30px\)/, 'h2 = échelle Nota de production');
-  assert.match(CSS, /--type-h3:\s*16px/, 'h3 = échelle Nota de production');
-  assert.match(CSS, /--type-lead:\s*16px/, 'lede = échelle Nota de production');
+  assert.match(CSS, /--type-h1:\s*clamp\(42px, 4\.25vw, 68px\)/, 'h1 = la taille de la bêta, verbatim');
+  assert.match(CSS, /--type-h2:\s*clamp\(24px, 2\.35vw, 34px\)/, 'h2 = la taille de la bêta, verbatim');
+  assert.match(CSS, /--type-h3:\s*17px/, 'h3 = la taille de la bêta, verbatim');
+  assert.match(CSS, /--type-lead:\s*17px/, 'lede = la taille de la bêta, verbatim');
 });
 
 test('h1, h2, h3 prennent la face et la graisse d’affichage globalement', () => {
@@ -97,7 +97,7 @@ test('les deux faces se chargent partout — le rendu ne dépend plus des police
   assert.match(SIG_HTML, both, 'signature.html charge Inter ET Sora');
   assert.match(ADMIN_HTML, both, 'admin charge Inter ET Sora');
   assert.match(SIG_CSS, /h1,h2,h3\{[^}]*font-family:var\(--font-display\)[^}]*font-weight:var\(--weight-display\)/, 'la salle titre en Sora 800');
-  assert.match(SIG_CSS, /--type-h1:\s*clamp\(32px, 3\.6vw, 56px\)/, 'la salle porte la même échelle');
+  assert.match(SIG_CSS, /--type-h1:clamp\(42px,4\.25vw,68px\)/, 'la salle porte la même échelle');
   assert.match(ADMIN_TOKENS, /--font-display:\s*'Sora'/, 'admin porte la face d’affichage');
   assert.match(ADMIN_CSS, /^h1, h2, h3 \{[^}]*font-family: var\(--font-display\)/m, 'admin titre en Sora');
 });

@@ -82,7 +82,7 @@ const PALETTE = {
   markBg: '#264961', // the reference lockup's deep blue-teal square
   brandBright: '#407598', // the reference lockup's cyan signal
   brandInk: '#ffffff', // --brand-ink — text on the brand fill
-  tint: '#f1f7fb', // nota-blue-50 — the callout wash
+  tint: '#ebf1f5', // nota-blue-50 — the callout wash
 };
 // The web square scale (--radius-lg / --radius / --radius-sm): the card, the
 // mark and the button, the callout. No pills, no circles.

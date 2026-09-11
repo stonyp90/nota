@@ -68,8 +68,9 @@ The default theme is **light**; `theme-color` is `#386888` on light and
 
 ## Alternatives reviewed
 
-1. **The selected lockup** — strongest Québec signal, legible at favicon size,
-   closest to the supplied reference.
+1. **01 — Monogramme lié (selected)** — the N opens directly into `ota`, with
+   the strongest Québec signal, favicon legibility, and the closest match to
+   the supplied reference.
 2. **Wordmark only** — cleaner in long-form documents, loses recognition in
    browser chrome, email clients and small app surfaces.
 3. **Rounded green/hunter** — distinct, but inconsistent with the reference and
@@ -77,7 +78,11 @@ The default theme is **light**; `theme-color` is `#386888` on light and
 4. **Text-only `CARNET PUBLIC · QUÉBEC`** — useful as supporting copy, too long
    as a primary lockup.
 
-Nine further logo directions (linked monogram, trust seal, deed leaf, continuous
+01 wins because it preserves the recognizable N at small sizes, lets the N open
+directly into `ota`, gives Québec a compact secondary badge, and keeps the
+action colour separate from the mark square.
+
+Eight further logo directions (trust seal, deed leaf, continuous
 paraph, register, notarial bridge, reserved date, proof frame, Québec rosette)
 were drawn and rejected. None ships. Both reference pages are `noindex` and are
 documentation, not production surfaces:
