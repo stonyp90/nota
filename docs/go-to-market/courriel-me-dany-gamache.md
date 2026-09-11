@@ -21,7 +21,7 @@ Le tarif de base ne relève pas de l'estimation. Il se construit à partir d'un 
 Le montant offert s'élève ensuite avec la proximité de la date souhaitée, jusqu'à un plafond de cinq fois ce tarif. Cette prime correspond à la célérité exceptionnelle que l'article 49 (4°) du Code de déontologie reconnaît expressément parmi les facteurs de fixation des honoraires.
 
 Version bêta : https://d1s1h4894dau0c.cloudfront.net/
-Mon parcours : anthonypaquet.com
+Mon parcours : gonota.ca
 
 À terme, je souhaite démontrer à la Chambre des notaires qu'un tel dossier peut se mener à distance en toute sécurité, ce qui augmenterait considérablement l'offre. C'est le sujet sur lequel votre avis me serait le plus utile.
 
@@ -34,7 +34,7 @@ Bien à vous,
 **Anthony Paquet**
 Fondateur, Nota
 418-564-6162
-anthonypaquet.com
+gonota.ca
 
 ---
 

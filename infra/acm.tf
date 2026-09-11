@@ -1,22 +1,31 @@
 ###############################################################################
 # ACM + Route53 — custom domain support (OPTIONAL).
 #
-# Every resource here is guarded by `count = var.domain_name == "" ? 0 : 1`, so
-# with no domain configured the stack creates nothing in this file and uses the
-# default *.cloudfront.net certificate instead.
+# Every resource here is guarded by the custom-host inputs, so with no domain
+# configured the stack creates nothing in this file and uses the default
+# *.cloudfront.net certificate instead. The public, plan, and pitch hostnames
+# share one CloudFront certificate.
 #
 # The certificate is created through the aws.us_east_1 provider because
-# CloudFront only accepts ACM certificates from us-east-1.
+# CloudFront only accepts ACM certificates from us-east-1. The public app,
+# plan, pitch and brand hosts share one certificate.
 ###############################################################################
 
 # DNS-validated certificate in us-east-1.
 resource "aws_acm_certificate" "cert" {
-  count    = var.domain_name == "" ? 0 : 1
+  count    = var.domain_name == "" && var.plan_domain_name == "" && var.pitch_domain_name == "" && var.brand_domain_name == "" ? 0 : 1
   provider = aws.us_east_1
 
-  domain_name               = var.domain_name
-  validation_method         = "DNS"
-  subject_alternative_names = var.enable_www ? ["www.${var.domain_name}"] : []
+  # When the plan is the only configured custom host, use it as the
+  # certificate's primary name; an empty ACM domain_name is invalid.
+  domain_name       = var.domain_name != "" ? var.domain_name : (var.plan_domain_name != "" ? var.plan_domain_name : (var.pitch_domain_name != "" ? var.pitch_domain_name : var.brand_domain_name))
+  validation_method = "DNS"
+  subject_alternative_names = concat(
+    var.enable_www && var.domain_name != "" ? ["www.${var.domain_name}"] : [],
+    var.plan_domain_name != "" ? [var.plan_domain_name] : [],
+    var.pitch_domain_name != "" ? [var.pitch_domain_name] : [],
+    var.brand_domain_name != "" ? [var.brand_domain_name] : [],
+  )
 
   lifecycle {
     create_before_destroy = true
@@ -25,7 +34,7 @@ resource "aws_acm_certificate" "cert" {
 
 # Route53 DNS records that prove domain ownership to ACM.
 resource "aws_route53_record" "cert_validation" {
-  for_each = var.domain_name == "" ? {} : {
+  for_each = var.domain_name == "" && var.plan_domain_name == "" && var.pitch_domain_name == "" && var.brand_domain_name == "" ? {} : {
     for dvo in aws_acm_certificate.cert[0].domain_validation_options : dvo.domain_name => {
       name   = dvo.resource_record_name
       record = dvo.resource_record_value
@@ -33,7 +42,13 @@ resource "aws_route53_record" "cert_validation" {
     }
   }
 
-  zone_id         = local.dns_zone_id
+  zone_id = each.key == var.plan_domain_name && var.plan_hosted_zone_id != null ? var.plan_hosted_zone_id : (
+    each.key == var.pitch_domain_name && var.pitch_hosted_zone_id != null ? var.pitch_hosted_zone_id : (
+      each.key == var.brand_domain_name && var.brand_hosted_zone_id != null ? var.brand_hosted_zone_id : (
+        endswith(each.key, ".gonata.ca") ? aws_route53_zone.legacy_gonata.zone_id : local.dns_zone_id
+      )
+    )
+  )
   name            = each.value.name
   type            = each.value.type
   records         = [each.value.record]
@@ -43,7 +58,7 @@ resource "aws_route53_record" "cert_validation" {
 
 # Blocks until ACM observes the validation records and issues the certificate.
 resource "aws_acm_certificate_validation" "cert" {
-  count    = var.domain_name == "" ? 0 : 1
+  count    = var.domain_name == "" && var.plan_domain_name == "" && var.pitch_domain_name == "" && var.brand_domain_name == "" ? 0 : 1
   provider = aws.us_east_1
 
   certificate_arn         = aws_acm_certificate.cert[0].arn

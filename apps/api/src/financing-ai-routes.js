@@ -12,9 +12,12 @@ const MAX_IN_FLIGHT = 32;
 // The current analysis lives on the private bid, with its retention/erasure
 // policy. Raw page text is never persisted here or added to the support prompt.
 function createFinancingAIRoutes({ repo, env, authenticate, json, parseBody, getSecret,
-  port, nowMs = Date.now, newId = randomUUID, audit = async () => {}, learning = null,
-  canAccessWorkPacket = async () => true }) {
-  const error = (status, code) => json(status, { errors: [{ code }] });
+  port, nowMs = Date.now, newId = randomUUID, audit = async () => {}, learning = null, aiAccess = null }) {
+  const error = (status, code) => json(status, { errors: [{ code, message: {
+    ai_access_required: 'Activez la bêta IA ou choisissez une formule pour continuer.',
+    quota_epuise: 'Votre quota de préparation IA est épuisé. Choisissez une formule ou achetez des unités.',
+    paiement_requis: 'Votre abonnement IA nécessite une mise à jour du paiement.',
+  }[code] || undefined }] });
   const workPacket = bid => D.financingWorkPacket(bid, { todayISO: D.businessDay(nowMs(), D.BUSINESS_TIMEZONE) });
   const setting = value => typeof value === 'string' ? value.trim() : '';
   const inFlight = new Map();
@@ -77,7 +80,13 @@ function createFinancingAIRoutes({ repo, env, authenticate, json, parseBody, get
     if (!bid) return error(404, 'introuvable');
     if (bid.notaryId !== owner) return error(403, 'interdit');
     if (bid.status !== D.STATUS.RETENUE || bid.efface) return error(409, 'dossier_indisponible');
-    if (!(await canAccessWorkPacket(bid))) return error(402, 'nota_payment_required');
+    const entitlement = aiAccess && await aiAccess.get(owner);
+    // Existing analyses remain reviewable after a trial or subscription ends;
+    // only a new provider call requires an active entitlement. The web client
+    // still hides this panel when access is unavailable, so the normal dossier
+    // remains the default product experience.
+    const needsEntitlement = route.endsWith('/preparation') && method === 'POST';
+    if (needsEntitlement && aiAccess && aiAccess.monetized() && (!entitlement || !entitlement.enabled)) return error(402, entitlement?.reason === 'paiement_requis' ? 'paiement_requis' : 'ai_access_required');
     if (method === 'GET') return json(200, { analysis: bid.financingAnalysis || null, workPacket: workPacket(bid) });
 
     if (route.endsWith('/review')) {
@@ -102,6 +111,7 @@ function createFinancingAIRoutes({ repo, env, authenticate, json, parseBody, get
     if (input.processingAuthorized !== true) return error(422, 'autorisation_traitement_requise');
     const validated = D.validateFinancingAIInput({ serviceId: bid.serviceId, pages: input.pages });
     if (!validated.ok) return json(422, { errors: validated.errors });
+    let consumedSource = null;
     try {
       const config = configuration();
       if (!config) return error(503, 'financing_ai_unavailable');
@@ -114,8 +124,12 @@ function createFinancingAIRoutes({ repo, env, authenticate, json, parseBody, get
         const key = JSON.stringify([bid.id, bid.dateISO, owner, identity.fingerprint]);
         let pending = inFlight.get(key);
         reused = !!pending;
+        let consumed = null;
         if (!pending) {
           if (inFlight.size >= MAX_IN_FLIGHT) return error(429, 'trop_de_requetes');
+          consumed = aiAccess ? await aiAccess.consume(owner) : { ok: true, source: 'legacy_open' };
+          if (!consumed.ok) return error(402, consumed.code);
+          consumedSource = consumed.source;
           pending = (async () => {
             const rawLimit = setting(env.NOTA_FINANCING_AI_MAX_CALLS_PER_DAY);
             const dailyLimit = rawLimit ? Number(rawLimit) : DEFAULT_DAILY_CALL_LIMIT;
@@ -152,7 +166,7 @@ function createFinancingAIRoutes({ repo, env, authenticate, json, parseBody, get
         let result;
         try { result = await pending; }
         finally { if (inFlight.get(key) === pending) inFlight.delete(key); }
-        if (result.status) return error(result.status, result.code);
+        if (result.status) { if (aiAccess && consumed) await aiAccess.refund(owner, consumed.source); consumedSource = null; return error(result.status, result.code); }
         analysisId = result.analysisId;
       }
       // Each waiter rechecks current ownership/erasure and reads current review
@@ -161,8 +175,12 @@ function createFinancingAIRoutes({ repo, env, authenticate, json, parseBody, get
       if (!current || current.notaryId !== owner || current.status !== D.STATUS.RETENUE || current.efface) return error(409, 'dossier_indisponible');
       if (current.financingAnalysis?.id !== analysisId) return error(409, 'analyse_modifiee');
       await learn('aiOutput', { bid: current, analysis: current.financingAnalysis, input: validated.value, owner, reused });
+      consumedSource = null;
       return json(200, { ok: true, analysis: current.financingAnalysis, workPacket: workPacket(current), reused });
-    } catch { return error(503, 'financing_ai_unavailable'); }
+    } catch {
+      if (aiAccess && consumedSource) await aiAccess.refund(owner, consumedSource);
+      return error(503, 'financing_ai_unavailable');
+    }
   };
 }
 

@@ -172,6 +172,6 @@ test('sans facturation configurée, la console reçoit quand même le tarif et s
     lienCNQ: null, rayonKm: 0, urgences: false, prefixe: null,
     nom: null, etude: null, telephone: null, adresse: null, courriel: 'n@etude.ca',
     complet: false, manquants: domain.notaryContactMissing({}),
-    alertes: { pace: 'daily', urgentOnly: false },
+    alertes: { pace: 'daily', urgentOnly: false, sms: false },
   });
 });

@@ -80,19 +80,50 @@ const { createNotifier } = require('./src/notifications');
 // L'origine que le NAVIGATEUR atteint : c'est elle qui doit être dans le lien,
 // pas l'adresse interne du conteneur.
 const SITE_URL = process.env.NOTA_SITE_URL || 'http://localhost:4173';
+// The local stack includes a loopback OIDC provider so all three sign-in
+// buttons can be exercised without third-party credentials or network calls.
+// This flag is set by dev-all; it is deliberately never inferred in production.
+const localOAuth = process.env.NOTA_OAUTH_LOCAL === 'true' && process.env.NODE_ENV !== 'production' && !useDynamo;
+if (localOAuth) {
+  process.env.NOTA_OAUTH_ORIGIN ||= SITE_URL;
+  process.env.NOTA_OAUTH_ENCRYPTION_KEY ||= '11'.repeat(32);
+  for (const id of ['google', 'microsoft', 'linkedin']) {
+    process.env['NOTA_OAUTH_' + id.toUpperCase() + '_CLIENT_ID'] ||= 'nota-local-' + id;
+    process.env['NOTA_OAUTH_' + id.toUpperCase() + '_CLIENT_SECRET'] ||= 'nota-local-' + id + '-secret';
+  }
+}
 const localMailer = createFileMailer({ dir: process.env.NOTA_LOCAL_MAIL_DIR });
+// ADR 0051 — les textos de la pile locale tombent à côté des courriels
+// (.local-mail/, ou NOTA_LOCAL_SMS_DIR), un .json par texto, et le texte est
+// imprimé dans les logs : tout le chemin SMS s'exerce sans carrier.
+const { createFileSms } = require('./src/sms-port');
+const localSms = createFileSms({ dir: process.env.NOTA_LOCAL_SMS_DIR || process.env.NOTA_LOCAL_MAIL_DIR });
 const localNotifier = createNotifier({
   repo,
   mailer: localMailer,
+  sms: localSms,
   adminUrl: process.env.NOTA_ADMIN_BASE_URL || null,
   baseUrl: SITE_URL,
   operatorEmail: process.env.NOTA_OPERATOR_EMAIL || 'admin@nota.local',
 });
 
+const { createOAuth } = require('./src/oauth');
+const oauth = createOAuth({ repo, env: process.env, now: Date.now });
+if (localOAuth) {
+  // A deterministic local demo identity lets the browser test the complete
+  // returning-user flow. First-time users still follow the real mailbox-proof
+  // branch, which remains covered by the API OAuth tests.
+  for (const id of ['google', 'microsoft', 'linkedin']) {
+    const identity = oauth.localDemoIdentity(id);
+    repo.putOAuthIdentity(identity.subject, identity);
+  }
+}
+
 const app = createApp(repo, {
   ...(demoBilling ? { billing: demoBilling, billingConfigured: false } : {}),
   notifier: localNotifier,
   siteUrl: SITE_URL,
+  oauth,
 });
 
 const server = http.createServer(async (req, res) => {

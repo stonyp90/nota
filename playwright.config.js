@@ -19,6 +19,7 @@ const { defineConfig, devices } = require('@playwright/test');
 const API_PORT = Number(process.env.E2E_API_PORT || 8811);
 const WEB_PORT = Number(process.env.E2E_WEB_PORT || 4311);
 const ADMIN_PORT = Number(process.env.E2E_ADMIN_PORT || 4312);
+const DOCS_PORT = Number(process.env.E2E_DOCS_PORT || 4313);
 const API_BASE = `http://localhost:${API_PORT}`;
 const WEB_BASE = `http://localhost:${WEB_PORT}`;
 
@@ -46,11 +47,11 @@ module.exports = defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', testMatch: /compatibility\.spec\.js/, use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', testMatch: /compatibility\.spec\.js/, use: { ...devices['Desktop Safari'] } },
-    { name: 'iphone', testMatch: /compatibility\.spec\.js/, use: { ...devices['iPhone 13'] } },
-    { name: 'android', testMatch: /compatibility\.spec\.js/, use: { ...devices['Pixel 7'] } },
-    { name: 'ipad', testMatch: /compatibility\.spec\.js/, use: { ...devices['iPad (gen 7)'] } },
+    { name: 'firefox', testMatch: /(compatibility|every-surface)\.spec\.js/, use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', testMatch: /(compatibility|every-surface)\.spec\.js/, use: { ...devices['Desktop Safari'] } },
+    { name: 'iphone', testMatch: /(compatibility|every-surface)\.spec\.js/, use: { ...devices['iPhone 13'] } },
+    { name: 'android', testMatch: /(compatibility|every-surface)\.spec\.js/, use: { ...devices['Pixel 7'] } },
+    { name: 'ipad', testMatch: /(compatibility|every-surface)\.spec\.js/, use: { ...devices['iPad (gen 7)'] } },
   ],
   // Start the API first (its /health gate), then the web app that proxies to it.
   // reuseExistingServer keeps local iteration instant; CI always boots clean.
@@ -70,6 +71,17 @@ module.exports = defineConfig({
       command: `node apps/web/run-local.mjs`,
       env: { NOTA_API_BASE: API_BASE, PORT: String(WEB_PORT) },
       url: WEB_BASE,
+      reuseExistingServer: !process.env.CI,
+      timeout: 30_000,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    },
+    {
+      // docs/ as the deploy ships it (pitch deck, business plan): the layout
+      // spec measures those two surfaces like any other page.
+      command: `node e2e/servers/docs-server.js`,
+      env: { PORT: String(DOCS_PORT) },
+      url: `http://localhost:${DOCS_PORT}/business-plan.html`,
       reuseExistingServer: !process.env.CI,
       timeout: 30_000,
       stdout: 'ignore',

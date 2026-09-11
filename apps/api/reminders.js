@@ -18,10 +18,13 @@ process.env.NOTA_EMAIL_LANGUAGE ||= 'fr';
  *   NOTA_NOTARY_SECRET  - signs that deep link; MUST match the API Lambda's
  *   NOTA_ADMIN_URL      - where operator alerts land, when a console exists
  *   STRIPE_SECRET_KEY   - ADR 0035: without it the caution pass is skipped
+ *   NOTA_SMS_ENABLED    - ADR 0051: 'true' wires the SNS text leg (consented recipients only)
+ *   NOTA_SMS_SENDER_ID  - the alphanumeric sender id where carriers show one
  */
 const domain = require('@nota/domain');
 const { createDynamoRepo } = require('./src/repo-dynamo');
 const { createSesAdapter } = require('./src/notify-port');
+const { createSnsSmsAdapter } = require('./src/sms-port');
 const { createNotifier } = require('./src/notifications');
 const { signToken, SCOPES } = require('./src/notary-auth');
 const { createBilling } = require('./src/billing');
@@ -38,6 +41,12 @@ exports.handler = async () => {
     from: process.env.NOTA_FROM_EMAIL,
     region: process.env.AWS_REGION,
   });
+  // ADR 0051 — la même jambe texto que le handler HTTP : ce lot envoie
+  // dateApproaching et cautionRefusee, deux des gabarits qui textent. Même
+  // variable, même port, même consentement lu dans la même table.
+  const sms = process.env.NOTA_SMS_ENABLED === 'true'
+    ? createSnsSmsAdapter({ region: process.env.AWS_REGION, senderId: process.env.NOTA_SMS_SENDER_ID })
+    : null;
   // ADR 0033 §2.7 — ces courriels-ci sont les SEULS qui parlent à quelqu'un qui
   // n'est pas devant l'écran : rappels J-7/J-3/J-1, J-0 sans preneur, dossier
   // incomplet, caution refusée, indemnité expirée. Sans `clientLink` leur bouton
@@ -51,6 +60,7 @@ exports.handler = async () => {
   const notifier = createNotifier({
     repo,
     mailer,
+    sms,
     baseUrl: process.env.NOTA_BASE_URL,
     apiBaseUrl: process.env.NOTA_API_BASE_URL,
     operatorEmail: process.env.NOTA_OPERATOR_EMAIL,

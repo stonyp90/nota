@@ -29,6 +29,15 @@ test('a fresh visit shows the two doors; the notary door plays its film and land
   await expect(page.locator('#ig-frame')).toBeVisible();
   await expect(page.locator('#ig-stage-notaire')).toHaveClass(/run/);
 
+  // The scene bar is both a progress indicator and a seek control: moving it
+  // one stop forward restarts the film on the second beat.
+  const seek = page.locator('#ig-stage-notaire .ig-progress-seek');
+  await seek.click();
+  await seek.press('Home');
+  await seek.press('ArrowRight');
+  await expect(seek).toHaveValue('1');
+  await expect(page.locator('#ig-stage-notaire')).toHaveAttribute('style', /--ig-seek-offset:\s*3500ms/);
+
   // Skipping lands on the notary pane and remembers the visit.
   await page.locator('#ig-skip').click();
   await expect(gate).not.toBeVisible();

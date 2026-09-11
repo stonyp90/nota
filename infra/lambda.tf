@@ -49,6 +49,7 @@ data "aws_iam_policy_document" "api_dynamodb" {
       "dynamodb:GetItem",
       "dynamodb:PutItem",
       "dynamodb:Query",
+      "dynamodb:TransactWriteItems",
       # UpdateItem lets the public API atomically ADD to the STATS# rollup
       # counters (best-effort analytics the admin surface reads). This is the
       # ONLY admin-related grant that is NOT gated behind var.enable_admin — it
@@ -221,6 +222,14 @@ resource "aws_lambda_function" "api" {
       STRIPE_SECRET_KEY     = var.use_secrets_manager ? "" : var.stripe_secret_key
       STRIPE_WEBHOOK_SECRET = var.use_secrets_manager ? "" : var.stripe_webhook_secret
 
+      # AI preparation is a separate product from marketplace settlement. Keep
+      # its launch explicit; empty Price IDs intentionally leave checkout
+      # closed rather than exposing a broken paid flow.
+      NOTA_AI_MONETIZATION_ENABLED = tostring(var.ai_monetization_enabled)
+      NOTA_AI_PRICE_ESSENTIEL      = var.ai_price_essentiel
+      NOTA_AI_PRICE_CABINET        = var.ai_price_cabinet
+      NOTA_AI_PRICE_EQUIPE         = var.ai_price_equipe
+
       # ADR 0031 — il n'y a plus de commission. Nota ne prélève aucune part des
       # honoraires du notaire : elle vend son service à son PRIX. Les trois
       # variables de taux qui vivaient ici ont été retirées le 2026-09-02 :
@@ -283,6 +292,10 @@ resource "aws_lambda_function" "api" {
       # placeholder in emails.js, which a test refuses in production — a
       # commercial message must carry a REAL mailing address.
       NOTA_SENDER_ADDRESS = var.sender_address
+      # SMS (texto) — the third channel, off unless sms.tf grants sns:Publish.
+      # The notifier composes the SNS adapter only when this reads "true".
+      NOTA_SMS_ENABLED   = tostring(var.sms_enabled)
+      NOTA_SMS_SENDER_ID = var.sms_sender_id
       # ADR 0032 — le seau des documents de la messagerie. VIDE = les portes de
       # document répondent 503 et la messagerie reste texte : un déploiement
       # sans seau n'est pas cassé, il est simplement plus étroit.

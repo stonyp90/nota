@@ -11,8 +11,10 @@ function createOAuthRoutes({ oauth, repo, now, grant, notify, clientIp }) {
     request = { ...request, headers: Object.fromEntries(Object.entries(request.headers || {}).map(([k, v]) => [k.toLowerCase(), v])) };
     const binding = String(request.headers?.cookie || '').split(';').map(s => s.trim()).find(s => s.startsWith(COOKIE + '='))?.slice(COOKIE.length + 1);
     const callback = path.match(new RegExp('^' + OAUTH_PATHS.callback.replace('{provider}', '(google|microsoft|linkedin)') + '$'));
+    const localAuthorize = path.match(/^\/auth\/oauth\/(google|microsoft|linkedin)\/authorize$/);
     try {
       if (path === OAUTH_PATHS.providers && method === 'GET') return json(200, { providers: oauth.providers() });
+      if (localAuthorize && method === 'GET' && typeof oauth.localAuthorize === 'function') return oauth.localAuthorize(localAuthorize[1], request.query || {});
       // A form POST from another site must not start/link identities. Callbacks
       // are the only permitted cross-site entry, protected by state + cookie.
       if (method === 'POST') {

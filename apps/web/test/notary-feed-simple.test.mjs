@@ -285,3 +285,18 @@ test('manual subscription remains selectable when clipboard access is denied', a
   assert.match(doc.body.textContent, /Copie impossible/);
   assert.equal($(doc, 'sub-subscription-copy').textContent, 'Copier le lien');
 });
+
+test('manual subscription is an explicit compact disclosure, not a native details row', async () => {
+  const { doc } = await boot();
+  const toggle = $(doc, 'sub-subscription-toggle');
+  const panel = $(doc, 'sub-subscription-panel');
+  assert.equal(doc.querySelector('#notary-carnet details'), null, 'the subscription card has no browser-native details marker');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(panel.hidden, true);
+  click(toggle);
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(panel.hidden, false);
+  click(toggle);
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(panel.hidden, true);
+});

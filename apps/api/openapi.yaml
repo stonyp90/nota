@@ -427,6 +427,103 @@ paths:
         '402':
           $ref: '#/components/responses/NotaPaymentRequired'
         default: { $ref: '#/components/responses/FinancingAIError' }
+  /notary/ai-access:
+    get:
+      summary: Read the notary's AI beta and subscription entitlement
+      description: Returns the usage ledger and published monthly plans. The normal dossier remains available regardless of this entitlement.
+      security: [{ notarySession: [] }]
+      responses:
+        '200':
+          description: Current AI access and plans.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enabled, reason, beta, subscription, paidUses, plans, maxPieceQuantity]
+                properties:
+                  enabled: { type: boolean }
+                  reason: { type: string }
+                  beta: { type: object, additionalProperties: true }
+                  subscription: { type: object, additionalProperties: true }
+                  paidUses: { type: integer, minimum: 0 }
+                  plans: { type: array, items: { type: object, additionalProperties: true } }
+                  maxPieceQuantity: { type: integer, minimum: 1 }
+        default: { $ref: '#/components/responses/FinancingAIError' }
+  /notary/ai-beta/enroll:
+    post:
+      summary: Opt the notary into the one-time AI beta
+      security: [{ notarySession: [] }]
+      responses:
+        '200':
+          description: Beta activated idempotently.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, access]
+                properties:
+                  ok: { const: true }
+                  access: { type: object, additionalProperties: true }
+        default: { $ref: '#/components/responses/FinancingAIError' }
+  /notary/ai/checkout:
+    post:
+      summary: Start a hosted Stripe checkout for an AI plan or units
+      security: [{ notarySession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [kind, planId]
+              properties:
+                kind: { type: string, enum: [subscription, usage] }
+                planId: { type: string, enum: [essentiel, cabinet, equipe] }
+                quantity: { type: integer, minimum: 1, maximum: 100 }
+      responses:
+        '200':
+          description: Hosted Checkout URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, url, sessionId]
+                properties:
+                  ok: { const: true }
+                  url: { type: string, format: uri }
+                  sessionId: { type: string }
+        default: { $ref: '#/components/responses/FinancingAIError' }
+  /notary/ai-feedback:
+    post:
+      summary: Record structured notary feedback on an AI uncertainty
+      description: The question is derived from the server-validated analysis. Feedback is appended as a minimized learning signal and never authorizes a legal or signing decision.
+      security: [{ notarySession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, dateISO, questionId, decision]
+              properties:
+                id: { type: string }
+                dateISO: { type: string, format: date }
+                questionId: { type: string, pattern: '^(missing|conflict):[a-zA-Z0-9_-]{1,80}$' }
+                decision: { type: string, enum: [confirmed, resolved, not_applicable, escalated] }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Structured feedback recorded in the learning signal stream.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, feedback, recorded]
+                properties:
+                  ok: { const: true }
+                  feedback: { type: object, additionalProperties: true }
+                  recorded: { type: boolean }
+        default: { $ref: '#/components/responses/FinancingAIError' }
   /auth/oauth/providers:
     get:
       summary: List Google, Microsoft and LinkedIn sign-in availability
@@ -722,10 +819,18 @@ paths:
                   preferences:
                     type: object
                     additionalProperties: { type: boolean }
+                  sms:
+                    $ref: "#/components/schemas/SmsPreference"
         '401': { description: Invalid signed identity }
     post:
-      summary: Update the recipient's email language or per-template preferences
-      description: Omitted fields are preserved. Language updates require a verified identity. Does not reverse a global marketing unsubscribe. Login messages cannot be disabled.
+      summary: Update the recipient's email language, per-template preferences, or SMS consent
+      description: >-
+        Omitted fields are preserved. Language updates require a verified
+        identity. Does not reverse a global marketing unsubscribe. Login
+        messages cannot be disabled. `smsConsent` (ADR 0051) withdraws — or
+        restores — the express consent to be texted, on the phone number
+        ALREADY on record; consenting with no number on record → 422
+        `telephone_requis_sms`.
       security:
         - notificationPreferenceToken: []
       requestBody:
@@ -737,16 +842,33 @@ paths:
               anyOf:
                 - required: [preferences]
                 - required: [emailLanguage]
+                - required: [smsConsent]
               properties:
                 emailLanguage: { type: string, enum: [fr, en] }
                 preferences:
                   type: object
                   additionalProperties: { type: boolean }
+                smsConsent:
+                  type: boolean
+                  description: Express consent to be texted (true) or its withdrawal (false). Strictly boolean.
       responses:
-        '200': { description: Updated catalog and preferences, same shape as GET }
+        '200': { description: Updated catalog, preferences and SMS consent, same shape as GET }
         '400': { description: Invalid JSON }
         '401': { description: Invalid signed identity }
-        '422': { description: Unknown template, non-boolean value, or disabled login message }
+        '422':
+          description: >-
+            Unknown template, non-boolean value, or disabled login message
+            (`preferences_invalides`); SMS consent requested with no phone on
+            record (`telephone_requis_sms`).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: string
+                    enum: [preferences_invalides, telephone_requis_sms]
   /coverage:
     get:
       summary: Aggregate geographic coverage by active notaries; not date availability.
@@ -1641,8 +1763,10 @@ paths:
             (`rayon_invalide`), the étude sector is not letter-digit-letter
             (`prefixe_invalide`), an identity field is oversized
             (`nom_invalide`, `etude_invalide`, `adresse_invalide`), the phone
-            is not dialable (`telephone_invalide`), or the alert preferences
-            are malformed (`alertes_invalides`, `alerte_rythme_invalide`).
+            is not dialable (`telephone_invalide`), the alert preferences
+            are malformed (`alertes_invalides`, `alerte_rythme_invalide`), or
+            `alertes.sms` is true while the profile has no dialable phone
+            (`telephone_requis_sms`, ADR 0051).
             A refused write never touches the stored record.
           content:
             application/json:
@@ -5904,6 +6028,19 @@ components:
             (else 422 `telephone_invalide`); the value is stored as typed,
             trimmed.
           example: "418 555-1234"
+        smsConsent:
+          type: boolean
+          writeOnly: true
+          description: >-
+            OPTIONAL, PRIVATE (write-only). ADR 0051 — the client's EXPRESS
+            consent to be texted at key moments (a notary retains the request,
+            a message, the eve of the signing). Strictly boolean: absent or
+            null leaves the consent register untouched, `false` is an express
+            withdrawal, anything else → 422 `sms_consent_invalide`. `true`
+            requires a dialable `telephone` → else 422 `telephone_requis_sms`.
+            Recorded per recipient, keyed by `courriel`, never as an attribute
+            of the bid, never in any projection. Without it, Nota never texts.
+          example: true
         parrain:
           type: string
           writeOnly: true
@@ -6051,6 +6188,8 @@ components:
             - dossier_invalide
             - parametre_requis
             - telephone_invalide
+            - telephone_requis_sms
+            - sms_consent_invalide
             - nom_invalide
             - etude_invalide
             - adresse_invalide
@@ -6228,20 +6367,41 @@ components:
           additionalProperties:
             type: integer
             minimum: 0
+    SmsPreference:
+      type: object
+      description: >-
+        ADR 0051 — what the preferences screen may show of the recipient's SMS
+        consent: whether it is on, and the phone on record MASKED to its last
+        four digits (`domain.maskTelephone`) — enough to recognise one's own
+        phone, never enough to dial it. `telephone` is null when no number is
+        on record.
+      required: [consent, telephone]
+      properties:
+        consent:
+          type: boolean
+        telephone:
+          type: [string, "null"]
+          example: "••• ••• 0100"
     NotaryAlertes:
       type: object
       description: >-
         How new demandes reach this notary (ADR 0033 §7). `instant` mails
         each matching demande as it is posted, `daily` is the digest (the
         default), `weekly` the digest on Mondays, `off` nothing. `urgentOnly`
-        narrows instant alerts to prioritaire/urgence tiers.
-      required: [pace, urgentOnly]
+        narrows instant alerts to prioritaire/urgence tiers. `sms` (ADR 0051)
+        is the notary's EXPRESS consent to be texted at the profile's phone
+        number for the act-bound, time-critical templates; false by default,
+        never inferred; a stored profile predating it reads false.
+      required: [pace, urgentOnly, sms]
       properties:
         pace:
           type: string
           enum: [instant, daily, weekly, off]
           default: daily
         urgentOnly:
+          type: boolean
+          default: false
+        sms:
           type: boolean
           default: false
     NotaryConditions:

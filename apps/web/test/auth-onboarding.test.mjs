@@ -91,7 +91,7 @@ test('les trois fournisseurs sont exposés, chacun nommé', async () => {
   });
 });
 
-test('aucun ne PRÉTEND fonctionner : chacun s’annonce à venir', async () => {
+test('un fournisseur non configuré reste honnêtement indisponible sans dire bientôt', async () => {
   const { doc } = await boot();
   $(doc, 'header-signup').click();
   socials(doc).forEach((b) => {
@@ -100,9 +100,8 @@ test('aucun ne PRÉTEND fonctionner : chacun s’annonce à venir', async () => 
     // découvrir ce qu'on ne peut pas atteindre.
     assert.equal(b.disabled, false, 'mais toujours atteignable au clavier');
     assert.ok(b.getAttribute('aria-describedby'), 'et rattaché à l’explication');
-    const badge = b.querySelector('.auth-soc-soon');
-    assert.ok(badge && badge.textContent.trim().length, 'un marqueur d’état vit SUR le bouton');
-    assert.ok(txt(b).indexOf(badge.textContent) >= 0, 'et il se lit avec le libellé');
+    assert.equal(b.querySelector('.auth-soc-soon'), null, 'aucun fournisseur ne porte le statut bientôt');
+    assert.doesNotMatch(txt(b), /bientôt|soon/i);
   });
 });
 
@@ -118,8 +117,8 @@ test('un clic répond — jamais un bouton qui avale le geste en silence', async
   const live = $(doc, 'auth-soc-live');
   assert.ok(live, 'la modale porte sa propre ligne de réponse');
   assert.ok($(doc, 'auth-dialog').contains(live), 'et elle vit DANS la modale');
-  assert.match(live.textContent, /Google/, 'elle nomme le fournisseur cliqué');
-  assert.match(live.textContent, /bientôt/i, 'et dit que ça s’en vient');
+  assert.match(live.textContent, /Connexion indisponible/, 'elle explique la disponibilité');
+  assert.doesNotMatch(live.textContent, /bientôt|soon/i, 'elle ne promet pas une intégration future');
   assert.equal(live.getAttribute('role'), 'status', 'annoncée sans voler le focus');
   assert.equal($(doc, 'auth-dialog').open, true, 'la porte reste ouverte : rien n’est perdu');
 });

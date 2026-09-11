@@ -418,17 +418,17 @@ test('clicking a has-bids cell opens the day modal with bid rows', async () => {
   assert.ok($(doc, 'day-title').textContent.trim().length > 0, 'day-title is empty');
 });
 
-// 11. Theme toggle flips document[data-theme] between dark and light.
+// 11. Theme toggle flips document[data-theme] between light and dark.
 test('theme toggle flips documentElement[data-theme]', async () => {
   const { doc } = await boot();
   const root = doc.documentElement;
-  assert.equal(root.getAttribute('data-theme'), 'dark'); // dark is the default
-
-  $(doc, 'theme-toggle').click();
-  assert.equal(root.getAttribute('data-theme'), 'light');
+  assert.equal(root.getAttribute('data-theme'), 'light'); // light is the default
 
   $(doc, 'theme-toggle').click();
   assert.equal(root.getAttribute('data-theme'), 'dark');
+
+  $(doc, 'theme-toggle').click();
+  assert.equal(root.getAttribute('data-theme'), 'light');
 });
 
 // 12b. Optional courriel field exists and never blocks a valid offer, and the
@@ -2130,22 +2130,22 @@ test('intro gate: a film that ends on its own does not flag the gate away', asyn
   assert.equal(Nota.state.tab, 'carnet', 'the film still lands on its pane');
 });
 
-// 40b''. Every page floats over the ambient backdrop — the Nota mark, twenty
+// 40b''. Every page floats over the ambient backdrop — the Nota mark, twenty-four
 //        times, adrift behind ALL content (owner, 2026-08-27: « on all
 //        background, smoothly »). The gate keeps a copy of its own above its
 //        opaque overlay; both are decorative and invisible to AT.
-test('ambient backdrop: twenty Nota marks drift behind every page and the gate', async () => {
+test('ambient backdrop: twenty-four Nota marks drift behind every page and the gate', async () => {
   const { doc } = await boot({ intro: true });
   const site = $(doc, 'site-bg');
   assert.ok(site, 'the site-wide layer exists');
   assert.equal(site.getAttribute('aria-hidden'), 'true', 'decorative: hidden from AT');
   const dice = site.querySelectorAll(':scope > i');
-  assert.equal(dice.length, 20, 'twenty dice adrift');
+  assert.equal(dice.length, 24, 'twenty-four dice adrift');
   // Owner (2026-08-27): « they must look as a full dice » — each mark is a
   // real cube, six logo faces around one tumbling body.
   assert.equal(dice[0].querySelectorAll('.cube > svg').length, 6, 'each die carries six faces');
   assert.ok(site.classList.contains('mark-drift--site'), 'the fixed, behind-everything variant');
-  assert.ok($(doc, 'ig-bg'), 'the gate still builds its own above the opaque overlay');
+  assert.equal($(doc, 'ig-bg'), null, 'the arrival gate stays clear; its aura supplies the motion');
   const again = await boot();
   assert.equal($(again.doc, 'ig-bg'), null, 'no gate backdrop when the gate stays shut');
   assert.ok($(again.doc, 'site-bg'), 'the site backdrop greets every arrival');
@@ -2402,14 +2402,14 @@ test('ambient gradients live on the background; every component is flat and opaq
   }
 });
 
-test('the today pill keeps a gap between its weekday and its day number', () => {
+test('the today number keeps a gap between its weekday and its day number', () => {
   // Phones print the weekday INSIDE the cell (.cal-daynum::before, "JEU 27");
-  // today's date-circle turns the daynum into a flex box, and flex layout
-  // drops the ::before's trailing space from the flow — "JEU27". The pill
-  // must carry its own gap so the two never fuse.
+  // today's day number turns the daynum into a flex box, and flex layout
+  // drops the ::before's trailing space from the flow — "JEU27". The number's
+  // spacing must carry its own gap so the two never fuse.
   const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
   assert.match(css, /\.cal-cell\.is-today \.cal-daynum\s*\{[^}]*gap:/,
-    'the today pill declares a flex gap of its own');
+    'the today number declares a flex gap of its own');
 });
 
 test('no @media rule may outrank a calendar @container rule on the same property', () => {

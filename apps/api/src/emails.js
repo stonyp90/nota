@@ -72,17 +72,17 @@ const SENDER = {
 // reads that file and holds every key here to it, so the mail can never drift
 // from the site. The card is light-only on purpose (see layout()).
 const PALETTE = {
-  ink: '#101b26', // --ink
-  muted: '#5b6c72', // --ink-muted (AA on every light surface)
-  bg: '#f2f1ec', // --bg — the page canvas the card floats on
-  card: '#fcfbf8', // --surface
-  border: '#cbd8d5', // --border
+  ink: '#173b52', // --ink
+  muted: '#607986', // --ink-muted (AA on every light surface)
+  bg: '#eef5f7', // --bg — the page canvas the card floats on
+  card: '#fbfdfd', // --surface
+  border: '#c5d8df', // --border
   brand: '#386888', // --brand (Nota blue-teal) — fills, rules, links
   brandDark: '#274a62', // --brand-hover — the button's edge
   markBg: '#264961', // the reference lockup's deep blue-teal square
   brandBright: '#407598', // the reference lockup's cyan signal
   brandInk: '#ffffff', // --brand-ink — text on the brand fill
-  tint: '#f1f7fb', // nota-blue-50 — the callout wash
+  tint: '#ebf1f5', // nota-blue-50 — the callout wash
 };
 // The web square scale (--radius-lg / --radius / --radius-sm): the card, the
 // mark and the button, the callout. No pills, no circles.
@@ -209,7 +209,7 @@ function preheaderHtml(text) {
     '</div>'
   );
 }
-// Bulletproof, VML-free, table-based CTA. Nota midnight with white text; the
+// Bulletproof, VML-free, table-based CTA. Institutional cobalt with white text; the
 // padding + line-height guarantee a >=44px touch target on mobile, and
 // mso-padding-alt keeps Outlook honest about the padding.
 function button(label, url) {
@@ -234,8 +234,8 @@ function button(label, url) {
   );
 }
 // Header band: the Nota "N" mark rendered WITHOUT images/SVG (many clients block
-// them) — a deep blue-teal square holding the Nota N + cyan signal dot — next to the "Nota"
-// wordmark in brand midnight and a small bilingual tagline. The mark is decoration
+// them) — a cobalt square holding a bold white "N" — next to the "Nota"
+// wordmark in brand blue and a small bilingual tagline. The mark is decoration
 // (aria-hidden): the wordmark IS the accessible name, so a screen reader says
 // « Nota », not « N Nota ». border-radius degrades gracefully to a square. Sits
 // at the top of the card, above a hairline rule.
@@ -3228,6 +3228,11 @@ const TEMPLATES = {
 // The admin console can store, per template key, an override record:
 //   { key, actif, subjectFr/En, preheaderFr/En, corpsFr/En, ctaFr/En, updatedAt }
 // (`enabled` is the older name of `actif`; both are honoured on read.)
+// ADR 0051 — `sms: true` marks the templates that ALSO text: time-critical,
+// act-bound, client or notary only — never a magic link, an operator alert,
+// a partner mail or a campaign. The notifier sends that text only to a
+// recipient whose EXPRESS consent is on record (repo.getSmsConsent); the flag
+// says « worth a text », the consent says « allowed to ».
 // TEMPLATE_META describes every registry key for that console: who receives it,
 // a human label per language, the DEFAULT subject shown with {{token}}
 // placeholders, exactly which tokens that template's ctx can interpolate, and
@@ -3276,25 +3281,25 @@ const TEMPLATE_META = {
     placeholders: ['montant', 'service', 'date'],
   },
   dateApproaching: {
-    audience: 'client', transactionnel: false,
+    audience: 'client', transactionnel: false, sms: true,
     labelFr: 'Date qui approche (J-7/3/1)', labelEn: 'Date approaching (J-7/3/1)',
     defaultSubjectFr: 'Votre signature approche', defaultSubjectEn: 'Your signing is coming up',
     placeholders: ['montant', 'service', 'date'],
   },
   offerRetained: {
-    audience: 'client', transactionnel: true,
+    audience: 'client', transactionnel: true, sms: true,
     labelFr: 'Demande retenue', labelEn: 'Request taken',
     defaultSubjectFr: 'Un notaire a retenu votre demande', defaultSubjectEn: 'A notary has taken your request',
     placeholders: ['montant', 'service', 'date', 'etude'],
   },
   dateMissedNoUptake: {
-    audience: 'client', transactionnel: true,
+    audience: 'client', transactionnel: true, sms: true,
     labelFr: 'Date proche sans preneur (J-0)', labelEn: 'Date near, no uptake (J-0)',
     defaultSubjectFr: 'Votre date approche, aucune offre retenue', defaultSubjectEn: 'Your date is near, no offer taken',
     placeholders: ['montant', 'service', 'date'],
   },
   offerCancelled: {
-    audience: 'client', transactionnel: true,
+    audience: 'client', transactionnel: true, sms: true,
     labelFr: 'Offre annulée (accusé)', labelEn: 'Offer cancelled (ack)',
     defaultSubjectFr: 'Offre annulée : {{montant}}', defaultSubjectEn: 'Offer cancelled: {{montant}}',
     placeholders: ['montant', 'service', 'date'],
@@ -3319,7 +3324,7 @@ const TEMPLATE_META = {
     placeholders: ['montant', 'service', 'date'],
   },
   actReleased: {
-    audience: 'client', transactionnel: true,
+    audience: 'client', transactionnel: true, sms: true,
     labelFr: 'Désistement du notaire', labelEn: 'Notary withdrew',
     defaultSubjectFr: 'Votre demande est de retour au carnet', defaultSubjectEn: 'Your request is back on the carnet',
     placeholders: ['montant', 'service', 'date'],
@@ -3346,27 +3351,27 @@ const TEMPLATE_META = {
     placeholders: ['montant', 'service', 'date'],
   },
   cautionRefusee: {
-    audience: 'client', transactionnel: true,
+    audience: 'client', transactionnel: true, sms: true,
     labelFr: 'Carte refusée (caution)', labelEn: 'Card declined (hold)',
     defaultSubjectFr: 'Votre carte a été refusée — votre signature approche',
     defaultSubjectEn: 'Your card was declined — your signing is coming up',
     placeholders: ['montant', 'service', 'date'],
   },
   cautionRefuseeNotaire: {
-    audience: 'notaire', transactionnel: true,
+    audience: 'notaire', transactionnel: true, sms: true,
     labelFr: 'Caution non posée (notaire)', labelEn: 'Hold not placed (notary)',
     defaultSubjectFr: 'Caution non posée — {{montant}}', defaultSubjectEn: 'Hold not placed — {{montant}}',
     placeholders: ['montant', 'service', 'date'],
   },
   // --- client — notary actions on an open offer -----------------------------
   propositionRecue: {
-    audience: 'client', transactionnel: true,
+    audience: 'client', transactionnel: true, sms: true,
     labelFr: 'Proposition reçue', labelEn: 'Proposal received',
     defaultSubjectFr: 'Un notaire vous propose {{montant}}', defaultSubjectEn: 'A notary proposes {{montant}}',
     placeholders: ['montant', 'service', 'date', 'etude'],
   },
   documentsDemandes: {
-    audience: 'client', transactionnel: true,
+    audience: 'client', transactionnel: true, sms: true,
     labelFr: 'Documents demandés', labelEn: 'Documents requested',
     defaultSubjectFr: 'Un notaire vous demande des documents', defaultSubjectEn: 'A notary is asking you for documents',
     placeholders: ['montant', 'service', 'date', 'etude'],
@@ -3379,38 +3384,38 @@ const TEMPLATE_META = {
     placeholders: ['montant', 'service', 'date', 'etude'],
   },
   documentDuClient: {
-    audience: 'notaire', transactionnel: true,
+    audience: 'notaire', transactionnel: true, sms: true,
     labelFr: 'Document du client (fil du dossier)', labelEn: 'Document from the client (file thread)',
     defaultSubjectFr: 'Un document de votre client — {{montant}}', defaultSubjectEn: 'A document from your client — {{montant}}',
     placeholders: ['montant', 'service', 'date'],
   },
   messageDuNotaire: {
-    audience: 'client', transactionnel: true,
+    audience: 'client', transactionnel: true, sms: true,
     labelFr: 'Message du notaire (fil du dossier)', labelEn: 'Message from the notary (file thread)',
     defaultSubjectFr: 'Message de votre notaire', defaultSubjectEn: 'A message from your notary',
     placeholders: ['montant', 'service', 'date', 'etude'],
   },
   messageDuClient: {
-    audience: 'notaire', transactionnel: true,
+    audience: 'notaire', transactionnel: true, sms: true,
     labelFr: 'Réponse du client (fil du dossier)', labelEn: 'Client reply (file thread)',
     defaultSubjectFr: 'Réponse de votre client — {{montant}}', defaultSubjectEn: 'Your client replied — {{montant}}',
     placeholders: ['montant', 'service', 'date'],
   },
   // --- notary — answers to their proposition --------------------------------
   propositionAcceptee: {
-    audience: 'notaire', transactionnel: true,
+    audience: 'notaire', transactionnel: true, sms: true,
     labelFr: 'Proposition acceptée', labelEn: 'Proposal accepted',
     defaultSubjectFr: 'Proposition acceptée : {{montant}}', defaultSubjectEn: 'Proposal accepted: {{montant}}',
     placeholders: ['montant', 'service', 'date'],
   },
   propositionRefusee: {
-    audience: 'notaire', transactionnel: true,
+    audience: 'notaire', transactionnel: true, sms: true,
     labelFr: 'Proposition déclinée', labelEn: 'Proposal declined',
     defaultSubjectFr: 'Proposition déclinée : {{montant}}', defaultSubjectEn: 'Proposal declined: {{montant}}',
     placeholders: ['montant', 'service', 'date'],
   },
   offerCancelledNotary: {
-    audience: 'notaire', transactionnel: true,
+    audience: 'notaire', transactionnel: true, sms: true,
     labelFr: 'Demande retenue annulée par le client', labelEn: 'Retained request cancelled by the client',
     defaultSubjectFr: 'Demande annulée par le client : {{montant}}', defaultSubjectEn: 'Client cancelled: {{montant}}',
     placeholders: ['montant', 'service', 'date'],
@@ -3423,7 +3428,7 @@ const TEMPLATE_META = {
   },
   // --- ADR 0033 — la mise en relation est complète ---------------------------
   demandeRetenueNotaire: {
-    audience: 'notaire', transactionnel: true,
+    audience: 'notaire', transactionnel: true, sms: true,
     labelFr: 'Demande retenue (au notaire)', labelEn: 'Request taken (to the notary)',
     defaultSubjectFr: 'Demande retenue : {{montant}} · {{service}}', defaultSubjectEn: 'Request taken: {{montant}}',
     placeholders: ['montant', 'service', 'date', 'email'],
@@ -3431,7 +3436,7 @@ const TEMPLATE_META = {
   nouvelleDemande: {
     // An alert the notary asked for (alertes.pace = instant) — relationnel:
     // it can be silenced, the daily digest and the carnet still carry the demand.
-    audience: 'notaire', transactionnel: false,
+    audience: 'notaire', transactionnel: false, sms: true,
     labelFr: 'Nouvelle demande (alerte instantanée)', labelEn: 'New request (instant alert)',
     defaultSubjectFr: 'Nouvelle demande : {{montant}} · {{service}}', defaultSubjectEn: 'New request: {{montant}} · {{service}}',
     placeholders: ['montant', 'service', 'date'],

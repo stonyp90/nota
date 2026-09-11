@@ -19,7 +19,7 @@
  * Boot harness mirrors account-optin.test.mjs (domain then app inside jsdom,
  * fetch stub keyed by URL, calls logged).
  */
-import test from 'node:test';
+import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -47,6 +47,11 @@ const jsonRes = (status, body) => ({
   json: async () => body, text: async () => JSON.stringify(body),
 });
 
+// Every window is closed at the end: the notary console arms a poll interval
+// that would otherwise keep the process alive.
+const DOMS = [];
+after(() => { for (const d of DOMS) { try { d.window.close(); } catch {} } });
+
 async function boot({ seed = {}, routes = [] } = {}) {
   const calls = [];
   const dom = new JSDOM(HTML_SRC, {
@@ -65,6 +70,7 @@ async function boot({ seed = {}, routes = [] } = {}) {
       Object.keys(seed).forEach((k) => window.localStorage.setItem(k, JSON.stringify(seed[k])));
     },
   });
+  DOMS.push(dom);
   const win = dom.window;
   win.eval(DOMAIN_SRC);
   win.eval(APP_SRC);
@@ -316,4 +322,160 @@ test('the 40-entry cap holds when a new kind rings', async () => {
   const a = notifs(win);
   assert.equal(a.length, 40, 'capped at 40');
   assert.equal(a[0].key, 'acte:b1', 'newest first — the invite made it in');
+});
+
+// ---------------------------------------------------------------------------
+// 5. Every business event reaches the bell (2026-09-11)
+// ---------------------------------------------------------------------------
+//
+// The server now writes a row for publication, document requests, the J-7/3/1/0
+// reminders, the cancellation itself, the settled act, a refused hold (client)
+// and for the answer to a proposal, a cancellation, a settled act, a refused
+// hold (notary). The bell must: map each kind to a profile switch, render a
+// row it does not know by its server `titre`, list the notary kinds in the
+// console, and never show one event twice when the device also derived it.
+
+const SERVER_AT = todayISO() + 'T00:00:00.000Z';
+const srv = (id, kind, refId, over = {}) => ({ id, kind, titre: 'Titre serveur ' + kind, corps: 'corps ' + kind, lien: null, refId, at: SERVER_AT, luLe: null, ...over });
+
+// Client routes: an empty month, a quiet /client/bid, and the server journal.
+function clientRoutes(avis, status = bidStatus({ bid: { status: 'ouverte', etude: null } })) {
+  return [
+    { match: (u) => u.includes('/notifications?id='), reply: () => jsonRes(200, { avis, nonLus: avis.filter((a) => !a.luLe).length }) },
+    { match: (u, i) => u.includes('/notifications/lues'), reply: () => jsonRes(200, { marques: 0 }) },
+    ...statusRoutes(status),
+  ];
+}
+const CLIENT_SEED = { 'nota.profile.v1': { courriel: 'client@example.ca' } };
+
+test('every client kind the server writes maps to a profile switch, and the new « caution » switch exists', async () => {
+  const { win, doc, Nota, D } = await boot();
+  const prefKeys = [...APP_SRC.matchAll(/\{ key: '([a-z]+)', label: '/g)].map((m) => m[1]);
+  for (const k of D.NOTIF_KINDS) {
+    const mapped = Nota.notifPrefKey(k.id);
+    assert.ok(prefKeys.includes(mapped), `server kind « ${k.id} » → « ${mapped} » is a switch of the card`);
+  }
+  assert.equal(Nota.notifPrefKey('publiee'), 'published');
+  assert.equal(Nota.notifPrefKey('documents_demandes'), 'documents');
+  assert.equal(Nota.notifPrefKey('rappel'), 'reminders');
+  assert.equal(Nota.notifPrefKey('annulee'), 'cancelled');
+  assert.equal(Nota.notifPrefKey('acte'), 'acte');
+  assert.equal(Nota.notifPrefKey('proposition_reponse'), 'proposition');
+  assert.equal(Nota.notifPrefKey('caution'), 'caution');
+  Nota.setTab('profil');
+  const cb = $(doc, 'p-notif-caution');
+  assert.ok(cb, 'the card carries a switch for the refused-card notice');
+  assert.equal(cb.checked, true);
+  assert.equal(cb.getAttribute('role'), 'switch');
+  void win;
+});
+
+test('the new titles and the switch label read in English too', () => {
+  I18N.force('en');
+  const strings = [
+    'Avis si votre carte est refusée',
+    'Votre offre est publiée', 'Le notaire demande des documents', 'Votre date approche', 'Offre annulée',
+    'Acte signé', 'Réponse à votre proposition', 'Carte refusée',
+  ];
+  for (const s of strings) {
+    assert.ok(I18N.covered(s), `no English entry for: ${s}`);
+    assert.notEqual(I18N.tEn(s), s, `translation is not the identity: ${s}`);
+  }
+  I18N.force('fr');
+});
+
+test('a server row of a kind the bell does not know renders by its server titre — never dropped', async () => {
+  const { win, doc } = await boot({
+    seed: { ...CLIENT_SEED, 'nota.myoffers.v1': [myOffer()] },
+    routes: clientRoutes([srv('av-x', 'genre_inconnu_du_client', 'b1', { titre: 'Un genre tout neuf' })]),
+  });
+  const n = byKey(win, 'srv:av-x');
+  assert.ok(n, 'the row lands in the bell');
+  assert.equal(n.title, 'Un genre tout neuf');
+  win.Nota.state.tab = 'carnet';
+  const titles = [...doc.querySelectorAll('#notif-list .notif-title')].map((e) => e.textContent);
+  assert.ok(titles.includes('Un genre tout neuf'), 'and is painted: ' + titles.join(' | '));
+});
+
+test('the new client kinds ring by their titre and obey their switch', async () => {
+  const rows = [
+    srv('av-p', 'publiee', 'b1'), srv('av-d', 'documents_demandes', 'b1'), srv('av-r', 'rappel', 'b1'),
+    srv('av-a', 'annulee', 'b1'), srv('av-c', 'caution', 'b1'),
+  ];
+  const on = await boot({ seed: { ...CLIENT_SEED, 'nota.myoffers.v1': [myOffer({ dateISO: addDays(todayISO(), 5) })] }, routes: clientRoutes(rows) });
+  for (const r of rows) {
+    const n = byKey(on.win, 'srv:' + r.id);
+    assert.ok(n, r.kind + ' rings');
+    assert.equal(n.title, r.titre, r.kind + ' is titled by the server');
+    assert.equal(n.offerId, 'b1', r.kind + ' opens the offer band');
+  }
+  // « Avis si votre carte est refusée » off → the caution row is silent, the others ring.
+  const off = await boot({
+    seed: { 'nota.profile.v1': { courriel: 'client@example.ca', notifs: { caution: false, documents: false } }, 'nota.myoffers.v1': [myOffer({ dateISO: addDays(todayISO(), 5) })] },
+    routes: clientRoutes(rows),
+  });
+  assert.equal(byKey(off.win, 'srv:av-c'), undefined, 'caution switch off silences the server row');
+  assert.equal(byKey(off.win, 'srv:av-d'), undefined, 'documents switch off silences the server row');
+  assert.ok(byKey(off.win, 'srv:av-p'), 'published still rings');
+});
+
+test('a device-derived entry and the server row of the same event show ONCE (local first, then server)', async () => {
+  // The device already rang « Offre publiée » at POST time and « J-7 » on
+  // load; the server journal then confirms both. Neither may appear twice.
+  const seven = myOffer({ dateISO: addDays(todayISO(), 7) });
+  const { win } = await boot({
+    seed: {
+      ...CLIENT_SEED, 'nota.myoffers.v1': [seven],
+      'nota.notifs.v1': [{ key: 'published:b1', kind: 'published', refId: 'b1', title: 'Offre publiée', body: '', dateISO: seven.dateISO, read: false }],
+    },
+    routes: clientRoutes([srv('av-p', 'publiee', 'b1'), srv('av-r', 'rappel', 'b1')]),
+  });
+  const all = notifs(win);
+  assert.equal(all.filter((n) => n.refId === 'b1' && Nota_kind(n) === 'published').length, 1, 'one publication entry: ' + JSON.stringify(all.map((n) => n.key)));
+  assert.equal(all.filter((n) => n.refId === 'b1' && Nota_kind(n) === 'reminders').length, 1, 'one J-7 entry: ' + JSON.stringify(all.map((n) => n.key)));
+  assert.equal(byKey(win, 'srv:av-p'), undefined, 'the server row folded into the seeded local entry');
+  // The journal is pulled BEFORE the J-7 derivation, so the server reminder
+  // lands first and the local derivation folds into it — same entry either way.
+  assert.equal(byKey(win, 'approach:b1:7'), undefined, 'the local J-7 folded into the server reminder');
+});
+
+test('server first, then the device derivation: still once, and the read state is the server’s', async () => {
+  const seven = myOffer({ dateISO: addDays(todayISO(), 7) });
+  const { win } = await boot({
+    seed: { ...CLIENT_SEED, 'nota.myoffers.v1': [seven] },
+    routes: clientRoutes([srv('av-r', 'rappel', 'b1', { luLe: SERVER_AT })]),
+  });
+  const all = notifs(win);
+  const reminders = all.filter((n) => n.refId === 'b1' && Nota_kind(n) === 'reminders');
+  assert.equal(reminders.length, 1, 'one J-7 entry: ' + JSON.stringify(all.map((n) => n.key)));
+  assert.equal(reminders[0].read, true, 'read on the server → read here');
+});
+
+// The switch key of an entry, whichever vocabulary wrote it.
+function Nota_kind(n) {
+  const map = { publiee: 'published', rappel: 'reminders', annulee: 'cancelled', documents_demandes: 'documents', retenue: 'retained', desistement: 'released', annulation: 'cancelled', document: 'documents' };
+  return map[n.kind] || n.kind;
+}
+
+test('the notary console bell lists the notary kinds by titre, with the console door', async () => {
+  const rows = [
+    srv('nv-1', 'proposition_reponse', 'b9', { lien: '#notaires&acte=b9' }), srv('nv-2', 'annulee', 'b9', { lien: '#notaires&acte=b9' }),
+    srv('nv-3', 'acte', 'b9', { lien: '#notaires&acte=b9' }), srv('nv-4', 'caution', 'b9', { lien: '#notaires&acte=b9' }),
+  ];
+  const { win, Nota } = await boot({
+    routes: [
+      { match: (u) => u.includes('/notary/session/request'), reply: () => jsonRes(200, { ok: true, devToken: 'chal.tok' }) },
+      { match: (u) => u.includes('/notary/session/verify'), reply: () => jsonRes(200, { token: 'sess.tok', feedToken: 'feed.tok', email: 'demo@etude.ca' }) },
+      { match: (u) => u.endsWith('/notifications'), reply: () => jsonRes(200, { avis: rows, nonLus: 4 }) },
+      { match: (u) => u.includes('/notary/bids'), reply: () => jsonRes(200, { bids: [], retained: [], profil: {}, rating: null, cote: null, tarif: null }) },
+    ],
+  });
+  await Nota.notary.signIn('demo@etude.ca');
+  await wait(30);
+  for (const r of rows) {
+    const n = byKey(win, 'srv:' + r.id);
+    assert.ok(n, r.kind + ' lands in the notary bell');
+    assert.equal(n.title, r.titre);
+    assert.equal(n.lien, '#notaires&acte=b9', 'the row opens the act on the console');
+  }
 });

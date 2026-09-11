@@ -686,6 +686,12 @@
       }
       var was = tip.dataset.on === 'true';
       tip.dataset.on = has ? 'true' : 'false';
+      // Empty contextual tips are intentionally kept as reusable nodes across
+      // re-renders, but they must leave both the layout and the tab order. A
+      // visibility-only rule still leaves an invisible information button
+      // focusable and can make multiple tips occupy the same top-right rail.
+      tip.hidden = !has;
+      btn.tabIndex = has ? 0 : -1;
       if (!has) {
         if (itipOpen === tip) itipClose();
         tip.removeAttribute('data-fresh');
@@ -1029,7 +1035,7 @@
         markMyOfferReleased(o.id);
         markNotifRead('retained:' + o.id);
         addNotif({
-          key: 'released:' + o.id + ':' + (prev.fetchedAt || o.id), kind: 'released',
+          key: 'released:' + o.id + ':' + (prev.fetchedAt || o.id), kind: 'released', refId: o.id,
           title: 'Le notaire s’est désisté — votre demande est de retour au carnet',
           body: dayTitle(o.dateISO) + ' · ' + T(svcName(o.serviceId)), dateISO: o.dateISO,
         });
@@ -1038,7 +1044,7 @@
       // client to evaluate — until the evaluation exists, then retire the invite.
       if (st.acte && st.acte.complete && !st.evaluation) {
         addNotif({
-          key: 'acte:' + o.id, kind: 'acte',
+          key: 'acte:' + o.id, kind: 'acte', refId: o.id,
           title: 'Acte signé — évaluez votre notaire',
           body: dayTitle(o.dateISO) + ' · ' + T(svcName(o.serviceId)), dateISO: null,
         });
@@ -1047,7 +1053,7 @@
       st.propositions.forEach(function (p) {
         if (p.status !== 'en_attente') return;
         addNotif({
-          key: 'proposition:' + p.id, kind: 'proposition',
+          key: 'proposition:' + p.id, kind: 'proposition', refId: o.id, sub: p.id,
           title: 'Un notaire vous propose ' + D.money(p.montant) + ' pour votre ' + T(svcName(o.serviceId)).toLowerCase() + ' du ' + dayTitle(o.dateISO),
           body: 'Acceptez ou refusez dans Mes offres.', dateISO: null,
         });
@@ -1055,7 +1061,7 @@
       st.demandes.forEach(function (d) {
         if (d.fournie) return;
         addNotif({
-          key: 'documents:' + d.id, kind: 'documents',
+          key: 'documents:' + d.id, kind: 'documents', refId: o.id, sub: d.id,
           title: 'Le notaire demande des documents pour votre ' + T(svcName(o.serviceId)).toLowerCase() + ' du ' + dayTitle(o.dateISO),
           body: (d.documents || []).map(function (x) { return T(x.nom); }).join(', '), dateISO: null,
         });
@@ -1066,7 +1072,7 @@
         if (m.de !== 'notaire') return;
         // `offerId` makes the entry a door: it opens Mes offres on this band.
         addNotif({
-          key: 'message:' + m.id, kind: 'message',
+          key: 'message:' + m.id, kind: 'message', refId: o.id, sub: m.id,
           title: 'Votre notaire vous a écrit',
           body: m.texte, dateISO: null, offerId: o.id,
         });
@@ -1488,13 +1494,29 @@
         row.appendChild(document.createTextNode(' ' + ((window.NotaI18N && window.NotaI18N.lang() === 'en') ? item.labelEn : item.labelFr)));
         var line = el('div'); line.appendChild(row); form.appendChild(line);
       });
+      // ADR 0051 — the text channel, beside the email choices: the switch
+      // reflects the server's consent record and the MASKED number it holds
+      // (never the full one). With no number on record there is nothing to
+      // text to: the switch is inert, says why, and posts nothing.
+      var smsData = data.sms || { consent: false, telephone: null };
+      var smsRow = el('label', 'check-row');
+      var smsInput = el('input'); smsInput.type = 'checkbox'; smsInput.id = 'email-preferences-sms';
+      smsInput.checked = smsData.consent === true && !!smsData.telephone;
+      smsInput.disabled = !smsData.telephone;
+      smsRow.appendChild(smsInput);
+      smsRow.appendChild(document.createTextNode(' ' + T('Par texto (SMS)') + (smsData.telephone ? ' · ' + smsData.telephone : '')));
+      var smsLine = el('div'); smsLine.appendChild(smsRow);
+      if (!smsData.telephone) smsLine.appendChild(el('p', 'help', T('Aucun numéro de téléphone enregistré : le texto n’est pas offert.')));
+      form.appendChild(smsLine);
       var save = el('button', 'btn btn-primary', T('Enregistrer')); save.type = 'submit'; form.appendChild(save);
       var status = el('p'); status.setAttribute('role', 'status'); form.appendChild(status);
       form.addEventListener('submit', async function (event) {
         event.preventDefault(); save.disabled = true;
         var preferences = {}; Object.keys(inputs).forEach(function (key) { preferences[key] = inputs[key].checked; });
+        var body = { preferences: preferences, emailLanguage: window.NotaI18N ? window.NotaI18N.lang() : 'fr' };
+        if (!smsInput.disabled) body.smsConsent = smsInput.checked;
         try {
-          var saved = await fetch(endpoint, { method: 'POST', headers: headers, body: JSON.stringify({ preferences: preferences, emailLanguage: window.NotaI18N ? window.NotaI18N.lang() : 'fr' }) });
+          var saved = await fetch(endpoint, { method: 'POST', headers: headers, body: JSON.stringify(body) });
           if (!saved.ok) throw new Error();
           status.textContent = T('Préférences de courriel enregistrées.');
         } catch (error) { status.textContent = T('Impossible d’enregistrer les préférences. Réessayez.'); }
@@ -1522,6 +1544,8 @@
     { key: 'cancelled', label: 'Confirmation d’annulation d’une offre' },
     { key: 'acte', label: 'Acte signé — invitation à évaluer' },
     { key: 'released', label: 'Avis si le notaire se désiste' },
+    // 2026-09-11 — la caution refusée (le lot quotidien l'écrit pour le client).
+    { key: 'caution', label: 'Avis si votre carte est refusée' },
   ];
   var PROFILE_NOTIF_DEFAULTS = {};
   PROFILE_NOTIF_KINDS.forEach(function (k) { PROFILE_NOTIF_DEFAULTS[k.key] = true; });
@@ -1555,6 +1579,14 @@
     proposition: 'proposition',
     desistement: 'released',
     annulation: 'cancelled',
+    // 2026-09-11 — chaque événement d'affaires a sa ligne côté serveur.
+    publiee: 'published',
+    documents_demandes: 'documents',
+    rappel: 'reminders',
+    annulee: 'cancelled',
+    acte: 'acte',
+    proposition_reponse: 'proposition',
+    caution: 'caution',
   };
   function notifPrefKey(kind) {
     if (!kind) return null;
@@ -1562,25 +1594,57 @@
   }
   function notifAllowed(kind) { return profileGet().notifs[notifPrefKey(kind)] !== false; }
 
+  // Le même événement, vu deux fois (2026-09-11). La dérive locale de
+  // l'appareil (« Offre publiée » au POST, « J-7 » au chargement, l'acte signé
+  // au sondage…) et la ligne que le serveur écrit pour le même fait portent
+  // des clés différentes. Elles se reconnaissent par l'OFFRE (`refId`) et
+  // l'INTERRUPTEUR (le genre, dans l'un ou l'autre vocabulaire), plus un
+  // discriminant `sub` quand le genre se répète sur une même offre (J-7 puis
+  // J-3 ; une demande de documents parmi d'autres). Une ligne serveur ne se
+  // lie qu'à UNE entrée (`srvId`), une entrée locale qu'à UNE ligne.
+  function notifTwin(a, n) {
+    if (!n.refId || !n.kind) return null;
+    var pk = notifPrefKey(n.kind);
+    for (var i = 0; i < a.length; i++) {
+      var x = a[i];
+      if (x.key === n.key || !x.refId || x.refId !== n.refId || !x.kind || notifPrefKey(x.kind) !== pk) continue;
+      if (n.srvId) {
+        // Une ligne serveur : son entrée déjà liée, sinon une entrée encore libre
+        // dont le discriminant ne la contredit pas.
+        if (x.srvId) { if (x.srvId === n.srvId) return x; continue; }
+        if (n.sub == null || x.sub == null || x.sub === n.sub) return x;
+        continue;
+      }
+      // Une entrée locale : la ligne serveur (ou l'entrée) du même fait.
+      if (n.sub != null && x.sub != null) { if (x.sub === n.sub) return x; continue; }
+      return x;
+    }
+    return null;
+  }
   function addNotif(n) {
     // Respect the profile's notification preferences (a kind'd notif can be off).
     if (n.kind && !notifAllowed(n.kind)) return;
     var a = notifLoad();
-    var existing = a.find(function (x) { return x.key === n.key; });
+    var existing = a.find(function (x) { return x.key === n.key; }) || notifTwin(a, n);
     if (existing) {
       // A local fallback can arrive before the API journal. When the server
       // later confirms the same event, merge its read state and canonical copy
       // instead of painting a second acceptance notice (or resurrecting one
       // that was already read).
       var changed = false;
-      ['title', 'body', 'dateISO', 'offerId', 'lien'].forEach(function (key) {
+      ['title', 'body', 'dateISO', 'offerId', 'lien', 'refId', 'sub', 'srvId'].forEach(function (key) {
         if (n[key] != null && existing[key] !== n[key]) { existing[key] = n[key]; changed = true; }
       });
       if (n.read === true && !existing.read) { existing.read = true; changed = true; }
       if (changed) { notifSave(a); renderNotifs(); }
       return false;
     }
-    a.unshift({ key: n.key, title: n.title, body: n.body || '', dateISO: n.dateISO || null, offerId: n.offerId || null, lien: n.lien || null, read: n.read === true });
+    var entry = { key: n.key, title: n.title, body: n.body || '', dateISO: n.dateISO || null, offerId: n.offerId || null, lien: n.lien || null, read: n.read === true };
+    if (n.kind) entry.kind = n.kind;
+    if (n.refId) entry.refId = n.refId;
+    if (n.sub != null) entry.sub = n.sub;
+    if (n.srvId) entry.srvId = n.srvId;
+    a.unshift(entry);
     notifSave(a.slice(0, 40));
     renderNotifs();
     return true;
@@ -1588,7 +1652,7 @@
   function addRetainedNotif(o, bid) {
     if (!o || !o.id) return false;
     return addNotif({
-      key: 'retained:' + o.id, kind: 'retained',
+      key: 'retained:' + o.id, kind: 'retained', refId: o.id,
       title: 'Un notaire a retenu votre demande 🎉',
       body: dayTitle(o.dateISO) + (bid && bid.etude ? ' · ' + bid.etude : ''),
       dateISO: o.dateISO,
@@ -1746,7 +1810,7 @@
     }).then(function (j) {
       (j.providers || []).forEach(function (p) { if (p.configured === true) oauthConfigured[p.id] = true; });
       if (Object.keys(oauthConfigured).length) authRenderProviders();
-      if (Object.keys(oauthConfigured).length && $('auth-social-note')) $('auth-social-note').textContent = 'À la première connexion, confirmez votre courriel pour lier votre compte. Microsoft accepte les comptes Outlook et Microsoft 365.';
+      if (Object.keys(oauthConfigured).length && $('auth-social-note')) $('auth-social-note').textContent = T('À la première connexion, confirmez votre courriel pour lier votre compte. Microsoft accepte les comptes Outlook et Microsoft 365.');
     }).catch(function () { oauthLoading = null; });
     return oauthLoading;
   }
@@ -1834,21 +1898,11 @@
       var ic = el('span', 'auth-soc-ic'); ic.innerHTML = p.svg;
       b.appendChild(ic);
       b.appendChild(el('span', 'auth-soc-t', 'Continuer avec ' + p.nom));
-      if (!oauthConfigured[id]) b.appendChild(el('span', 'auth-soc-soon', 'À venir'));
       b.addEventListener('click', function () {
         if (oauthConfigured[id]) { oauthStart(id, b); return; }
-        // Répondre, toujours : un bouton qui avale le geste se lit comme cassé.
-        // La réponse va dans la MODALE, pas dans un toast : une <dialog> ouverte
-        // par showModal() occupe la couche supérieure du navigateur, et un toast
-        // ajouté au <body> peindrait dessous — invisible, précisément là où on
-        // vient de cliquer.
         var live = $('auth-soc-live');
         if (live) {
-          live.textContent = T('La connexion avec ' + p.nom + ' arrive bientôt. D’ici là, votre courriel suffit.');
-          // …et la faire VOIR. La modale a `max-height: 92vh; overflow: auto` :
-          // sur un écran court, la ligne naît sous la pliure et le clic paraît
-          // n'avoir rien fait — le défaut même qu'on voulait éviter.
-          // `block: 'nearest'` ne défile que si c'est nécessaire.
+          live.textContent = T('Connexion indisponible. Réessayez ou utilisez votre courriel.');
           if (live.scrollIntoView) { try { live.scrollIntoView({ block: 'nearest' }); } catch (e) {} }
         }
         var em = $('auth-email'); if (em) { try { em.focus({ preventScroll: true }); } catch (e) { try { em.focus(); } catch (e2) {} } }
@@ -2176,7 +2230,7 @@
   function openOfferFlow() {
     toggleNotifPanel(false);
     setTab('carnet', { scroll: false });
-    openDay(state.selectedDate || firstStandardDate());
+    openDay(state.selectedDate || firstStandardDate(), { offer: true });
   }
 
   // ---------------------------------------------------------------------------
@@ -2302,6 +2356,7 @@
     clear(list);
     flow.steps.forEach(function (st, i) {
       var li = el('li', 'onb-step');
+      li.style.setProperty('--onb-step-index', String(i));
       li.appendChild(el('span', 'onb-step-n', String(i + 1)));
       var body = el('div', 'onb-step-body');
       body.appendChild(el('div', 'onb-step-t', st.t));
@@ -2367,6 +2422,22 @@
     return !!(dlg && dlg.open);
   }
 
+  // Keep the guide's two views feeling like one guided flow: the content
+  // enters once per transition, while reduced-motion users get the same
+  // information with no decorative movement.
+  function onbAnimateView(view) {
+    if (!view || view.hidden) return;
+    var reduced = false;
+    try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
+    view.classList.remove('is-entering');
+    if (reduced) return;
+    // Force a reflow so returning to the previous view reliably retriggers the
+    // short entrance, including after a keyboard back action.
+    void view.offsetWidth;
+    view.classList.add('is-entering');
+    window.setTimeout(function () { view.classList.remove('is-entering'); }, 520);
+  }
+
   // VIEW 1 (role choice). Both views live in the DOM; we just show/hide.
   function onbShowRoleView() {
     // Drop the parked role and point the accessible name back at THIS view's
@@ -2383,6 +2454,7 @@
       var first = r && r.querySelector('.onb-choice');
       if (first) { try { first.focus(); } catch (e) {} }
     }
+    onbAnimateView(r);
     renderOnbWeekAnim(); // (re)start the live board when this view is on screen
   }
 
@@ -2402,6 +2474,7 @@
     var r = $('onb-view-role'), s = $('onb-view-steps');
     if (r) r.hidden = true;
     if (s) s.hidden = false;
+    onbAnimateView(s);
     renderOnbWeekAnim(); // reflavour the live board for the chosen role
     // Focus follows the view, or a keyboard/SR user is left on a hidden control.
     if (cta) { try { cta.focus(); } catch (e) {} }
@@ -2627,12 +2700,20 @@
         // live status poll). Use its event key so the server journal enriches
         // that entry instead of duplicating the same acceptance in the bell.
         var key = a.kind === 'retenue' ? 'retained:' + (a.refId || o.id) : 'srv:' + a.id;
+        // Un rappel se répète sur une même offre (J-7, J-3, J-1, J-0) : le jour
+        // écrit sur la ligne et la date de l'acte donnent le même discriminant
+        // que la dérive locale (`approach:<id>:<jours>`).
+        var sub;
+        if (a.kind === 'rappel' && a.at && o.dateISO) sub = D.daysBetween(String(a.at).slice(0, 10), o.dateISO);
         addNotif({
           key: key,
           kind: a.kind,
           title: a.titre || '',
           body: a.corps || '',
           offerId: a.refId || o.id,
+          refId: a.refId || o.id,
+          srvId: a.id,
+          sub: sub,
           lien: a.lien || null,
           read: !!a.luLe,
         });
@@ -2648,7 +2729,7 @@
       if (days >= 0 && (days === 7 || days === 3 || days === 1 || days === 0)) {
         addNotif({
           key: 'approach:' + o.id + ':' + days,
-          kind: 'reminders',
+          kind: 'reminders', refId: o.id, sub: days,
           title: days === 0 ? 'Votre signature est aujourd’hui' : 'Votre date approche (J-' + days + ')',
           body: dayTitle(o.dateISO) + ' · ' + svcName(o.serviceId), dateISO: o.dateISO,
         });
@@ -2759,6 +2840,11 @@
     var visible = applyFilters(state.monthBids);
     var byDay = {};
     visible.forEach(function (b) { (byDay[b.dateISO] = byDay[b.dateISO] || []).push(b); });
+    var empty = $('cal-empty');
+    if (empty) {
+      empty.textContent = visible.length ? '' : '0 offre dans ce calendrier.';
+      empty.hidden = visible.length > 0;
+    }
     // The client's OWN offers, to badge their status on the calendar. Status is
     // read from the live public bid (unfiltered): retained -> approved; still
     // open on a past date -> expired; otherwise pending.
@@ -2802,7 +2888,9 @@
         b.addEventListener('click', function () {
           state.anchor = firstOfMonth(iso);
           state.focusDate = iso;
-          reloadAndRender().then(function () { openDay(iso); });
+          reloadAndRender().then(function () {
+            openDay(iso, { preview: compactCalendarInteraction() });
+          });
         });
       }
       week.appendChild(b);
@@ -2906,7 +2994,9 @@
         }
       }
 
-      if (!isPast) cell.addEventListener('click', function () { openDay(this.dataset.date); });
+      if (!isPast) cell.addEventListener('click', function () {
+        openDay(this.dataset.date, { preview: compactCalendarInteraction() });
+      });
       if (week) week.appendChild(cell);
     }
 
@@ -3102,14 +3192,14 @@
   // service filter of the carnet below.
   // French keeps the singular at 0 as well as 1 ("0 demande"), unlike English.
   function plural(n, word) { return n + ' ' + word + (n < 2 ? '' : 's'); }
-  function countText(n, fr, en) {
-    var english = window.NotaI18N && window.NotaI18N.lang && window.NotaI18N.lang() === 'en';
-    return english ? n + ' ' + en + (n === 1 ? '' : 's') : plural(n, fr);
-  }
 
-  // The domain owns the minimum sample size for a public month reference.
-  // The median is still returned for arithmetic/diagnostic consumers, but the
-  // public label stays empty until the domain says the sample is meaningful.
+  // Under this many offers in the month no reference is shown: the median
+  // of one or two amounts is a coincidence, not a market. The domain lifts
+  // any amount into `median`; the render decides what a client may read as a
+  // « repère du mois » — and never calls it a médiane, a statistic's name
+  // that two or three amounts cannot carry.
+  var PULSE_REPERE_MIN = 3;
+
   function pulseRow(s, active, busiest) {
     var short = s.nom.split(' ')[0];
     var row = el('button', 'pulse-row' + (active ? ' is-on' : ''));
@@ -3118,7 +3208,7 @@
     row.setAttribute('aria-pressed', active ? 'true' : 'false');
     // The row is several fragments; name the WHOLE control once so a screen
     // reader announces the figures and what clicking it does, not "788 $ 10 offres".
-    var hasRepere = D.carnetRepereDisponible(s);
+    var hasRepere = s.median != null && s.total >= PULSE_REPERE_MIN;
     row.setAttribute('aria-label',
       short + ', à partir de ' + D.money(prixAnnonceDollars(s.id))
       + (s.total === 0 ? ', aucune offre ce mois' : hasRepere ? ', repère du mois ' + D.money(s.median) : ', pas assez d’offres ce mois pour un repère') + '. '
@@ -3184,7 +3274,7 @@
     syncFilterChips();
     writeHash();
     setTab('carnet', { scroll: false });
-    openDay(state.selectedDate || firstStandardDate());
+    openDay(state.selectedDate || firstStandardDate(), { offer: true });
   }
 
   function renderPulse() {
@@ -3243,12 +3333,6 @@
   // the grid itself.
   function renderActiveView() {
     var visible = applyFilters(state.monthBids);
-    var empty = $('cal-empty');
-    if (empty) {
-      var calendarVisible = visible.filter(function (b) { return b.dateISO >= todayISO(); }).length;
-      empty.textContent = calendarVisible ? '' : countText(0, 'offre visible', 'visible offer') + ' — ' + T('Aucune offre ne correspond aux filtres sélectionnés.');
-      empty.hidden = calendarVisible > 0;
-    }
     updateFilterSummary(visible.length, visible);
     // The pulse reads the WHOLE month (not `visible`): it is the market
     // reference the filters are applied against, so filtering must not
@@ -3300,7 +3384,50 @@
 
   // Enlarged day view: click/Enter a cell to see every offer for that day over
   // a dimmed backdrop. Cells stay minimal; all detail lives here.
-  async function openDay(iso) {
+  // Touch users need a deliberate first step: a date tap explores the day's
+  // market, while an explicit reserve action enters the offer form. Desktop
+  // keeps the established one-click booking flow. The width fallback matters
+  // for mobile emulation, where browsers do not always expose touch points.
+  function compactCalendarInteraction() {
+    var coarse = false;
+    try {
+      coarse = !!(window.matchMedia && window.matchMedia('(hover: none) and (pointer: coarse)').matches);
+    } catch (e) {}
+    return coarse || (window.innerWidth && window.innerWidth <= 680)
+      || Number(navigator.maxTouchPoints || 0) > 0;
+  }
+
+  function setDayInteractionMode(preview) {
+    var dlg = $('day-dialog'), form = $('offer-form'), bids = $('day-bids');
+    if (!dlg || !form || !bids) return;
+    var market = bids.closest('.day-market');
+    var host = $('day-preview');
+    if (preview) {
+      if (!host) {
+        host = el('div', 'day-market'); host.id = 'day-preview';
+        var action = el('button', 'btn btn-primary btn-lg', T('Réserver cette date'));
+        action.type = 'button'; action.addEventListener('click', function () {
+          setDayInteractionMode(false);
+          bookGoTo(1);
+          focusBookingStart();
+        });
+        host.appendChild(action);
+        dlg.insertBefore(host, form);
+      }
+      if (bids.parentNode !== host) host.appendChild(bids);
+      host.hidden = false;
+      form.hidden = true;
+      dlg.dataset.interaction = 'preview';
+    } else {
+      if (market && bids.parentNode !== market) market.appendChild(bids);
+      if (host) host.hidden = true;
+      form.hidden = false;
+      dlg.dataset.interaction = 'offer';
+    }
+  }
+
+  async function openDay(iso, opts) {
+    var preview = opts ? opts.preview === true : compactCalendarInteraction();
     // A day in a different month (opened from a reminder/retenue notification or a
     // "Mes offres" row) needs that month's bids loaded first — otherwise the dialog
     // shows an empty day and the calendar stays on the wrong month behind it.
@@ -3365,6 +3492,7 @@
     var dlg = $('day-dialog');
     var wasOpen = !!dlg.open;
     if (dlg.showModal && !dlg.open) dlg.showModal();
+    setDayInteractionMode(preview);
     // The criteria were rendered while the dialog was still closed — zero
     // geometry. Re-settle the tracks now that they are visible.
     settleSegTracks($('o-criteria'));
@@ -3429,12 +3557,17 @@
     // Headline row: the one offer to beat for this act.
     if (matching.length) list.appendChild(bidRow(matching[0]));
 
-    // Totals: what the client is actually up against on this date. Keep zero
-    // visible too: a filtered act is still a real result, not a missing
-    // component. The all-acts segment appears when it adds context.
+    // Totals: what the client is actually up against on this date. Only real
+    // numbers — "Aucune offre en X" is #day-hint's sentence, never repeated
+    // here — and the all-acts segment only appears when it says something the
+    // act segment does not. Nothing to count = no count line at all.
     var counts = [];
-    if (svc) counts.push(countText(matching.length, 'offre', 'offer') + ' en ' + T(svc.nom).toLowerCase());
-    if (!svc || dayAll.length !== matching.length) counts.push(countText(dayAll.length, 'offre', 'offer') + ' ce jour, tous actes confondus');
+    if (svc) {
+      counts.push(matching.length + ' offre' + (matching.length > 1 ? 's' : '') + ' en ' + T(svc.nom).toLowerCase());
+    }
+    if ((!svc || dayAll.length !== matching.length) && dayAll.length > 0) {
+      counts.push(dayAll.length + ' offre' + (dayAll.length > 1 ? 's' : '') + ' ce jour, tous actes confondus');
+    }
     var countEl = counts.length ? el('div', 'day-bids-count', counts.join(' · ')) : null;
     if (countEl) list.appendChild(countEl);
 
@@ -3442,17 +3575,13 @@
     // totals line itself (owner, 2026-08-27: « compacter les sections »): the
     // count and its toggle share one row instead of stacking a full-width
     // button under the list.
-    var totalOthers = Math.max(0, dayAll.length - (matching.length ? 1 : 0));
     var others = dayAll.filter(function (b) { return b !== matching[0]; }).slice(0, DAY_CAP);
     if (others.length) {
       var rest = el('div', 'day-bids-rest'); rest.hidden = true;
       others.forEach(function (b) { rest.appendChild(bidRow(b)); });
-      var english = window.NotaI18N && window.NotaI18N.lang && window.NotaI18N.lang() === 'en';
-      var label = totalOthers > others.length
-        ? (english ? 'View ' + others.length + ' of ' + totalOthers + ' other offers' : 'Voir ' + others.length + ' des ' + totalOthers + ' autres offres')
-        : others.length > 1
-          ? (english ? 'View the ' + others.length + ' other offers' : 'Voir les ' + others.length + ' autres offres')
-          : (english ? 'View the other offer' : 'Voir l’autre offre');
+      var label = others.length > 1
+        ? 'Voir les ' + others.length + ' autres offres'
+        : 'Voir l’autre offre';
       var toggle = el('button', 'day-bids-toggle', label); toggle.type = 'button';
       toggle.setAttribute('aria-expanded', 'false');
       toggle.addEventListener('click', function () {
@@ -3915,7 +4044,7 @@
     btn.setAttribute('aria-haspopup', 'listbox');
     btn.setAttribute('aria-expanded', 'false');
     // What described or labelled the native control describes the trigger.
-    ['aria-label', 'aria-describedby', 'aria-labelledby'].forEach(function (a) {
+    ['aria-describedby', 'aria-labelledby'].forEach(function (a) {
       var v = sel.getAttribute(a); if (v) btn.setAttribute(a, v);
     });
     var val = el('span', 'nselect-value');
@@ -4036,7 +4165,7 @@
       else if (k === 'Home') { e.preventDefault(); active = 0; paintActive(); }
       else if (k === 'End') { e.preventDefault(); active = sel.options.length - 1; paintActive(); }
       else if (k === 'Enter' || k === ' ') { e.preventDefault(); commit(active); }
-      else if (k === 'Escape') { e.preventDefault(); e.stopPropagation(); closeList(); }
+      else if (k === 'Escape') { e.preventDefault(); closeList(); }
       else if (k === 'Tab') { closeList(); }
       else if (k.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); typeAhead(k); }
     });
@@ -5173,6 +5302,14 @@
       acct.disabled = !D.isEmail(courriel);
       if (acct.disabled) acct.checked = false;
     }
+    // ADR 0051 — the text opt-in follows its phone the same way: inert without
+    // a dialable number, and a cleared phone also clears the consent — a bid
+    // never consents to texts blindly.
+    var smsBox = $('o-sms');
+    if (smsBox) {
+      smsBox.disabled = !D.toE164(($('o-telephone') && $('o-telephone').value) || '');
+      if (smsBox.disabled) smsBox.checked = false;
+    }
     // Raw field value: validateOffer owns the normalization (domain rule).
     var v = D.validateOffer({ serviceId: o.serviceId, dateISO: o.dateISO, montant: o.montant, courriel: courriel, prefixe: $('o-prefix') && $('o-prefix').value, pricing: effectivePricing(), todayISO: todayISO() });
     // ADR 0033 — the mise en relation is complete: the retaining notary must
@@ -5626,6 +5763,10 @@
       // Private too (ADR 0010 §4): handed only to the notary who retains the
       // demand, for the mise en relation. Never on the public carnet.
       telephone: ($('o-telephone') && $('o-telephone').value || '').trim(),
+      // ADR 0051 — the express consent to be texted, ALWAYS sent as a strict
+      // boolean: publishing is the moment the person took a position, and the
+      // API records « false » as a withdrawal (never an absence).
+      smsConsent: !!($('o-sms') && $('o-sms').checked),
     };
     // Private referral attribution (ADR 0011): the visible « Code de
     // référence » field is the single source — pre-filled from a captured
@@ -5723,7 +5864,7 @@
     renderAccountMenu();
     addNotif({
       key: 'published:' + res.bid.id,
-      kind: 'published',
+      kind: 'published', refId: res.bid.id,
       title: 'Offre publiée',
       body: D.money(res.bid.montant) + ' · ' + dayTitle(res.bid.dateISO) + ' · ' + svcName(res.bid.serviceId),
       dateISO: res.bid.dateISO,
@@ -6429,7 +6570,7 @@
       offerStatusSet(o.id, st);
     }
     addNotif({
-      key: 'cancelled:' + o.id, kind: 'cancelled',
+      key: 'cancelled:' + o.id, kind: 'cancelled', refId: o.id,
       title: 'Votre offre du ' + dayTitle(o.dateISO) + ' est annulée',
       body: keptLine || 'Elle a été retirée du carnet.', dateISO: null,
     });
@@ -6444,9 +6585,13 @@
   // The domain validates inline exactly like the offer form; the API is
   // authoritative. `context.offer` ties the message to an offer for triage.
   var contactBidId = null;
+  var contactMessageStarted = false;
+  var contactSubjectSyncing = false;
   function openContactDialog(context) {
     var o = context && context.offer;
     contactBidId = o ? o.id : null;
+    contactMessageStarted = false;
+    track('contact_ouvert');
     var p = profileGet();
     if (!$('ct-nom').value) $('ct-nom').value = p.nom || '';
     if (!$('ct-courriel').value) $('ct-courriel').value = p.courriel || (o && o.courriel) || '';
@@ -6454,7 +6599,9 @@
     // default otherwise — a previous visit's choice must not linger. The
     // change event keeps the enhanced Nota select's label in sync.
     $('ct-sujet').value = o ? 'Aide avec une offre' : 'Question générale';
+    contactSubjectSyncing = true;
     $('ct-sujet').dispatchEvent(new Event('change', { bubbles: true }));
+    contactSubjectSyncing = false;
     var ctx = $('ct-context');
     ctx.hidden = !o;
     ctx.textContent = o ? 'À propos de votre ' + T(svcName(o.serviceId)).toLowerCase() + ' du ' + dayTitle(o.dateISO) + '.' : '';
@@ -6522,14 +6669,23 @@
     };
     var eb = $('ct-errors');
     var v = D.validateContactMessage(input);
+    track('contact_soumis');
     if (!v.ok) {
+      track('contact_echec');
+      var emailInvalid = !D.isEmail(input.courriel);
+      var messageInvalid = !String(input.message || '').trim();
+      $('ct-courriel').setAttribute('aria-invalid', emailInvalid ? 'true' : 'false');
+      $('ct-message').setAttribute('aria-invalid', messageInvalid ? 'true' : 'false');
       clear(eb); eb.hidden = false;
       v.errors.forEach(function (er) { eb.appendChild(el('li', null, er.message)); });
+      try { (emailInvalid ? $('ct-courriel') : $('ct-message')).focus(); } catch (e5) {}
       return;
     }
+    $('ct-courriel').setAttribute('aria-invalid', 'false');
+    $('ct-message').setAttribute('aria-invalid', 'false');
     eb.hidden = true;
     var btn = $('ct-submit');
-    btn.disabled = true; btn.setAttribute('aria-busy', 'true');
+    btn.disabled = true; btn.setAttribute('aria-busy', 'true'); btn.textContent = T('Envoi…');
     var ok = false;
     try {
       var r = await fetch(API_BASE + '/contact', {
@@ -6547,8 +6703,13 @@
         }
       }
     } catch (e2) { ok = false; }
-    btn.disabled = false; btn.removeAttribute('aria-busy');
-    if (!ok) { toast('Impossible d’envoyer pour le moment. Réessayez, ou écrivez-nous par courriel.'); return; }
+    btn.disabled = false; btn.removeAttribute('aria-busy'); btn.textContent = T('Envoyer');
+    if (!ok) {
+      track('contact_echec');
+      toast('Impossible d’envoyer pour le moment. Réessayez, ou écrivez-nous par courriel.');
+      return;
+    }
+    track('contact_envoye');
     profileSet({ nom: v.nom || profileGet().nom, courriel: v.courriel });
     $('contact-form').hidden = true;
     $('contact-success').hidden = false;
@@ -7552,7 +7713,88 @@
   // can prune a local entry the server stopped returning (a cancelled act).
   // deepAct -> the act a « #notaires&acte=<id> » link points at, until the
   // card is on screen.
-  var nc = { token: null, feedToken: null, email: null, open: [], filter: { service: 'all', readyOnly: false, day: null }, openDetails: {}, rating: null, profil: { lienCNQ: null }, tarif: null, cote: null, conditions: null, fenetre: null, deepAct: null, manquantsServeur: null };
+  var nc = { token: null, feedToken: null, email: null, open: [], filter: { service: 'all', readyOnly: false, day: null }, openDetails: {}, rating: null, profil: { lienCNQ: null }, tarif: null, cote: null, conditions: null, fenetre: null, deepAct: null, manquantsServeur: null, aiAccess: null };
+
+  // --- AI preparation access -------------------------------------------------
+  // The dossier checklist is always available. This separate product card is
+  // the only place that reveals the paid assistant, and the API remains the
+  // authority if a browser is stale or a notary opens an old tab.
+  function ncRenderAIProduct() {
+    var card = $('notary-ai-product'), actions = $('notary-ai-product-actions'), lead = $('notary-ai-product-lead');
+    if (!card || !nc.token) { if (card) card.hidden = true; return; }
+    var a = nc.aiAccess;
+    if (!a || a.reason === 'legacy_open') { card.hidden = true; return; }
+    card.hidden = false; clear(actions);
+    var beta = a.beta || {}, sub = a.subscription || {};
+    var remaining = Number(beta.remaining) || 0;
+    var paidRemaining = Number(sub.remaining) || 0;
+    if (beta.enrolled && (remaining || paidRemaining || a.paidUses > 0)) {
+      lead.textContent = T('Votre accès est actif. Chaque nouvelle analyse consomme une unité; une analyse réutilisée et votre révision restent gratuites.');
+      var quota = el('span', 'nc-ai-quota', remaining ? T(remaining + ' essai' + (remaining > 1 ? 's' : '') + ' bêta restant' + (remaining > 1 ? 's' : ''))
+        : (paidRemaining ? T(paidRemaining + ' unité' + (paidRemaining > 1 ? 's' : '') + ' restante' + (paidRemaining > 1 ? 's' : '')) : T(a.paidUses + ' unité' + (a.paidUses > 1 ? 's' : '') + ' achetée' + (a.paidUses > 1 ? 's' : ''))));
+      actions.appendChild(quota);
+    } else {
+      lead.textContent = T(beta.enrolled ? 'Vos 5 essais bêta sont terminés. Passez à une formule mensuelle ou achetez seulement les unités dont vous avez besoin.' : 'Inscrivez-vous à la bêta : 5 préparations gratuites, une seule fois par notaire. Le notaire vérifie chaque proposition avant tout envoi.');
+      if (!beta.enrolled) {
+        var enroll = el('button', 'btn btn-sm btn-primary', T('Activer mes 5 essais')); enroll.type = 'button';
+        enroll.addEventListener('click', ncEnrollAIBeta); actions.appendChild(enroll);
+      }
+      var plans = a.plans || [];
+      if (plans.length) {
+        var select = el('select', 'nc-ai-plan'); select.setAttribute('aria-label', T('Formule IA'));
+        plans.forEach(function (plan) {
+          var planName = window.NotaI18N && window.NotaI18N.lang() === 'en' ? (plan.nomEn || plan.nom) : plan.nom;
+          var amount = window.NotaI18N && window.NotaI18N.lang() === 'en' && D.moneyEn ? D.moneyEn(plan.monthlyCents / 100) : D.money(plan.monthlyCents / 100);
+          var option = el('option', null, planName + ' · ' + amount + T('/mois · ') + plan.includedUses + ' ' + T('dossiers'));
+          option.value = plan.id; select.appendChild(option);
+        });
+        actions.appendChild(select);
+        var subscribe = el('button', 'btn btn-sm', T('Choisir cette formule')); subscribe.type = 'button';
+        subscribe.addEventListener('click', function () { ncAICheckout('subscription', select.value, 1); }); actions.appendChild(subscribe);
+        var quantity = el('input', 'nc-ai-quantity'); quantity.type = 'number'; quantity.min = '1'; quantity.max = '100'; quantity.value = '1'; quantity.setAttribute('aria-label', T('Nombre d’unités à acheter'));
+        var piece = el('button', 'btn btn-sm btn-ghost', T('Acheter à la pièce')); piece.type = 'button';
+        piece.addEventListener('click', function () { ncAICheckout('usage', select.value, Number(quantity.value)); });
+        actions.appendChild(quantity); actions.appendChild(piece);
+      }
+    }
+  }
+  async function ncLoadAIAccess() {
+    if (!nc.token) return;
+    try {
+      var r = await fetch(API_BASE + '/notary/ai-access', { headers: { authorization: 'Bearer ' + nc.token } });
+      if (r.status === 401) { ncExpire('Session expirée. Reconnectez-vous.'); return; }
+      if (!r.ok) { nc.aiAccess = { enabled: true, reason: 'legacy_open' }; ncRenderAIProduct(); return; }
+      nc.aiAccess = await r.json();
+      ncRenderAIProduct();
+    } catch (e) {
+      // A transient access-read failure must not block the normal dossier. The
+      // AI endpoint still enforces access server-side before any provider call.
+      nc.aiAccess = { enabled: true, reason: 'legacy_open' }; ncRenderAIProduct();
+    }
+  }
+  async function ncEnrollAIBeta() {
+    if (!nc.token) return;
+    var status = $('notary-ai-product-status');
+    try {
+      var r = await fetch(API_BASE + '/notary/ai-beta/enroll', { method: 'POST', headers: { authorization: 'Bearer ' + nc.token } });
+      var j = {}; try { j = await r.json(); } catch (e) {}
+      if (!r.ok) { if (status) status.textContent = T('Inscription à la bêta impossible pour le moment.'); return; }
+      nc.aiAccess = Object.assign({}, j.access, { plans: (nc.aiAccess && nc.aiAccess.plans) || [] }); ncRenderAIProduct(); ncRenderRetained();
+      if (status) status.textContent = T('Bêta activée. Vos 5 essais sont prêts.');
+    } catch (e) { if (status) status.textContent = T('Hors ligne. Réessayez une fois en ligne.'); }
+  }
+  async function ncAICheckout(kind, planId, quantity) {
+    if (!nc.token || !planId) return;
+    var status = $('notary-ai-product-status');
+    try {
+      var requestId = window.crypto && typeof window.crypto.randomUUID === 'function'
+        ? window.crypto.randomUUID() : 'checkout-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+      var r = await fetch(API_BASE + '/notary/ai/checkout', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + nc.token }, body: JSON.stringify({ kind, planId, quantity, requestId }) });
+      var j = {}; try { j = await r.json(); } catch (e) {}
+      if (r.ok && j.url) { window.location.href = j.url; return; }
+      if (status) status.textContent = (j.errors && j.errors[0] && j.errors[0].message) || T('Paiement momentanément indisponible.');
+    } catch (e) { if (status) status.textContent = T('Hors ligne. Réessayez une fois en ligne.'); }
+  }
 
   // Pending declines: id -> { timer, dateISO }. A decline collapses the card
   // into an undo line first and only POSTs once the window closes (or a test
@@ -7696,9 +7938,7 @@
     }
     // The server echoes the SETTLED value — on a duplicate submit that is the
     // ledger's original figure, never the retried one.
-    ncRetainedUpdate(nc.email, id, { completed: true, paid: j.paid === true,
-      notaryTemplate: j.notaryTemplate || null,
-      actAmount: j.actAmount != null ? j.actAmount : amt, commissionCents: j.commissionCents || 0 });
+    ncRetainedUpdate(nc.email, id, { completed: true, actAmount: j.actAmount != null ? j.actAmount : amt, commissionCents: j.commissionCents || 0 });
     ncRenderRetained();
     toast(j.paid === true
       ? 'Acte complété. Vos honoraires : ' + D.money(j.honorairesCents != null ? j.honorairesCents / 100 : (j.actAmount != null ? j.actAmount : amt)) + ', virés en entier.'
@@ -7720,6 +7960,23 @@
     setCalendarSubscription('sub', http, T('Nota — carnet Québec'));
   }
 
+  // The manual calendar URL is a secondary path for Outlook/Apple users. Keep
+  // it explicit and compact: opening the panel is a choice, while the URL and
+  // copy action stay in one predictable row once revealed.
+  function wireCalendarSubscriptionDetails() {
+    ['sub', 'notary'].forEach(function (prefix) {
+      var toggle = $(prefix + '-subscription-toggle');
+      var panel = $(prefix + '-subscription-panel');
+      if (!toggle || !panel) return;
+      toggle.addEventListener('click', function () {
+        if (toggle.disabled) return;
+        var open = toggle.getAttribute('aria-expanded') !== 'true';
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        panel.hidden = !open;
+      });
+    });
+  }
+
   // The same subscription URL powers every provider and the manual fallback.
   // Clear all private links when the session/feed token is no longer available.
   function setCalendarSubscription(prefix, http, name) {
@@ -7733,6 +7990,7 @@
       if (links[id]) a.href = links[id]; else a.removeAttribute('href');
     });
     var input = $(prefix + '-subscription-url'), copy = $(prefix + '-subscription-copy');
+    var toggle = $(prefix + '-subscription-toggle'), panel = $(prefix + '-subscription-panel');
     if (input) { input.value = http || ''; input.disabled = !http; }
     if (copy) {
       copy.disabled = !http;
@@ -7741,6 +7999,13 @@
         input.focus(); input.select();
         copyLinkText(input.value, function () { flashCopied(copy); });
       };
+    }
+    if (toggle) {
+      toggle.disabled = !http;
+      if (!http) {
+        toggle.setAttribute('aria-expanded', 'false');
+        if (panel) panel.hidden = true;
+      }
     }
   }
 
@@ -7759,6 +8024,7 @@
     nc.token = null; nc.feedToken = null; nc.email = null; nc.open = [];
     nc.rating = null; nc.profil = { lienCNQ: null, rayonKm: 0, urgences: false }; nc.tarif = null;
     nc.cote = null; nc.conditions = null; nc.fenetre = null; nc.manquantsServeur = null;
+    nc.aiAccess = null;
     ncCloseRetainSheet(); // a sheet about a session that ended
     nc.retainedOrder = null;
     ncRenderProfil({ force: true }); // the form must never keep another notary's fiche
@@ -7930,7 +8196,7 @@
     var j = {}; try { j = await r.json(); } catch (e) { return; }
     (j.avis || []).slice().reverse().forEach(function (a) {
       if (!a || !a.id) return;
-      addNotif({ key: 'srv:' + a.id, kind: a.kind, title: a.titre || '', body: a.corps || '', lien: a.lien || null, read: !!a.luLe });
+      addNotif({ key: 'srv:' + a.id, kind: a.kind, title: a.titre || '', body: a.corps || '', lien: a.lien || null, refId: a.refId || null, srvId: a.id, read: !!a.luLe });
     });
   }
   // Tell the server what the bell just marked read — the notary's session,
@@ -7982,11 +8248,14 @@
     nc.cote = j.cote || null;             // ADR 0028: always there, barème or not
     nc.conditions = j.conditions || null; // ADR 0033: what retaining commits to
     nc.fenetre = Array.isArray(j.fenetre) ? j.fenetre : null;
+    await ncLoadAIAccess();
+    if (!nc.token) return false;
     nc.manquantsServeur = null;           // a fresh profile supersedes an old 403
     nc.profilCharge = true;               // le profil vient du SERVEUR, plus du défaut vide
     ncRenderCautionRegle();
     ncRenderProfil();
     ncRenderProfilBanner();
+    ncRenderAIProduct();
     ncRenderPrefs();
     accountTourReplay('notary', $('notary-authed'));
     ncRenderEarnings(); // the money tiles
@@ -8138,7 +8407,6 @@
       distanceKm: bidMeta.distanceKm != null ? bidMeta.distanceKm : null,
       complexity: bidMeta.complexity || null,
       messages: [], documents: [], annulation: j.annulation || null, completed: false,
-      paid: false, notaryTemplate: j.notaryTemplate || null,
     };
     // PAID AT SIGNING (ADR 0015): accepting retains — no money moves here.
     // The settlement (capture + net transfer, or the créance fallback)
@@ -8240,6 +8508,7 @@
       // These visual spaces carry no inventory or action. Avoid announcing
       // the same empty label to a screen reader.
       slot.setAttribute('aria-hidden', 'true');
+      slot.tabIndex = -1;
       grid.appendChild(slot);
     }
     if (!open.length) {
@@ -8665,7 +8934,7 @@
   // The server's view, normalized: an unknown pace reads as the daily digest.
   function ncAlertes() {
     var a = (nc.profil && nc.profil.alertes) || {};
-    return { pace: NC_PACES.indexOf(a.pace) >= 0 ? a.pace : 'daily', urgentOnly: a.urgentOnly === true };
+    return { pace: NC_PACES.indexOf(a.pace) >= 0 ? a.pace : 'daily', urgentOnly: a.urgentOnly === true, sms: a.sms === true };
   }
   async function ncSaveAlertes(patch) {
     if (!nc.token) return;
@@ -8691,6 +8960,8 @@
     }
     var a = ncAlertes();
     var urg = $('pref-urgent'); if (urg) urg.checked = a.urgentOnly;
+    // ADR 0051 — the SMS switch is a server fact: on only when the profile says so.
+    var smsSw = $('pref-ch-sms'); if (smsSw) smsSw.checked = a.sms;
     document.querySelectorAll('#pref-pace .seg-btn').forEach(function (b) {
       var on = b.dataset.pace === a.pace; b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
@@ -8750,18 +9021,19 @@
     var form = $('notary-auth-form'); var view = $('notary-authed');
     if (form) form.hidden = authed;
     if (view) view.hidden = !authed;
-    // The beta notice is a signed-out acquisition message. Keep it out of the
-    // authenticated workspace explicitly so it cannot become part of the
-    // notary console through a CSS/layout regression.
+    // Keep the beta announcement visible on the signed-out notary landing so
+    // the disclosure remains discoverable; an authenticated notary instead
+    // receives the account-scoped product card.
     var beta = $('notary-ai-beta-note');
     if (beta) beta.hidden = authed;
     if (!authed) ncShowGateStep('email'); // never resurface a stale signup branch
-    renderNotaryLive(); // the teaser follows the gate: shown signed-out, gone signed-in
+    renderNotaryLive(); // the inventory remains the signed-out landing's proof
     if (authed) {
       // Identity (courriel + Se déconnecter) lives in the header account menu
       // only — the console itself opens straight on the agenda.
       ncRenderPrefs(); // alert preferences for this notary
       ncRenderProfilBanner(); // the contact gate, said over the feed (ADR 0033)
+      ncRenderAIProduct();
       ncRenderRetained();
     }
   }
@@ -9474,17 +9746,15 @@
     if (head) {
       clear(head);
       head.appendChild(el('span', null, 'Demandes ouvertes'));
-      {
+      head.appendChild(document.createTextNode(' · '));
+      head.appendChild(el('span', 'nc-h-n', String(all.length)));
+      if (all.length) {
         var inPlay = all.reduce(function (s, b) { return s + (Math.round(Number(b.montant)) || 0); }, 0);
         head.appendChild(document.createTextNode(' · '));
-        head.appendChild(el('span', 'nc-h-n', String(all.length)));
-        if (all.length) {
-          head.appendChild(document.createTextNode(' · '));
-          head.appendChild(el('span', 'nc-h-sum'));
-          head.lastChild.appendChild(el('span', 'nc-h-amt', D.money(inPlay)));
-          head.lastChild.appendChild(document.createTextNode(' '));
-          head.lastChild.appendChild(el('span', null, 'en jeu'));
-        }
+        head.appendChild(el('span', 'nc-h-sum'));
+        head.lastChild.appendChild(el('span', 'nc-h-amt', D.money(inPlay)));
+        head.lastChild.appendChild(document.createTextNode(' '));
+        head.lastChild.appendChild(el('span', null, 'en jeu'));
       }
     }
     if (!all.length) {
@@ -9599,7 +9869,6 @@
       item.appendChild(meta);
       list.appendChild(item);
     });
-    if (!(workflow.nextActions || []).length) list.appendChild(el('li', 'nc-zero-count', countText(0, 'action suivante', 'next action')));
     wrap.appendChild(list);
     return wrap;
   }
@@ -9784,6 +10053,9 @@
   // Source text and AI proposals stay in this disclosure's memory. Only the
   // authenticated API persists analyses/reviews; opening a card never runs AI.
   function ncFinancingAIBlock(entry) {
+    // The normal dossier remains visible when a notary has not opted into the
+    // beta, has exhausted its trial, or has an unpaid subscription.
+    if (nc.aiAccess && !nc.aiAccess.enabled && nc.aiAccess.reason !== 'legacy_open') return null;
     var actAI = !['financement', 'refinancement'].includes(entry.serviceId);
     var aiFields = actAI ? (D.actAIFields(entry.serviceId) || []) : D.FINANCING_AI_FIELDS;
     var aiRoute = actAI ? '/notary/acts' : '/notary/financing';
@@ -9841,7 +10113,7 @@
     var consentLabel = el('label', 'check-line');
     var consent = el('input'); consent.type = 'checkbox'; consent.name = 'processingAuthorized'; consent.required = true;
     consentLabel.appendChild(consent);
-    consentLabel.appendChild(el('span', null, 'Je confirme être autorisé à transmettre ce document au fournisseur d’IA configuré, sans utilisation pour l’entraînement des modèles.'));
+    consentLabel.appendChild(el('span', null, T('Je confirme être autorisé à transmettre ce document au fournisseur d’IA configuré, sans utilisation pour l’entraînement du texte du dossier; seules des décisions notariales minimisées peuvent contribuer au programme contrôlé d’amélioration.')));
     sourceControls.appendChild(consentLabel);
     var analyze = el('button', 'btn btn-sm btn-primary', 'Analyser cette page avec l’IA'); analyze.type = 'submit';
     sourceControls.appendChild(analyze);
@@ -9896,6 +10168,65 @@
       }
       list('Champs non trouvés dans les pages analysées', preparation.missing, 'Aucun champ signalé comme manquant.');
       list('Contradictions à examiner', preparation.conflicts, 'Aucune contradiction signalée.');
+      var uncertaintyQuestions = D.notaryAIUncertaintyQuestions
+        ? D.notaryAIUncertaintyQuestions(entry.serviceId, preparation)
+        : [];
+      if (uncertaintyQuestions.length) {
+        results.appendChild(el('div', 'nc-dossier-h', T('Questions de clarification')));
+        results.appendChild(el('p', 'help', T('Un point incertain a été repéré. Confirmez-le avec les sources et utilisez votre décision comme feedback professionnel pour améliorer Nota.')));
+        var questions = el('ul', 'nc-ai-questions');
+        uncertaintyQuestions.forEach(function (question) {
+          var item = el('li');
+          var prefix = question.kind === 'conflicting_evidence'
+            ? 'Confirmer la contradiction et choisir la source autorisée : '
+            : 'Confirmer l’absence ou rechercher une pièce source : ';
+          item.appendChild(el('strong', null, T(prefix)));
+          item.appendChild(fieldLabel(question.fieldId));
+          var feedbackForm = el('form', 'nc-ai-question-feedback');
+          var decisionLabel = el('label', 'field');
+          decisionLabel.appendChild(el('span', null, T('Réponse à la question')));
+          var decision = el('select');
+          decision.name = 'decision';
+          [['', 'Choisir une réponse'], ['confirmed', 'Point confirmé'], ['resolved', 'Point résolu'],
+            ['not_applicable', 'Non applicable'], ['escalated', 'À examiner par le notaire']].forEach(function (option) {
+            var choice = el('option', null, T(option[1])); choice.value = option[0]; decision.appendChild(choice);
+          });
+          decision.required = true;
+          decisionLabel.appendChild(decision);
+          feedbackForm.appendChild(decisionLabel);
+          var note = el('textarea'); note.name = 'note'; note.rows = 2; note.maxLength = 500;
+          var noteLabel = el('label', 'field');
+          noteLabel.appendChild(el('span', null, T('Note facultative'))); noteLabel.appendChild(note);
+          feedbackForm.appendChild(noteLabel);
+          var saveFeedback = el('button', 'btn btn-sm btn-secondary', 'Enregistrer la réponse');
+          saveFeedback.type = 'submit'; feedbackForm.appendChild(saveFeedback);
+          var feedbackStatus = el('p', 'help'); feedbackStatus.setAttribute('role', 'status'); feedbackForm.appendChild(feedbackStatus);
+          feedbackForm.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            if (!active() || busy || saveFeedback.disabled || !feedbackForm.reportValidity()) return;
+            saveFeedback.disabled = true; decision.disabled = true; note.disabled = true;
+            message(feedbackStatus, 'Enregistrement de la réponse…');
+            try {
+              var response = await ncPost('/notary/ai-feedback', {
+                id: entry.id, dateISO: entry.dateISO, questionId: question.id,
+                decision: decision.value, note: note.value.trim(),
+              });
+              if (!active()) return;
+              if (!response || response.status < 200 || response.status >= 300 || !response.json.ok) {
+                saveFeedback.disabled = false; decision.disabled = false; note.disabled = false;
+                message(feedbackStatus, 'Impossible d’enregistrer la réponse. Réessayez.', true); return;
+              }
+              message(feedbackStatus, 'Réponse enregistrée.');
+            } catch {
+              saveFeedback.disabled = false; decision.disabled = false; note.disabled = false;
+              if (active()) message(feedbackStatus, 'Impossible d’enregistrer la réponse. Réessayez.', true);
+            }
+          });
+          item.appendChild(feedbackForm);
+          questions.appendChild(item);
+        });
+        results.appendChild(questions);
+      }
       var provenance = el('details'); provenance.appendChild(el('summary', null, 'Provenance de l’analyse'));
       var metadata = el('dl', 'nc-kv');
       function meta(label, value) { metadata.appendChild(el('dt', null, T(label))); metadata.appendChild(raw('dd', value)); }
@@ -10070,14 +10401,9 @@
     kv('Consentement de partage', d.__consent ? 'Oui' : 'Non');
     wrap.appendChild(rows);
     var isFinancing = ['financement', 'refinancement'].includes(entry.serviceId);
-    var paidTemplate = entry.paid === true && entry.notaryTemplate && entry.notaryTemplate.serviceId === entry.serviceId
-      ? entry.notaryTemplate : null;
-    var preparation = paidTemplate && (isFinancing
+    var preparation = isFinancing
       ? D.financingPreparation(entry.serviceId, d, entry.pricing)
-      : D.actPreparation(entry.serviceId, d, entry.pricing));
-    if (!paidTemplate) {
-      wrap.appendChild(el('p', 'help', 'Le dossier de préparation et les connecteurs de Nota restent masqués jusqu’au paiement du service.'));
-    }
+      : D.actPreparation(entry.serviceId, d, entry.pricing);
     if (preparation) {
       var brief = el('details', 'nc-preparation');
       brief.appendChild(el('summary', null, isFinancing ? 'Préparation du financement' : 'Préparation de l’acte'));
@@ -10108,19 +10434,8 @@
         });
         brief.appendChild(controls);
       }
-      if (Array.isArray(paidTemplate.connectors) && paidTemplate.connectors.length) {
-        brief.appendChild(el('div', 'nc-dossier-h', 'Connecteurs du dossier'));
-        brief.appendChild(el('p', 'help', 'Ce modèle a été généré à la réservation et débloqué après le paiement du service.'));
-        var connectors = el('ul');
-        paidTemplate.connectors.forEach(function (connector) {
-          var item = el('li');
-          item.appendChild(el('strong', null, T(connector.label)));
-          item.appendChild(el('p', 'help', T(connector.candidate) + ' · ' + T('Préparation automatique seulement')));
-          connectors.appendChild(item);
-        });
-        brief.appendChild(connectors);
-      }
-      brief.appendChild(ncFinancingAIBlock(entry));
+      var aiBlock = ncFinancingAIBlock(entry);
+      if (aiBlock) brief.appendChild(aiBlock);
       wrap.appendChild(brief);
     }
     return wrap;
@@ -10577,7 +10892,6 @@
   function documentsBlock(ctx, documents, onAjout) {
     var box = el('div', 'chat-docs');
     var docs = documents || [];
-    box.appendChild(el('div', 'chat-doc-count', countText(docs.length, 'document échangé', 'shared document')));
     var items = ctx.serviceId ? checklistDocs(ctx.serviceId, ctx.pricing) : [];
     var assoc = items.length ? docItemsFor(ctx.id) : {};
     var byItem = {};
@@ -10927,6 +11241,7 @@
     var items = nc.email ? ncRetainedFor(nc.email) : [];
     head.appendChild(document.createTextNode(' · '));
     head.appendChild(el('span', 'nc-h-n', String(items.length)));
+    if (!items.length) return;
     var unread = items.reduce(function (s, e) { return s + ncUnreadCount(e); }, 0);
     if (unread) { head.appendChild(document.createTextNode(' ')); head.appendChild(ncUnreadBadge(unread)); }
   }
@@ -11093,8 +11408,7 @@
     if (e.pending) {
       box.appendChild(el('p', 'help', e.pending + ' dossier' + (e.pending > 1 ? 's' : '') + ' à compléter · valeur estimée ' + D.money(e.pendingVal) + '. Vos honoraires vous sont virés à la signature, en entier.'));
     } else if (!e.done) {
-      box.appendChild(el('p', 'nc-zero-count', countText(0, 'acte complété', 'completed act')));
-      box.appendChild(el('p', 'help', 'Vos honoraires s’afficheront ici dès votre premier acte complété.'));
+      box.appendChild(el('p', 'help', T('0 acte complété. Vos honoraires s’afficheront ici dès votre premier acte complété.')));
     }
   }
 
@@ -11160,12 +11474,8 @@
 
   function ncRenderCote() {
     var box = $('notary-cote'); if (!box) return; clear(box);
-    if (!nc.email) return; // signed out is not an empty score result
     var score = nc.cote;
-    if (!score || !score.axes || !score.axes.length) {
-      box.appendChild(el('p', 'help', T('Aucune cote n’est encore disponible. Elle s’affichera après les premières données de votre activité.')));
-      return; // signed out, or nothing to publish yet
-    }
+    if (!score || !score.axes || !score.axes.length) return; // signed out, or nothing to publish yet
 
     // Le nombre, en grand, sur 100 — et RIEN qui le rattache à l'argent.
     var head = el('div', 'nc-cote-head');
@@ -11229,15 +11539,9 @@
   // clients said about them. A service without a single review says so in
   // words; the domain never invents an average, and neither does this.
   function ncRenderServices(box, services) {
-    services = Array.isArray(services) ? services : [];
+    if (!services || !services.length) return;
     var wrap = el('div', 'nc-svc');
     wrap.appendChild(el('div', 'nc-svc-h', 'Ce que vous portez, service par service'));
-    wrap.appendChild(el('div', 'nc-svc-count', countText(services.length, 'service', 'service')));
-    if (!services.length) {
-      wrap.appendChild(el('p', 'help', T('Aucun service n’est encore associé à votre historique.')));
-      box.appendChild(wrap);
-      return;
-    }
     services.forEach(function (s) {
       var row = el('div', 'nc-svc-row');
       row.dataset.service = s.serviceId;
@@ -11255,7 +11559,6 @@
   function ncRenderEvals(rating, evaluations, services) {
     var box = $('nc-evals-list'); if (!box) return; clear(box);
     if (!evaluations || !evaluations.length) {
-      box.appendChild(el('div', 'nc-zero-count', countText(0, 'évaluation', 'evaluation')));
       box.appendChild(el('p', 'help', 'Vos évaluations s’afficheront ici après vos premiers actes signés.'));
       ncRenderServices(box, services);
       return;
@@ -11317,7 +11620,6 @@
     var box = $('nc-actes-list'); if (!box) return; clear(box);
     var actes = (payload && payload.actes) || [];
     if (!actes.length) {
-      box.appendChild(el('div', 'nc-zero-count', countText(0, 'acte réglé', 'settled act')));
       box.appendChild(el('p', 'help', 'Votre relevé s’ouvrira ici dès votre premier acte réglé.'));
       return;
     }
@@ -11451,7 +11753,7 @@
     var body = {
       nom: p.nom || '', etude: p.etude || '', telephone: p.telephone || '', adresse: p.adresse || '',
       lienCNQ: p.lienCNQ || '', rayonKm: p.rayonKm || 0, urgences: p.urgences === true, prefixe: p.prefixe || '',
-      alertes: { pace: a.pace, urgentOnly: a.urgentOnly },
+      alertes: { pace: a.pace, urgentOnly: a.urgentOnly, sms: a.sms },
     };
     return Object.assign(body, over || {});
   }
@@ -11718,32 +12020,6 @@
   // ---------------------------------------------------------------------------
   // Theme
   // ---------------------------------------------------------------------------
-  var PALETTE_IDS = ['ardoise', 'marine', 'sapin', 'prune', 'bourgogne', 'terre', 'indigo', 'mousse', 'graphite'];
-  function paletteId() {
-    var id = document.documentElement.getAttribute('data-palette');
-    return PALETTE_IDS.indexOf(id) > -1 ? id : 'ardoise';
-  }
-  function syncPaletteChrome() {
-    var id = paletteId();
-    document.querySelectorAll('[data-palette-select]').forEach(function (select) { select.value = id; });
-    /* The browser tab mark is generated from the same live CSS tokens as the
-       inline logo. The fallback favicon.svg remains available before boot. */
-    try {
-      var css = getComputedStyle(document.documentElement);
-      var bg = css.getPropertyValue('--nota-logo-bg').trim();
-      var signal = css.getPropertyValue('--nota-logo-signal').trim();
-      var ink = css.getPropertyValue('--nota-midnight').trim();
-      var svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="6" fill="' + bg + '"/><g fill="#ffffff"><rect x="16" y="15" width="7.5" height="34" rx="2.5"/><rect x="40.5" y="15" width="7.5" height="34" rx="2.5"/><polygon points="16,15 24,15 48,49 40,49"/></g><circle cx="48" cy="16" r="8" fill="' + signal + '" stroke="' + ink + '" stroke-width="3"/></svg>';
-      var href = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
-      document.querySelectorAll('link[rel="icon"]').forEach(function (link) { link.href = href; });
-    } catch (e) {}
-  }
-  function setPalette(id) {
-    if (PALETTE_IDS.indexOf(id) < 0) id = 'ardoise';
-    document.documentElement.setAttribute('data-palette', id);
-    lsSave('nota.palette', id);
-    syncPaletteChrome();
-  }
   function setTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
     lsSave('nota.theme', theme);
@@ -11870,6 +12146,12 @@
   }
 
   function wire() {
+    var loopToggle = $('how-we-build') && $('how-we-build').querySelector('.build-loop-toggle');
+    if (loopToggle) loopToggle.addEventListener('click', function () {
+      var paused = loopToggle.getAttribute('aria-pressed') === 'true';
+      loopToggle.setAttribute('aria-pressed', paused ? 'false' : 'true');
+      loopToggle.textContent = paused ? 'Mettre l’animation en pause' : 'Reprendre l’animation';
+    });
     // Les sections écrites en dur reçoivent leur glyphe une fois pour toutes.
     paintStaticSectionIcons();
     document.querySelectorAll('[data-history="back"]').forEach(function (button) {
@@ -11966,37 +12248,25 @@
       var cur = document.documentElement.getAttribute('data-theme');
       setTheme(cur === 'dark' ? 'light' : 'dark');
     });
-    document.querySelectorAll('[data-palette-select]').forEach(function (select) {
-      select.addEventListener('change', function () { setPalette(this.value); });
-    });
-    syncPaletteChrome();
-
-    // The beta announcement is intentionally a tooltip-sized disclosure. Only
-    // its information button expands it, for pointer, touch, and keyboard users,
-    // without adding a new row to the resting landing layout. The CTA leads to
-    // the existing professional-email gate;
-    // there is no separate beta list or unverified subscription record here.
+    // The beta controls remain wired for the dedicated Beta surface. If the
+    // hidden landing markup is ever reused, the explanation stays floating and
+    // a click on the info control only exposes that surface for touch users.
     var betaNote = $('notary-ai-beta-note');
     var betaToggle = $('notary-ai-beta-toggle');
     var betaDetails = $('notary-ai-beta-details');
     if (betaNote && betaToggle && betaDetails) {
-      betaDetails.hidden = true;
-      betaToggle.addEventListener('click', function () {
-        var open = !betaNote.classList.contains('is-open');
-        betaNote.classList.toggle('is-open', open);
-        betaToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-        betaDetails.setAttribute('aria-hidden', open ? 'false' : 'true');
-        betaDetails.hidden = !open;
-      });
+      var syncBetaTip = function (visible) {
+        betaDetails.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        betaDetails.hidden = !visible;
+        betaToggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
+      };
+      // Programmatic clicks and touch browsers do not all move focus first.
+      // Reveal the floating surface, but deliberately do not toggle a class
+      // or change the note's dimensions.
+      betaToggle.addEventListener('click', function () { syncBetaTip(betaToggle.getAttribute('aria-expanded') !== 'true'); });
     }
     var betaSubscribe = $('notary-ai-beta-subscribe');
     if (betaSubscribe) betaSubscribe.addEventListener('click', function () {
-      if (betaNote && betaToggle && betaDetails) {
-        betaNote.classList.add('is-open');
-        betaToggle.setAttribute('aria-expanded', 'true');
-        betaDetails.setAttribute('aria-hidden', 'false');
-        betaDetails.hidden = false;
-      }
       var gate = $('notary-auth-form');
       var email = $('nc-email');
       if (gate && gate.scrollIntoView) {
@@ -12056,16 +12326,13 @@
         if (!mnav.classList.contains('is-open')) return;
         if (e.key === 'Escape') { setMobileNav(false); return; }
         if (e.key !== 'Tab') return;
-        var controls = Array.prototype.filter.call(mnav.querySelectorAll('button, a[href], input, select, textarea, [tabindex]'), function (n) {
-          return !n.disabled && n.tabIndex >= 0 && n.getClientRects().length > 0;
-        });
-        if (!controls.length) { e.preventDefault(); mnav.focus(); return; }
-        var first = controls[0], last = controls[controls.length - 1];
-        if (e.shiftKey && (document.activeElement === first || document.activeElement === mnav)) {
-          e.preventDefault(); last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault(); first.focus();
-        }
+        var focusable = Array.prototype.slice.call(mnav.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+          .filter(function (el) { return !el.hidden && getComputedStyle(el).visibility !== 'hidden' && el.getClientRects().length; });
+        if (!focusable.length) return;
+        var first = focusable[0];
+        var last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
       });
       mnav.querySelectorAll('.mnav-link[data-tab]').forEach(function (b) {
         b.addEventListener('click', function () { setTab(this.dataset.tab); });
@@ -12365,9 +12632,19 @@
     // Nous joindre dialog.
     $('contact-form').addEventListener('submit', submitContact);
     $('ct-done').addEventListener('click', function () { $('contact-dialog').close(); });
-    $('ct-message').addEventListener('input', contactGrow);
+    $('contact-dialog').addEventListener('close', function () { track('contact_ferme'); });
+    $('ct-message').addEventListener('input', function () {
+      contactGrow();
+      if (!contactMessageStarted && $('ct-message').value.trim()) {
+        contactMessageStarted = true;
+        track('contact_message_commence');
+      }
+    });
     var ctMsg = $('ct-message');
     if (ctMsg) { ctMsg.setAttribute('maxlength', String(D.CONTACT_MESSAGE_MAX)); ctMsg.addEventListener('input', contactCount); }
+    $('ct-sujet').addEventListener('change', function () {
+      if (!contactSubjectSyncing) track('contact_sujet_choisi');
+    });
     $('contact-dialog').addEventListener('click', function (e) { if (e.target === this) this.close(); });
     $('mnav-contact').addEventListener('click', function () { setMobileNav(false); openContactDialog(); });
     // The support chat's phone door: the fixed fab leaves phones (styles.css,
@@ -12462,6 +12739,10 @@
     // Alert preferences (ADR 0033 §7) — every control saves to the SERVER on
     // change, through the profile; the seg repaints optimistically.
     if ($('pref-urgent')) $('pref-urgent').addEventListener('change', function () { ncSaveAlertes({ urgentOnly: this.checked }); });
+    // ADR 0051 — the text consent saves through the same profile POST; the API
+    // refuses it (telephone_requis_sms) when the profile has no dialable phone,
+    // and ncSaveAlertes then repaints the switch from the server and toasts.
+    if ($('pref-ch-sms')) $('pref-ch-sms').addEventListener('change', function () { ncSaveAlertes({ sms: this.checked }); });
     var ncPace = $('pref-pace');
     if (ncPace) ncPace.addEventListener('click', function (e) {
       var b = e.target.closest('.seg-btn'); if (!b) return;
@@ -12723,20 +13004,25 @@
 
   // ===== Ambient mark drift — the Nota logo, twenty times, adrift. =====
   // Born on the intro gate (2026-08-27), then promoted the same day to ONE
-  // fixed site-wide layer behind all content. The builder deals each copy its
-  // own place, size, drift and tempo, and a negative delay starts every one
+  // fixed site-wide layer behind all content (the hero's own clipped copy
+  // « cut rough » at the band's edges). The builder deals each copy its own
+  // place, size, drift and tempo, and a negative delay starts every one
   // mid-flight so the scene is alive from the first frame. Decorative only:
-  // aria-hidden, pointer-blind. These are branded cube facets, not duplicate
-  // logos: the single Nota mark remains the clear identity anchor.
+  // aria-hidden, pointer-blind. The mark is the #nota-logomark symbol's
+  // drawing, kept as a string because each die clones it six times — same
+  // the two Nota signal colours (styles.css --nota-blue-900 / --nota-blue-500).
   var DRIFT_MARK_SVG =
     '<svg viewBox="0 0 64 64" aria-hidden="true" focusable="false">' +
-    '<rect width="64" height="64" rx="12" fill="var(--nota-logo-bg)"/>' +
-    '<path d="M14 16 50 48" stroke="var(--nota-teal-bright)" stroke-width="5" stroke-linecap="round" opacity=".72"/>' +
-    '<path d="M14 48 50 16" stroke="var(--nota-teal-bright)" stroke-width="4" stroke-linecap="round" opacity=".72"/>' +
-    '<circle cx="48" cy="16" r="6" fill="var(--nota-logo-signal)" opacity=".9"/>' +
+    '<rect width="64" height="64" rx="12" fill="var(--nota-blue-900)"/>' +
+    '<g fill="#ffffff">' +
+    '<rect x="16" y="15" width="7.5" height="34" rx="2.5"/>' +
+    '<rect x="40.5" y="15" width="7.5" height="34" rx="2.5"/>' +
+    '<polygon points="16,15 24,15 48,49 40,49"/>' +
+    '</g>' +
+    '<circle cx="48" cy="16" r="8" fill="var(--nota-blue-500)" stroke="var(--nota-blue-900)" stroke-width="3"/>' +
     '</svg>';
-  // A full die — six quiet branded facets around one body; CSS folds them
-  // into a cube and tumbles the whole thing.
+  // A full die (owner: « they must look as a full dice ») — six logo faces
+  // around one body; CSS folds them into a cube and tumbles the whole thing.
   var DRIFT_DIE_HTML = (function () {
     var faces = '';
     for (var f = 0; f < 6; f++) faces += DRIFT_MARK_SVG;
@@ -12749,7 +13035,8 @@
     if (reducedMotion()) return;
     // opts lets one caller (the intro gate) run a denser, more visible field
     // than the site-wide layer without touching that layer's own tuning —
-    // defaults below reproduce the original 20-die, whisper-faint site-bg.
+    // defaults below reproduce the original intro field; the site-wide layer
+    // asks for a denser but much quieter field below.
     opts = opts || {};
     var cols = opts.cols || 5, rows = opts.rows || 4;
     var oMin = opts.oMin != null ? opts.oMin : 0.04, oRange = opts.oRange != null ? opts.oRange : 0.05;
@@ -13193,6 +13480,8 @@
   // has seen it, even without ever pressing « Passer ».
   var LS_INTRO_PLAYS = 'nota.introPlays';
   var IG_MAX_PLAYS = 2;
+  var IG_SCENE_MS = 3500;
+  var IG_FILM_MS = 14400;
   var igTimer = null;
   var igRemaining = 0, igStartedAt = 0;
   var igActiveStage = null;
@@ -13202,7 +13491,7 @@
   // Everything behind a modal layer (the intro gate, the phone drawer) is
   // inert while it is open: no tab stop, no click, nothing read. One list for
   // both, since they never open together.
-  var BACKDROP_SELECTORS = ['.site-header', '#main', '.site-footer', '#chat-wrap', '.guide-fab'];
+  var BACKDROP_SELECTORS = ['.skip', '.site-header', '#main', '.site-footer', '#chat-wrap', '.guide-fab'];
   function setBackdropInert(on) {
     BACKDROP_SELECTORS.forEach(function (sel) {
       var n = document.querySelector(sel); if (!n) return;
@@ -13228,6 +13517,12 @@
     stage.hidden = false;
     igActiveStage = stage;
     stage.classList.remove('run', 'is-paused');
+    stage.style.setProperty('--ig-seek-offset', '0ms');
+    var seek = stage.querySelector('.ig-progress-seek');
+    if (seek) {
+      seek.value = '0';
+      seek.setAttribute('aria-valuenow', '0');
+    }
     $('ig-pause').textContent = 'Pause';
     $('ig-pause').setAttribute('aria-pressed', 'false');
     void stage.offsetWidth; /* restart the CSS timeline */
@@ -13235,10 +13530,32 @@
     var tab = film === 'client' ? 'carnet' : 'notaires';
     $('ig-skip').dataset.tab = tab;
     clearTimeout(igTimer);
-    igRemaining = 14400; // matches the CSS film timeline: 4 beats x 3.5s + a short grace on the last one
+    igRemaining = IG_FILM_MS; // matches the CSS film timeline: 4 beats x 3.5s + a short grace on the last one
     igResumeTimer();
     // Focus follows the film to its direct route into the product.
     try { $('ig-skip').focus(); } catch (e) {}
+  }
+  function igSeekScene(index) {
+    if (!igActiveStage) return;
+    index = Math.max(0, Math.min(3, Number(index) || 0));
+    var stage = igActiveStage;
+    var wasPaused = stage.classList.contains('is-paused');
+    var offset = index * IG_SCENE_MS;
+    clearTimeout(igTimer);
+    stage.style.setProperty('--ig-seek-offset', offset + 'ms');
+    var seek = stage.querySelector('.ig-progress-seek');
+    if (seek) {
+      seek.value = String(index);
+      seek.setAttribute('aria-valuenow', String(index));
+    }
+    // Reflow restarts the CSS timeline with the requested scene at time zero.
+    // Keeping the paused class means a paused film stays paused after seeking.
+    stage.classList.remove('run');
+    void stage.offsetWidth;
+    stage.classList.add('run');
+    igRemaining = Math.max(500, IG_FILM_MS - offset);
+    if (wasPaused) stage.classList.add('is-paused');
+    else igResumeTimer();
   }
   function igResumeTimer() {
     igStartedAt = Date.now();
@@ -13256,7 +13573,7 @@
   function igDismiss(tab, explicit) {
     clearTimeout(igTimer);
     var gate = $('intro-gate');
-    if (!gate || gate.hidden) return;
+    if (!gate || gate.hidden || gate.classList.contains('ig-out')) return;
     if (explicit !== false) flagSet(LS_INTRO, '1');
     else {
       var plays = (parseInt(flagGet(LS_INTRO_PLAYS), 10) || 0) + 1;
@@ -13266,6 +13583,7 @@
     gate.classList.add('ig-out');
     setTimeout(function () { gate.hidden = true; gate.classList.remove('ig-out'); }, 320);
     document.body.classList.remove('ig-open');
+    document.documentElement.classList.remove('ig-open');
     setBackdropInert(false);
     if (tab) setTab(tab, { scroll: false });
     else if (gate.contains(document.activeElement)) {
@@ -13290,14 +13608,49 @@
     gate.querySelectorAll('[data-ig-goto]').forEach(function (button) {
       button.addEventListener('click', function () { igDismiss(button.dataset.igGoto, true); });
     });
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !gate.hidden) igDismiss(null, true); });
-    // The first-arrival moment earns a more visible field than the
-    // whisper-faint site-wide layer, without crowding it: 16 dice (fewer
-    // than the site-wide 20, spread wider), roughly twice as opaque, a
-    // touch bigger.
-    driftBuild(gate, 'ig-bg', undefined, { cols: 4, rows: 4, oMin: 0.07, oRange: 0.09, sMin: 24, sRange: 66 });
+    gate.querySelectorAll('.ig-progress-seek').forEach(function (input) {
+      input.addEventListener('input', function () {
+        if (input.closest('.ig-stage') === igActiveStage) igSeekScene(input.value);
+      });
+    });
+    document.addEventListener('keydown', function (e) {
+      if (gate.hidden || gate.classList.contains('ig-out')) return;
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        igDismiss(igActiveStage ? $('ig-skip').dataset.tab : null, true);
+      } else if (e.key === 'Tab') {
+        // Only the current scene and controls participate. The CSS timeline
+        // hides future/past scenes with visibility, not the hidden attribute.
+        var buttons = Array.from(gate.querySelectorAll('button:not([disabled]), .ig-progress-seek')).filter(function (button) {
+          return !button.closest('[hidden]') && getComputedStyle(button).visibility !== 'hidden' && getComputedStyle(button).display !== 'none';
+        });
+        // The seek bar lives in the stage for layout, but follows Pause in the
+        // keyboard sequence so the playback controls read as one cluster.
+        var seekControl = buttons.find(function (button) { return button.classList.contains('ig-progress-seek'); });
+        var pauseControl = buttons.find(function (button) { return button.id === 'ig-pause'; });
+        if (seekControl && pauseControl) {
+          buttons.splice(buttons.indexOf(seekControl), 1);
+          buttons.splice(buttons.indexOf(pauseControl) + 1, 0, seekControl);
+        }
+        var first = buttons[0], last = buttons[buttons.length - 1];
+        if (!first) return;
+        if (!buttons.includes(document.activeElement) || (e.shiftKey ? document.activeElement === first : document.activeElement === last)) {
+          e.preventDefault();
+          (e.shiftKey ? last : first).focus();
+        }
+      }
+    });
+    // A visible logo field gives the arrival screen the same identity as the
+    // marketplace. Six columns across three rows add three more marks than the
+    // earlier field without turning the chooser into wallpaper. Each face is
+    // the shared Nota N mark (never a placeholder X); the panel and its
+    // decisions remain the foreground.
     gate.hidden = false;
+    driftBuild(gate, 'ig-logo-field', 'mark-drift--intro', {
+      cols: 6, rows: 3, oMin: 0.038, oRange: 0.05, sMin: 30, sRange: 46
+    });
     document.body.classList.add('ig-open');
+    document.documentElement.classList.add('ig-open');
     setBackdropInert(true);
     // A modal takes focus: the first door, so a keyboard user is IN the choice.
     try { $('ig-door-client').focus(); } catch (e) {}
@@ -13324,6 +13677,7 @@
   // The counter shows only near the cap — this many characters before it.
   var CHAT_COUNT_MARGIN = 200;
   var CHAT_FAB_LABEL = 'Messagerie — posez votre question';
+  var chatMessageStarted = false;
   // ADR 0046 — l'ancienne ligne (« on vous répond en général en quelques
   // minutes ») promettait un délai que RIEN dans le code ne tient : c'est
   // l'affirmation que l'audit a marquée invérifiable, et elle a disparu. Le
@@ -13481,6 +13835,7 @@
         button.dataset.search = (topic[topicLang] + ' ' + topic.id).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
         button.addEventListener('click', function () {
           // Selecting a topic prepares a question; preserve an unfinished draft.
+          track('messagerie_sujet_choisi');
           var input = $('chat-text');
           if (!input || chatSending) return;
           if (!input.value.trim()) input.value = topic[topicLang];
@@ -13497,6 +13852,7 @@
       var b = el('button', 'sup-chip', q[lang] || q.fr);
       b.type = 'button'; b.dataset.q = q.id;
       b.addEventListener('click', function () {
+        track('messagerie_sujet_choisi');
         var ta = $('chat-text');
         if (!ta || chatSending) return;
         if (ta.value.trim()) { ta.focus(); return; }
@@ -13628,6 +13984,9 @@
       var messages = res.json.messages;
       var panel = $('chat-panel');
       var open = panel && !panel.hidden && !document.hidden;
+      if (messages.some(function (m) {
+        return (m.de === D.SUPPORT_FROM.NOTA || m.de === D.SUPPORT_FROM.ASSISTANT) && chatNewer(m.createdAt, current.seenAt);
+      })) track('messagerie_reponse_recue');
       chatRenderMessages($('chat-log'), messages, D.SUPPORT_FROM.VISITEUR);
       if (typeof res.json.escalade === 'boolean') chatEscalade(res.json.escalade);
       if (typeof res.json.escalade === 'boolean') chatSessionPatch({ escalade: res.json.escalade, humain: !!res.json.humain });
@@ -13652,6 +14011,11 @@
     if (!panel || !fab) return;
     var show = open != null ? open : panel.hidden;
     if (show && panel.hidden) chatOpener = opts.opener || document.activeElement;
+    if (show && panel.hidden) {
+      chatMessageStarted = false;
+      track('messagerie_ouverte');
+    }
+    if (!show && !panel.hidden) track('messagerie_fermee');
     panel.hidden = !show;
     fab.setAttribute('aria-expanded', show ? 'true' : 'false');
     flagSet(LS_SUPPORT_OPEN, show ? '1' : '0');
@@ -13694,9 +14058,11 @@
   function chatMailOpen(open, opts) {
     var row = $('chat-courriel-row'), btn = $('chat-courriel-open');
     if (!row || !btn) return;
+    var wasHidden = row.hidden;
     var show = open != null ? open : row.hidden;
     row.hidden = !show;
     btn.setAttribute('aria-expanded', show ? 'true' : 'false');
+    if (show && wasHidden) track('messagerie_courriel_ouvert');
     if (show && !(opts && opts.noFocus)) {
       var inp = $('chat-courriel'); if (inp) { try { inp.focus(); } catch (e) {} }
     }
@@ -13723,6 +14089,7 @@
     note.textContent = res && res.status === 200
       ? 'Courriel enregistré pour cette conversation.'
       : 'Courriel non enregistré. Réessayez avant de quitter.';
+    if (res && res.status === 200) track('messagerie_courriel_enregistre');
     if (res && res.status === 200 && inp.value.trim().toLowerCase() === courriel) chatMailEdited = false;
   }
   function chatSendingState(on) {
@@ -13748,6 +14115,10 @@
     var text = $('chat-text'), err = $('chat-error'), courrielInp = $('chat-courriel');
     var texte = (text && text.value || '').trim();
     var courriel = (courrielInp && courrielInp.value || '').trim();
+    if (texte && !chatMessageStarted) {
+      chatMessageStarted = true;
+      track('messagerie_message_commence');
+    }
     // The domain is the gate — mirror it inline before any network call.
     var v = D.validateSupportMessage({ texte: texte, courriel: courriel });
     if (err) err.hidden = true;
@@ -13803,6 +14174,7 @@
     chatSendingState(false);
     chatTyping(false);
     if (!res || res.status !== 201 || !res.json || !res.json.token || !res.json.threadId || !res.json.message) {
+      track('messagerie_echec');
       var pending = logNow && logNow.querySelector('[data-id="' + pendingId + '"]');
       if (text && !text.value.trim()) {
         text.value = v.texte; chatAutoGrow(text); chatCount();
@@ -13831,6 +14203,7 @@
       }
       return;
     }
+    track('messagerie_envoye');
     var log = $('chat-log');
     // The confirmed token replaces the temporary first-request capability.
     delete attempt.body.requestKey;
@@ -13842,6 +14215,7 @@
     // elle s'affiche sans attendre le prochain sondage, et c'est ce qui fait
     // la différence entre une messagerie vivante et une boîte à lettres.
     var r = res.json.reponse || null;
+    if (r) track('messagerie_reponse_recue');
     var dernier = (r && r.createdAt) || (m && m.createdAt) || null;
     var previousSession = chatSession();
     var sameThread = previousSession && previousSession.threadId === res.json.threadId;
@@ -14065,7 +14439,13 @@
       text.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); chatSend(); }
       });
-      text.addEventListener('input', function () { chatAutoGrow(text); chatCount(); });
+      text.addEventListener('input', function () {
+        chatAutoGrow(text); chatCount();
+        if (!chatMessageStarted && text.value.trim()) {
+          chatMessageStarted = true;
+          track('messagerie_message_commence');
+        }
+      });
     }
     var form = $('chat-form'); if (form) form.addEventListener('submit', onChatSubmit);
     var mailBtn = $('chat-courriel-open');
@@ -14091,7 +14471,12 @@
   async function boot() {
     // The ambient scene first: one fixed layer of drifting marks behind ALL
     // content, alive before the first pane paints.
-    driftBuild(document.body, 'site-bg', 'mark-drift--site');
+    // More, smaller marks make the Nota identity read as atmosphere rather
+    // than as a foreground illustration. Keep the logo faces legible only on
+    // a close look: the content remains the visual priority.
+    driftBuild(document.body, 'site-bg', 'mark-drift--site', {
+      cols: 6, rows: 4, oMin: 0.012, oRange: 0.018
+    });
     populateServiceSelects();
     buildServiceChips();
     buildBookingChips();
@@ -14109,13 +14494,13 @@
     renderCatalogueLd(); // the priced catalogue + contact, from the domain — never markup literals
     renderPartnerPane(); // rewards, type chips and the TOS amounts — domain data
     wire();
+    wireCalendarSubscriptionDetails();
     wireCarnetSubscribe();
     enhanceSelects();
     supportBoot();
 
     // Restore theme preference
     var savedTheme = lsLoad('nota.theme'); if (savedTheme) setTheme(savedTheme);
-    var savedPalette = lsLoad('nota.palette'); setPalette(savedPalette || paletteId());
 
     // Initialize offer form
     onOfferServiceChange();

@@ -29,18 +29,27 @@ for (const width of [320, 390, 768]) {
     await page.locator('#nav-burger').click();
     const drawer = page.locator('#mobile-nav');
     await expect(drawer).toBeVisible();
-    await expect(drawer.getByRole('combobox', { name: 'Colour palette', exact: true })).toBeVisible();
+    // The drawer carries the two preferences the header trims away under 900px.
+    // There is exactly ONE brand, so there is no palette chooser here (ADR 0048):
+    // a control the drawer shows must be a control the app actually wires.
+    await expect(drawer.locator('#mnav-lang')).toBeVisible();
+    await expect(drawer.locator('#mnav-theme')).toBeVisible();
+    expect(await drawer.locator('select, [role="combobox"]').count(),
+      'no orphan dropdown survives in the drawer').toBe(0);
     await expect(page.locator('#main')).toHaveAttribute('inert', '');
     await page.locator('#mnav-close').focus();
     await page.keyboard.press('Shift+Tab');
     expect(await drawer.evaluate(n => n.contains(document.activeElement))).toBe(true);
     await page.keyboard.press('Tab');
     await expect(page.locator('#mnav-close')).toBeFocused();
-    const palette = drawer.getByRole('combobox', { name: 'Colour palette', exact: true });
-    await palette.click();
-    await expect(palette).toHaveAttribute('aria-expanded', 'true');
-    await page.keyboard.press('Escape');
-    await expect(palette).toHaveAttribute('aria-expanded', 'false');
+    // Every preference control is operable from the keyboard and leaves the
+    // drawer open — only Escape closes it.
+    const themeSwitch = drawer.locator('#mnav-theme');
+    await themeSwitch.click();
+    await expect(themeSwitch).toHaveAttribute('aria-checked', 'true');
+    await expect(drawer).toBeVisible();
+    await themeSwitch.click();
+    await expect(themeSwitch).toHaveAttribute('aria-checked', 'false');
     await expect(drawer).toBeVisible();
     await page.keyboard.press('Escape');
     await expect(drawer).not.toBeVisible();

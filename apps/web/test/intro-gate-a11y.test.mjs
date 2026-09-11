@@ -58,7 +58,49 @@ async function boot({ url = 'https://nota.example/', reducedMotion = false, seed
   return { win, doc: win.document, Nota: win.Nota };
 }
 
-const BEHIND = ['.site-header', '#main', '.site-footer', '#chat-wrap'];
+const BEHIND = ['.skip', '.site-header', '#main', '.site-footer', '#chat-wrap'];
+
+test('Tab and Shift+Tab stay inside the chooser and the visible film controls', async () => {
+  const { doc, win } = await boot();
+  function tabFrom(button, shiftKey = false) {
+    button.focus();
+    const event = new win.KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true });
+    button.dispatchEvent(event);
+    assert.ok(event.defaultPrevented, 'the modal handles its focus boundary');
+    return doc.activeElement;
+  }
+  const language = doc.querySelector('#ig-chooser button');
+  assert.equal(tabFrom($(doc, 'ig-enter')), language);
+  assert.equal(tabFrom(language, true), $(doc, 'ig-enter'));
+
+  $(doc, 'ig-door-notaire').click();
+  // JSDOM does not run CSS animations: model the hidden finale at film start.
+  const next = doc.querySelector('#ig-stage-notaire [data-ig-goto]');
+  next.style.visibility = 'hidden';
+  assert.equal(tabFrom($(doc, 'ig-skip')), $(doc, 'ig-pause'));
+  assert.equal(tabFrom($(doc, 'ig-pause'), true), $(doc, 'ig-skip'));
+  next.style.visibility = 'visible';
+  assert.equal(tabFrom($(doc, 'ig-skip')), next, 'the finale joins the focus order once visible');
+});
+
+test('Escape from the notary film keeps the selected audience and restores focus', async () => {
+  const { doc, win, Nota } = await boot();
+  $(doc, 'ig-door-notaire').click();
+  doc.activeElement.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+  assert.equal(Nota.state.tab, 'notaires');
+  assert.equal(doc.activeElement, $(doc, 'pane-notaires').querySelector('h1'));
+  assert.equal(win.localStorage.getItem('nota.introSeen'), '1');
+});
+
+test('repeated completion during the fade counts once and preserves the first destination', async () => {
+  const { doc, win, Nota } = await boot();
+  $(doc, 'ig-door-notaire').click();
+  Nota.intro.dismiss('notaires', false);
+  Nota.intro.dismiss('carnet', false);
+  assert.equal(win.localStorage.getItem('nota.introPlays'), '1');
+  assert.equal(win.localStorage.getItem('nota.introSeen'), null);
+  assert.equal(Nota.state.tab, 'notaires');
+});
 
 test('P1-10: the gate is a labelled modal dialog', () => {
   const doc = new JSDOM(HTML_SRC).window.document;
@@ -74,6 +116,7 @@ test('P1-10: open, the gate takes focus and inerts everything behind it; closed,
   const gate = $(doc, 'intro-gate');
   assert.equal(gate.hidden, false, 'a fresh arrival meets the gate');
   assert.equal(doc.activeElement, $(doc, 'ig-door-client'), 'focus lands on the first door');
+  assert.ok(doc.documentElement.classList.contains('ig-open'), 'the document root is scroll-locked behind the gate');
   for (const sel of BEHIND) {
     assert.ok(doc.querySelector(sel).hasAttribute('inert'), sel + ' is inert behind the gate');
   }
@@ -107,7 +150,8 @@ for (const [film, tab] of [['client', 'carnet'], ['notaire', 'notaires']]) {
     assert.equal($(doc, 'pane-' + tab).hidden, false);
     assert.equal(win.localStorage.getItem('nota.introSeen'), '1', 'the visitor explicitly entered the product');
     assert.equal(win.localStorage.getItem('nota.introPlays'), null, 'a CTA click is not an automatic completion');
-    assert.ok(!doc.body.classList.contains('ig-open'), 'the page can scroll again');
+  assert.ok(!doc.body.classList.contains('ig-open'), 'the page can scroll again');
+  assert.ok(!doc.documentElement.classList.contains('ig-open'), 'the document root can scroll again');
     for (const sel of BEHIND) {
       assert.ok(!doc.querySelector(sel).hasAttribute('inert'), sel + ' is interactive again');
     }
@@ -157,7 +201,7 @@ test('P2-20: the drifting dice are not built under prefers-reduced-motion', asyn
   assert.equal($(rm.doc, 'ig-bg'), null);
   const live = await boot();
   assert.ok($(live.doc, 'site-bg'), 'the backdrop still greets everyone else');
-  assert.equal($(live.doc, 'site-bg').querySelectorAll(':scope > i').length, 20);
+  assert.equal($(live.doc, 'site-bg').querySelectorAll(':scope > i').length, 24);
 });
 
 test('pause freezes the film deadline; resume uses only the remaining time', async () => {

@@ -3,7 +3,9 @@
 /**
  * Is the local stack up, FRESH, and SEEDED? `npm run local:check`.
  *
- * Three separate questions, and the middle one is the reason this exists. A
+ * Five separate questions: do the surfaces answer, are the APIs FRESH, is the
+ * carnet SEEDED, and are the shareable plan and pitch deck current and
+ * branded? The freshness question is the reason this exists. A
  * container that answers 200 with two-day-old code looks exactly like a healthy
  * one — the audit found the stack in precisely that state — so this compares the
  * `x-nota-source` digest each API server stamps on its responses against the
@@ -26,6 +28,7 @@ const PORTS = {
   web: Number(process.env.NOTA_PORT_WEB || 4173),
   adminApi: Number(process.env.NOTA_PORT_ADMIN_API || 8790),
   admin: Number(process.env.NOTA_PORT_ADMIN || 4174),
+  plan: Number(process.env.NOTA_PORT_PLAN || 4175),
 };
 
 const TIMEOUT_MS = Number(process.env.NOTA_CHECK_TIMEOUT_MS || 5000);
@@ -96,6 +99,30 @@ function freshness(label, res) {
   }
 
   await probe('Site public', `http://localhost:${PORTS.web}/`, 200);
+  // The root serves the pitch deck by default. Validate the plan asset
+  // separately below so this check remains compatible with fetch clients
+  // that do not allow overriding the Host header.
+  const plan = await probe('Pitch deck / plan viewer', `http://localhost:${PORTS.plan}/`, 200);
+  if (plan) {
+    // Validate the full business plan asset separately from the default pitch
+    // deck route. The public plan intentionally omits internal release stamps.
+    let fullPlan = null;
+    try {
+      fullPlan = await fetchOnce(`http://localhost:${PORTS.plan}/business-plan.html`);
+    } catch { /* la sonde de surface ci-dessus donnera le diagnostic */ }
+    const planText = fullPlan && fullPlan.status === 200 ? fullPlan.text : '';
+    const currentPlan = /<title>Nota Business Plan<\/title>/i.test(planText) && /id="plan-en"/.test(planText) && /id="plan-fr"/.test(planText);
+    record(currentPlan, 'Plan d’affaires — document',
+      currentPlan ? 'document bilingue prêt à partager' : 'le document bilingue est incomplet');
+    record(/#386888/i.test(planText), 'Plan d’affaires — marque',
+      /#386888/i.test(planText) ? 'palette Nota actuelle' : 'couleur primaire Nota absente');
+    // Keep this probe resilient to the bilingual viewer's explicit
+    // `titlesEn`/`titlesFr` arrays while still requiring the thumbnail rail and
+    // slide navigation shell.
+    const pitchDeckHome = /Pitch deck/i.test(plan.text) && /id="thumbs"/.test(plan.text) && /const titles(?:En)? = \[/.test(plan.text) && /The notary remains the decision-maker/i.test(plan.text);
+    record(pitchDeckHome, 'Pitch deck — contenu',
+      pitchDeckHome ? '16 slides, avec la slide légale' : 'le pitch deck complet est absent');
+  }
 
   // Unauthenticated: 401 is the healthy answer, and it carries the header.
   const adminApi = await probe('API admin', `http://localhost:${PORTS.adminApi}/admin/metrics/overview`, 401);

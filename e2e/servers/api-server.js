@@ -20,9 +20,18 @@ const { createApp } = require(path.join(apiRoot, 'src', 'handler'));
 const { createBilling } = require(path.join(apiRoot, 'src', 'billing'));
 const { createMemoryRepo } = require(path.join(apiRoot, 'src', 'repo-memory'));
 const { createLocalAdminApp } = require(path.join(apiRoot, 'admin-local-server'));
+const { createOAuth } = require(path.join(apiRoot, 'src', 'oauth'));
 const domain = require('@nota/domain');
 
 const PORT = Number(process.env.PORT || 8811);
+const SITE_URL = process.env.NOTA_SITE_URL || 'http://localhost:4311';
+process.env.NOTA_OAUTH_LOCAL = 'true';
+process.env.NOTA_OAUTH_ORIGIN = SITE_URL;
+process.env.NOTA_OAUTH_ENCRYPTION_KEY ||= '11'.repeat(32);
+for (const id of ['google', 'microsoft', 'linkedin']) {
+  process.env['NOTA_OAUTH_' + id.toUpperCase() + '_CLIENT_ID'] ||= 'nota-local-' + id;
+  process.env['NOTA_OAUTH_' + id.toUpperCase() + '_CLIENT_SECRET'] ||= 'nota-local-' + id + '-secret';
+}
 // Effectively unthrottled for the test run; still a finite guard.
 const RL_MAX = Number(process.env.E2E_RL_MAX || 100000);
 
@@ -54,21 +63,39 @@ const demoBilling = createBilling({
   now: () => new Date().toISOString(),
 });
 
+const oauth = createOAuth({ repo, env: process.env, now: () => Date.now() });
+for (const id of ['google', 'microsoft', 'linkedin']) {
+  const identity = oauth.localDemoIdentity(id);
+  repo.putOAuthIdentity(identity.subject, identity);
+}
+
 const app = createApp(repo, {
-  siteUrl: process.env.NOTA_SITE_URL,
+  siteUrl: SITE_URL,
+  oauth,
   billing: demoBilling,
   billingConfigured: false,
   // Same LOCAL-date clock as the fixtures above and the web client's
   // todayISO() — otherwise every evening (UTC-4/-5) the handler's UTC default
   // is already "tomorrow" and rejects same-day bookings as date_passee.
   now: () => today,
-  // The one E2E-specific tweak: don't let the shared-IP suite hit the throttle.
+  // The one E2E-specific tweak: don't let the shared-IP suite hit a throttle.
+  // EVERY per-IP throttle the handler exposes is raised, not just the two
+  // sign-in ones: the funnel beacon (/events, 120/window in production) was
+  // the first to trip once the suite grew past ~30 specs — every spec's
+  // `visite` / `jour_ouvert` / `formulaire` beacons come from 127.0.0.1, and
+  // no-console-errors.spec.js then read the 429s as a product regression.
   notaryLoginRlMax: RL_MAX,
   partnerClaimRlMax: RL_MAX,
+  notarySignupRlMax: RL_MAX,
+  notaryVerifyRlMax: RL_MAX,
+  clientLoginRlMax: RL_MAX,
+  supportRlMax: RL_MAX,
+  chatRlMax: RL_MAX,
+  funnelRlMax: RL_MAX,
 });
 // Exercise the real local shared-store composition: admin replies must become
 // visible in the public widget without a test-only messaging implementation.
-const localAdmin = createLocalAdminApp({ repo });
+const localAdmin = createLocalAdminApp({ repo, adminRlMax: RL_MAX });
 
 const server = http.createServer(async (req, res) => {
   try {

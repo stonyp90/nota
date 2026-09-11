@@ -271,3 +271,76 @@ Then('ce courriel dit que {int} $ sont retenus en dédommagement du notaire', fu
 Given('{string} désactive le courriel {string}', async function (email, key) {
   await this.repo.putNotificationPreferences(email, { [key]: false });
 });
+
+// --- ADR 0051 — le texto, un canal de consentement exprès ---------------------
+
+When(
+  'un client nommé {string} au téléphone {string} publie une offre avec le courriel {string} pour {string} à {int} dans {int} jours en cochant le texto',
+  async function (nom, telephone, courriel, serviceId, montant, jours) {
+    const dateISO = this.domain.addDays(this.today, jours);
+    await this.request({ method: 'POST', path: '/bids', body: JSON.stringify({ serviceId, dateISO, montant, courriel, nom, telephone, smsConsent: true, anonyme: true, prefixe: 'G1R', pricing: PRICING_VALIDE[serviceId] }) });
+    assert.equal(this.response.statusCode, 201, 'la publication a échoué: ' + this.response.body);
+    const j = this.responseJson;
+    this.lastBidId = j.bid.id;
+    this.lastBid = j.bid;
+    this.clientToken = j.clientToken || null;
+  }
+);
+
+Then('le numéro {string} reçoit exactement {int} texto', function (e164, count) {
+  const texts = this.sms.sent.filter((m) => m.to === e164);
+  assert.equal(texts.length, count, `${e164} : ${texts.length} texto(s), attendu ${count}. Envois: ` + JSON.stringify(this.sms.sent));
+  this.lastText = texts[texts.length - 1] || null;
+});
+
+Then("aucun texto n'est envoyé", function () {
+  assert.equal(this.sms.sent.length, 0, 'textos envoyés: ' + JSON.stringify(this.sms.sent));
+});
+
+// « ce texto » = celui de l'étape précédente ; « ce courriel » = celui constaté
+// par « reçoit le courriel ». Le texte est celui que le DOMAINE dérive du sujet
+// envoyé et du lien de l'acte — jamais une chaîne attendue en dur.
+Then("ce texto porte le sujet de ce courriel et le lien vers l'acte", function () {
+  assert.ok(this.lastText, 'aucun texto constaté par l’étape précédente');
+  const m = lastMail(this);
+  // Le bouton du courriel (emails.js `button`) : la première ancre sur fond de
+  // marque. C'est LÀ que le texto doit mener — le même acte, le même lien.
+  const lien = (m.html.match(/bgcolor="[^"]+"[^>]*>\s*<a href="([^"]+)"/) || [])[1];
+  assert.ok(lien, 'le courriel porte un bouton vers l’acte');
+  const attendu = this.domain.smsText({ lang: 'fr', subject: m.subject, url: lien.replace(/&amp;/g, '&') });
+  assert.equal(this.lastText.text, attendu);
+  assert.ok(this.lastText.text.length <= this.domain.SMS_TEXT_MAX);
+});
+
+// --- 2026-09-11 — la cloche porte chaque événement d'affaires ----------------
+// Les avis en application se lisent là où l'API les range : sous le sujet du
+// client (le haché de l'offre) ou celui du notaire (son courriel). Le titre
+// attendu est DÉRIVÉ du catalogue du domaine, jamais retapé.
+
+const { notaryNotifSubject, clientNotifSubject } = require('../../apps/api/src/keys.js');
+
+function assertBell(world, sujet, kind, refId) {
+  return world.repo.listNotifications(sujet).then((rows) => {
+    const hits = rows.filter((r) => r.kind === kind);
+    assert.equal(hits.length, 1, `attendu 1 avis « ${kind} », obtenu ${hits.length} : ` + JSON.stringify(rows.map((r) => r.kind)));
+    const k = world.domain.NOTIF_KINDS.find((x) => x.id === kind);
+    assert.equal(hits[0].titre, k.titre, 'le titre est celui du catalogue');
+    assert.equal(hits[0].refId, refId, 'l’avis renvoie à l’offre');
+    world.lastBell = hits[0];
+  });
+}
+
+Then('la cloche du client porte un avis {string}', async function (kind) {
+  assert.ok(this.lastBidId, 'aucune offre publiée');
+  await assertBell(this, clientNotifSubject(this.lastBidId), kind, this.lastBidId);
+});
+
+Then('la cloche du notaire {string} porte un avis {string}', async function (email, kind) {
+  assert.ok(this.lastBidId, 'aucune offre publiée');
+  await assertBell(this, notaryNotifSubject(email), kind, this.lastBidId);
+});
+
+Then("cet avis mène à l'acte sur la console", function () {
+  assert.ok(this.lastBell, 'aucun avis constaté par l’étape précédente');
+  assert.equal(this.lastBell.lien, '#notaires&acte=' + this.lastBidId);
+});

@@ -179,17 +179,19 @@ test('the API writes in-app notifications and the bell reads them through two do
   assert.equal((await accept(a, notary, bid)).statusCode, 200);
   await flush();
   const clientList = () => a.handle({ method: 'GET', path: '/notifications', query: { id: bid.id }, headers: bearer(clientToken) });
-  // Retention rang the client.
+  // Publication (2026-09-11) then retention rang the client.
   let r = parse(await clientList());
-  assert.equal(r.nonLus, 1);
-  assert.equal(r.avis[0].kind, 'retenue');
-  assert.equal(r.avis[0].refId, bid.id);
-  assert.ok(r.avis[0].titre, 'the domain title rides along');
+  assert.equal(r.nonLus, 2);
+  const retenue = r.avis.find((x) => x.kind === 'retenue');
+  assert.ok(retenue, 'the retention rings');
+  assert.ok(r.avis.some((x) => x.kind === 'publiee'), 'the publication rings');
+  assert.equal(retenue.refId, bid.id);
+  assert.ok(retenue.titre, 'the domain title rides along');
   // A notary message rings the client; a client message rings the notary.
   assert.equal((await notarySend(a, notary, bid, 'Pouvez-vous m’envoyer le relevé ?')).statusCode, 200);
   await flush();
   r = parse(await clientList());
-  assert.equal(r.nonLus, 2);
+  assert.equal(r.nonLus, 3);
   assert.ok(r.avis.some((x) => x.kind === 'message' && /relevé/.test(x.corps)));
   assert.equal((await clientSend(a, clientToken, bid, 'Le voici.')).statusCode, 200);
   await flush();
@@ -201,10 +203,10 @@ test('the API writes in-app notifications and the bell reads them through two do
   // Reading clears the count, and stays cleared.
   const m = await a.handle({ method: 'POST', path: '/notifications/lues', headers: bearer(clientToken), body: JSON.stringify({ id: bid.id, ids: 'toutes' }) });
   assert.equal(m.statusCode, 200, m.body);
-  assert.equal(parse(m).marques, 2);
+  assert.equal(parse(m).marques, 3);
   r = parse(await clientList());
   assert.equal(r.nonLus, 0);
-  assert.equal(r.avis.length, 2, 'read notifications are still listed, just read');
+  assert.equal(r.avis.length, 3, 'read notifications are still listed, just read');
   // Doors are scoped: no token → 401, a client token on another offer → 403.
   assert.equal((await a.handle({ method: 'GET', path: '/notifications' })).statusCode, 401);
   assert.equal((await a.handle({ method: 'GET', path: '/notifications', query: { id: 'other' }, headers: bearer(clientToken) })).statusCode, 403);

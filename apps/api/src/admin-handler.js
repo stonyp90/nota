@@ -309,6 +309,44 @@ function createAdminApp(repo, opts = {}) {
       return json(200, data);
     }
 
+    // --- CRM first-party: persisted leads + operator workflow ---------------
+    // Counts are joined from bounded MONTH# partitions and the write-once act
+    // ledger. GA4 remains supplementary because it cannot establish a durable
+    // lead or a completed act, especially when consent is absent.
+    if (route === '/admin/crm/leads' && method === 'GET') {
+      const result = await admin.listCrmLeads(bearer(request), {
+        from: query.from,
+        to: query.to,
+        stage: query.stage,
+        source: query.source,
+        limit: query.limit,
+        ip: clientIp(request),
+      });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status || 503, { errors: result.errors });
+      }
+      const { ok, ...body } = result;
+      return json(200, body);
+    }
+
+    // contract: /admin/crm/leads/{bidId}
+    const crmLeadMatch = /^\/admin\/crm\/leads\/([^/]+)$/.exec(route);
+    if (crmLeadMatch && method === 'PUT') {
+      let payload;
+      try { payload = parseBody(request); } catch {
+        return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+      }
+      let bidId;
+      try { bidId = decodeURIComponent(crmLeadMatch[1]); } catch { bidId = ''; }
+      const result = await admin.updateCrmLead(bearer(request), bidId, payload, { ip: clientIp(request) });
+      if (!result.ok) {
+        if (result.status === 401) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+        return json(result.status || 503, { errors: result.errors });
+      }
+      return json(200, { ok: true, lead: result.lead });
+    }
+
     // --- Email templates (ADR 0018 §3) ---------------------------------------
     // GET is open to any authenticated admin (analysts see the state read-only);
     // PUT/DELETE require 'notifications:write' — enforced in admin.js, which
@@ -460,6 +498,58 @@ function createAdminApp(repo, opts = {}) {
       return json(200, admin.listPermissions());
     }
 
+    if (route === '/admin/permission-groups' && method === 'GET') {
+      const p = await admin.requireAdmin(bearer(request), { ip: clientIp(request) });
+      if (!p) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      if (!rbac.can(p.permissions, 'groups:read')) return json(403, { errors: [{ code: 'interdit', message: 'Lecture des groupes de permissions non autorisée.' }] });
+      return json(200, await admin.listPermissionGroups());
+    }
+
+    // contract: /admin/permission-groups/{id}
+    const permissionGroupMatch = route.match(/^\/admin\/permission-groups\/([^/]+)$/);
+    if (permissionGroupMatch && (method === 'PUT' || method === 'DELETE')) {
+      const p = await admin.requireAdmin(bearer(request), { ip: clientIp(request) });
+      if (!p) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      if (!rbac.can(p.permissions, 'groups:write')) return json(403, { errors: [{ code: 'interdit', message: 'Modification des groupes de permissions non autorisée.' }] });
+      const id = decodeURIComponent(permissionGroupMatch[1]);
+      let result;
+      if (method === 'PUT') {
+        let payload;
+        try { payload = parseBody(request); } catch {
+          return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+        }
+        result = await admin.putPermissionGroup(id, payload, { actor: p.email });
+      } else {
+        result = await admin.deletePermissionGroup(id, { actor: p.email });
+      }
+      if (!result.ok) return json(result.errors.some((e) => e.code === 'groupe_permissions_introuvable') ? 404 : (result.code === 'groupe_permissions_utilise' ? 409 : 422), { errors: result.errors });
+      return json(200, method === 'PUT' ? { ok: true, groupe: result.groupe } : { ok: true });
+    }
+
+    if (route === '/admin/cabinets' && method === 'GET') {
+      const result = await admin.listCabinets(bearer(request), { ip: clientIp(request) });
+      if (!result.ok) return json(result.status || 401, { errors: result.errors || [{ code: 'non_autorise', message: 'Session invalide ou accès refusé.' }] });
+      return json(200, { ok: true, cabinets: result.cabinets, plans: result.plans });
+    }
+
+    // contract: /admin/cabinets/{id}
+    const cabinetMatch = route.match(/^\/admin\/cabinets\/([^/]+)$/);
+    if (cabinetMatch && (method === 'PUT' || method === 'DELETE')) {
+      const id = decodeURIComponent(cabinetMatch[1]);
+      let result;
+      if (method === 'PUT') {
+        let payload;
+        try { payload = parseBody(request); } catch {
+          return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] });
+        }
+        result = await admin.putCabinet(bearer(request), id, payload || {}, { ip: clientIp(request) });
+      } else {
+        result = await admin.deleteCabinet(bearer(request), id, { ip: clientIp(request) });
+      }
+      if (!result.ok) return json(result.status || 422, { errors: result.errors || [{ code: 'cabinet_invalide', message: 'Cabinet invalide.' }] });
+      return json(200, method === 'PUT' ? { ok: true, cabinet: result.cabinet } : { ok: true });
+    }
+
     if (route === '/admin/groups' && method === 'GET') {
       const p = await admin.requireAdmin(bearer(request), { ip: clientIp(request) });
       if (!p) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
@@ -486,7 +576,7 @@ function createAdminApp(repo, opts = {}) {
       } else {
         result = await admin.deleteGroup(id, { actor: p.email });
       }
-      if (!result.ok) return json(result.errors.some((e) => e.code === 'groupe_introuvable') ? 404 : 422, { errors: result.errors });
+      if (!result.ok) return json(result.errors.some((e) => e.code === 'groupe_introuvable' || e.code === 'groupe_permissions_introuvable') ? 404 : 422, { errors: result.errors });
       return json(200, method === 'PUT' ? { ok: true, groupe: result.groupe } : { ok: true });
     }
 

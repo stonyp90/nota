@@ -94,7 +94,7 @@ function actsPlusOne(map, serviceId) {
 
 function createBilling({
   repo, stripe, now, timeZone,
-  onboardingReturnUrl, onboardingRefreshUrl,
+  onboardingReturnUrl, onboardingRefreshUrl, onEvent = null,
 } = {}) {
   if (!repo) throw new Error('createBilling: repo is required');
   if (!stripe) throw new Error('createBilling: stripe adapter is required');
@@ -956,8 +956,12 @@ function createBilling({
     }
 
     const { handled, notary, bid } = await applyEvent(event);
+    // Additional product ledgers (such as the notary AI subscription) run
+    // before the shared idempotency marker is written. A retry can therefore
+    // safely replay a failed entitlement update instead of losing access.
+    const extra = onEvent ? await onEvent(event) : null;
     await repo.markEventProcessed(event.id, clock());
-    return { ok: true, handled, duplicate: false, type: event.type, event, notary, bid: bid || null };
+    return { ok: true, handled: handled || !!extra?.handled, duplicate: false, type: event.type, event, notary, bid: bid || null, extra };
   }
 
   return { connectNotary, authorizeOffer, payNotaryOnAccept, completeAct, cancelAuthorization, chargeCancellationFee, handleWebhook, quoteOffer, priceAct, resolveGrilleNota, placeCaution, attendCaution };

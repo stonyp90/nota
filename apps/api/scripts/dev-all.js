@@ -9,23 +9,23 @@
  * one of them wrong gives a console that renders and silently talks to nothing,
  * which is the worst possible failure for an agent iterating alone.
  *
- * The four surfaces and their wiring are declared here, once. Both API listeners
+ * The five surfaces and their wiring are declared here, once. Both API listeners
  * share one process/repository in memory mode.
  * Every one runs under `dev-watch.js`, so an edit anywhere under the API source
  * restarts what serves it. Output is prefixed per service; Ctrl-C stops all
- * four.
+ * five.
  *
  * CE QUE CE SCRIPT NE SAIT PAS. Ses enfants sont des SUPERVISEURS, et un
  * superviseur ne meurt pas quand son serveur meurt : il annonce l'arrêt et
  * attend une modification. Donc un service qui refuse de démarrer — un port
  * déjà pris, le cas le plus fréquent quand la pile docker tourne encore — ne
  * remonte JAMAIS jusqu'ici : la bannière ci-dessous s'affiche entière et les
- * quatre adresses qu'elle donne peuvent ne rien servir. La trace EADDRINUSE
+ * cinq adresses qu'elle donne peuvent ne rien servir. La trace EADDRINUSE
  * passe bien dans la sortie préfixée, mais elle se noie. Le verdict, lui, se
- * demande : `npm run local:check` interroge les quatre surfaces.
+ * demande : `npm run local:check` interroge les cinq surfaces.
  *
  * Ports are overridable (NOTA_PORT_API, NOTA_PORT_WEB, NOTA_PORT_ADMIN_API,
- * NOTA_PORT_ADMIN). This path is IN-MEMORY: TABLE_NAME is deliberately dropped
+ * NOTA_PORT_ADMIN, NOTA_PORT_PLAN). This path is IN-MEMORY: TABLE_NAME is deliberately dropped
  * from the children's environment so the shared repository is seeded from
  * `dev-fixtures.js`. For the DynamoDB-backed stack, use `docker compose up`.
  */
@@ -48,6 +48,7 @@ const PORTS = {
   web: Number(process.env.NOTA_PORT_WEB || 4173),
   adminApi: Number(process.env.NOTA_PORT_ADMIN_API || 8790),
   admin: Number(process.env.NOTA_PORT_ADMIN || 4174),
+  plan: Number(process.env.NOTA_PORT_PLAN || 4175),
 };
 
 const watcher = path.join('apps', 'api', 'scripts', 'dev-watch.js');
@@ -60,6 +61,8 @@ const SERVICES = [
       PORT: String(PORTS.api),
       NOTA_SHARED_ADMIN_PORT: String(PORTS.adminApi),
       NOTA_ADMIN_BASE_URL: `http://localhost:${PORTS.admin}`,
+      NOTA_OAUTH_LOCAL: 'true',
+      NOTA_OAUTH_ORIGIN: `http://localhost:${PORTS.web}`,
     },
   },
   {
@@ -74,6 +77,12 @@ const SERVICES = [
     entry: path.join('apps', 'admin', 'run-local.mjs'),
     env: { PORT: String(PORTS.admin), NOTA_ADMIN_API: `http://localhost:${PORTS.adminApi}` },
     watch: 'apps/admin/run-local.mjs,apps/admin/dev-server.mjs',
+  },
+  {
+    name: 'plan',
+    entry: path.join('docs', 'planning', 'serve-business-plan.mjs'),
+    env: { PORT: String(PORTS.plan) },
+    watch: 'docs/pitch-deck.html,docs/pitch-deck,docs/business-plan.html,docs/plan-affaires-sommaire.md,docs/planning/business-plan-model.json,docs/planning/business-plan-review-2026-09-09.md,docs/planning/serve-business-plan.mjs',
   },
 ];
 
@@ -133,12 +142,13 @@ console.log(
     `  API publique    http://localhost:${PORTS.api}`,
     `  console admin   http://localhost:${PORTS.admin}`,
     `  API admin       http://localhost:${PORTS.adminApi}`,
+    `  plan d'affaires  http://localhost:${PORTS.plan}`,
     '',
     "  Connexion admin : demander un lien pour admin@nota.local — hors production",
     "  la réponse renvoie le lien magique (devLink) et la page l'affiche.",
     '  Ces adresses sont celles qui ONT ÉTÉ DEMANDÉES, pas un constat : un port',
     '  déjà pris tue le service sans que ce script le sache. Le constat se prend',
-    '  avec « npm run local:check », qui interroge les quatre surfaces.',
+    '  avec « npm run local:check », qui interroge les cinq surfaces.',
     '',
   ].join('\n'),
 );

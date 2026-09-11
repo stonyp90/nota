@@ -1,0 +1,3 @@
+The 32 PNGs here (`dark-slide-{1..16}.png` English, `dark-slide-fr-{1..16}.png` French, 1600×900 at 144 dpi) are the slides that `docs/pitch-deck.html` shows; they are drawn from the ADR 0048 dark-canvas tokens and the ADR 0050 type (Sora 800 titles, Inter body).
+Regenerate them with `python3 docs/pitch-deck/render-slides.py` — it needs ImageMagick (`magick`) plus the Sora and Inter families installed locally (fontconfig), and refuses to run when a face is missing because ImageMagick would silently substitute a generic sans.
+The `.pptx` files under `docs/` are NOT the source of these slides: `render-slides.py` is, and the palette lives in its constants.

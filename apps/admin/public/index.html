@@ -12,7 +12,7 @@
     <title>Nota · Admin</title>
     <!-- Private console: never index or follow. -->
     <meta name="robots" content="noindex,nofollow" />
-    <meta name="theme-color" content="#101B26" />
+    <meta name="theme-color" content="#386888" />
     <meta name="color-scheme" content="light dark" />
 
     <!-- API base override for local dev. Empty/absent → same-origin "/api/admin"
@@ -28,6 +28,9 @@
     <meta name="nota-timezone" content="America/Toronto" />
 
     <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@700;800&display=swap" />
     <link rel="stylesheet" href="admin.css" />
   </head>
   <body>
@@ -35,10 +38,9 @@
 
     <header class="admin-header">
       <a class="admin-brand" href="#/" aria-label="Nota Admin, accueil">
-        <span class="admin-brand-mark" aria-hidden="true">
-          <img src="favicon.svg" width="26" height="26" alt="" />
+        <span class="admin-brand-lockup" aria-hidden="true" data-i18n-skip>
+          <span class="admin-brand-mark"><img src="favicon.svg" alt="" /></span><span class="admin-brand-word"><svg class="admin-brand-word-svg" viewBox="0 0 92 42" aria-hidden="true" focusable="false"><g fill="none" stroke="currentColor" stroke-width="5.2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 6H10a7.5 7.5 0 0 0-7.5 7.5v8A7.5 7.5 0 0 0 10 29h6.5a7.5 7.5 0 0 0 7.5-7.5v-8A7.5 7.5 0 0 0 16.5 6Z"/><path d="M30 6.5h23q2 0 2 2t-2 2h-9v18.5"/><path d="M60.5 29 70.2 7.2Q71 5.5 72 5.5t1.8 1.7L83.5 29M65 20.5h13.5"/><path d="M0.5 36.5h86" stroke-width="1.8"/></g></svg><span class="visually-hidden">OTA</span></span>
         </span>
-        <span class="admin-brand-word">Nota</span>
         <span class="admin-brand-sub">Admin</span>
       </a>
       <span class="admin-spacer"></span>
@@ -52,11 +54,11 @@
         <button type="button" class="btn btn-sm btn-ghost" id="admin-logout">Se déconnecter</button>
       </div>
 
-      <!-- Language control: both choices stay visible so the current language
-           is legible without guessing. Wired and labelled by i18n.js. -->
-      <div class="mini-seg lang-btn" id="admin-lang-toggle" role="group" aria-label="Langue" data-lang-seg data-i18n-skip>
-        <button type="button" class="mini-seg-btn" data-set-lang="fr" lang="fr-CA">FR</button>
-        <button type="button" class="mini-seg-btn" data-set-lang="en" lang="en-CA">EN</button>
+      <!-- Language toggle: shows the OTHER language. Wired and labelled by
+           i18n.js; data-i18n-skip keeps the translator's walker away. -->
+      <div class="lang-btn" id="admin-lang-toggle" data-lang-toggle="short" data-i18n-skip role="group" aria-label="Langue">
+        <button type="button" class="lang-choice" data-set-lang="fr" lang="fr-CA" aria-pressed="false">FR</button>
+        <button type="button" class="lang-choice" data-set-lang="en" lang="en-CA" aria-pressed="false">EN</button>
       </div>
       <button type="button" class="icon-btn" id="admin-theme-toggle" title="Thème clair / sombre" aria-label="Changer de thème">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>

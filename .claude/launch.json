@@ -43,6 +43,14 @@
       "port": 8790
     },
     {
+      "name": "nota-docs",
+      "runtimeExecutable": "node",
+      "runtimeArgs": [
+        "e2e/servers/docs-server.js"
+      ],
+      "port": 4313
+    },
+    {
       "name": "nota-admin",
       "runtimeExecutable": "npm",
       "runtimeArgs": [

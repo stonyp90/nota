@@ -7,6 +7,21 @@ output "cloudfront_domain_name" {
   value       = aws_cloudfront_distribution.web.domain_name
 }
 
+output "plan_domain" {
+  description = "Shareable business-plan hostname when configured, otherwise the empty value. DNS delegation for plan.gonata.ca must point at the selected Route 53 zone."
+  value       = var.plan_domain_name
+}
+
+output "pitch_domain" {
+  description = "Shareable pitch-deck hostname when configured, otherwise the empty value."
+  value       = var.pitch_domain_name
+}
+
+output "brand_domain" {
+  description = "Shareable Nota brand-kit hostname when configured, otherwise the empty value."
+  value       = var.brand_domain_name
+}
+
 output "web_bucket_name" {
   description = "Name of the private S3 bucket holding the web assets."
   value       = aws_s3_bucket.web.bucket

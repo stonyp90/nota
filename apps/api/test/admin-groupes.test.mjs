@@ -165,6 +165,17 @@ test('un groupe ne peut pas porter une permission inconnue', async () => {
   assert.ok(parse(res).errors.some((e) => e.code === 'permission_inconnue'), res.body);
 });
 
+test('un groupe ne peut pas attacher un groupe de permissions inexistant', async () => {
+  const h = make();
+  const s = await login(h);
+  const res = await h.call('PUT', '/admin/groups/invalide', {
+    bearer: s,
+    body: { nom: 'Invalide', groupesPermissions: ['absent'] },
+  });
+  assert.equal(res.statusCode, 404, res.body);
+  assert.ok(parse(res).errors.some((e) => e.code === 'groupe_permissions_introuvable'), res.body);
+});
+
 test('un compte sans « groups:write » ne peut pas toucher aux groupes', async () => {
   const h = make();
   const nu = await loginNu(h);
@@ -274,4 +285,48 @@ test('chaque changement de groupe ou d’accès est journalisé avec avant et ap
   assert.equal(acces.meta.avant, null, 'aucun accès avant');
   assert.deepEqual(acces.meta.apres.groupes, ['soutien'], 'et le groupe après');
   assert.equal(acces.email, 'ops@nota.ca', 'qui a décidé');
+});
+
+test('un groupe de permissions est indépendant et peut être attaché à plusieurs groupes d’usagers', async () => {
+  const h = make();
+  const s = await login(h);
+  const pg = await h.call('PUT', '/admin/permission-groups/dossiers-lecture', {
+    bearer: s, body: { nom: 'Lecture des dossiers', permissions: ['subjects:read', 'audit:read'] },
+  });
+  assert.equal(pg.statusCode, 200, pg.body);
+  await h.call('PUT', '/admin/groups/support', { bearer: s, body: { nom: 'Soutien', groupesPermissions: ['dossiers-lecture'] } });
+  await h.call('PUT', '/admin/groups/controle', { bearer: s, body: { nom: 'Contrôle', groupesPermissions: ['dossiers-lecture'] } });
+  const listed = parse(await h.call('GET', '/admin/permission-groups', { bearer: s }));
+  assert.deepEqual(listed.groupes[0].permissions.sort(), ['audit:read', 'subjects:read']);
+  await h.call('PUT', '/admin/users/support@nota.ca', { bearer: s, body: { groupes: ['support'] } });
+  const meSupport = parse(await h.call('GET', '/admin/me', { bearer: await login(h, 'support@nota.ca') }));
+  assert.ok(meSupport.permissions.includes('subjects:read'));
+  const used = await h.call('DELETE', '/admin/permission-groups/dossiers-lecture', { bearer: s });
+  assert.equal(used.statusCode, 409, used.body);
+  assert.ok(parse(used).errors.some((e) => e.code === 'groupe_permissions_utilise'));
+  await h.call('PUT', '/admin/groups/support', { bearer: s, body: { nom: 'Soutien', groupesPermissions: [] } });
+  await h.call('PUT', '/admin/groups/controle', { bearer: s, body: { nom: 'Contrôle', groupesPermissions: [] } });
+  assert.equal((await h.call('DELETE', '/admin/permission-groups/dossiers-lecture', { bearer: s })).statusCode, 200);
+});
+
+test('un cabinet porte un forfait, un prix négocié et plusieurs notaires, sans devenir un groupe RBAC', async () => {
+  const h = make();
+  await h.repo.putNotary({ id: 'n1', email: 'n1@nota.ca', status: 'active', etude: 'Étude Nord' });
+  await h.repo.putNotary({ id: 'n2', email: 'n2@nota.ca', status: 'active', etude: 'Étude Nord' });
+  const s = await login(h);
+  const saved = await h.call('PUT', '/admin/cabinets/etude-nord', {
+    bearer: s,
+    body: { nom: 'Étude du Nord', planId: 'cabinet', statut: 'actif', prixMensuelCents: 19900, siegesInclus: 12, notaires: ['n1', 'n2'] },
+  });
+  assert.equal(saved.statusCode, 200, saved.body);
+  assert.equal(parse(saved).cabinet.planId, 'cabinet');
+  assert.equal(parse(saved).cabinet.prixMensuelCents, 19900);
+  assert.equal(parse(saved).cabinet.membres.length, 2);
+  const listed = parse(await h.call('GET', '/admin/cabinets', { bearer: s }));
+  assert.equal(listed.cabinets[0].membres[0].email, 'n1@nota.ca');
+  const bad = await h.call('PUT', '/admin/cabinets/solo', { bearer: s, body: { nom: 'Solo', planId: 'independant', notaires: ['n1', 'n2'] } });
+  assert.equal(bad.statusCode, 422, bad.body);
+  assert.ok(parse(bad).errors.some((e) => e.code === 'forfait_sans_equipe'));
+  const conflict = await h.call('PUT', '/admin/cabinets/autre', { bearer: s, body: { nom: 'Autre', planId: 'cabinet', notaires: ['n1'] } });
+  assert.equal(conflict.statusCode, 409, conflict.body);
 });

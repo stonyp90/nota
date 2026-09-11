@@ -230,6 +230,15 @@ test('aucun service node ne tourne en « node » nu : tout passe par le supervis
   }
 });
 
+test('le compose sert le plan d’affaires avec les preuves liées', () => {
+  const plan = compose.services.plan;
+  assert.ok(plan, 'le compose doit porter un service plan');
+  assert.match(JSON.stringify(plan.command || ''), /serve-business-plan\.mjs/);
+  assert.match(JSON.stringify(plan.environment || {}), /business-plan\.html/);
+  assert.match(JSON.stringify(plan.environment || {}), /pitch-deck\.html/);
+  assert.ok((plan.ports || []).some((p) => String(p) === '4175:4175'));
+});
+
 test('la base locale PERSISTE : plus de -inMemory, un volume nommé', () => {
   const ddb = compose.services['dynamodb-local'];
   assert.doesNotMatch(String(ddb.command), /-inMemory/, 'tout disparaissait au redémarrage');

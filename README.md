@@ -303,7 +303,7 @@ npm install          # install all workspaces
 npm test             # domain + api unit tests
 ```
 
-Then **one command** brings up all four surfaces, seeded, with no AWS and no
+Then **one command** brings up all five surfaces, seeded, with no AWS and no
 Docker:
 
 ```bash
@@ -316,12 +316,13 @@ npm run local
 | API publique | http://localhost:8788 |
 | **Console admin** | http://localhost:4174 |
 | API admin | http://localhost:8790 |
+| **Business plan** | http://localhost:4175 |
 
 Everything is in memory and seeded from `apps/api/scripts/dev-fixtures.js` — 34
 offers, two confirmed referral codes, four demo notaries and a 28-day analytics
 history — so every surface renders on real data from the first request. Ctrl-C
-stops all four. Ports are overridable (`NOTA_PORT_API`, `NOTA_PORT_WEB`,
-`NOTA_PORT_ADMIN_API`, `NOTA_PORT_ADMIN`); the individual servers are still
+stops all five. Ports are overridable (`NOTA_PORT_API`, `NOTA_PORT_WEB`,
+`NOTA_PORT_ADMIN_API`, `NOTA_PORT_ADMIN`, `NOTA_PORT_PLAN`); the individual servers are still
 there (`npm run dev`, `api:local`, `dev:admin`, `admin:local`) when you want one
 of them alone.
 
@@ -342,10 +343,11 @@ curl -s -X POST http://localhost:4174/api/admin/auth/request \
 npm run local:check
 ```
 
-asks three separate questions: does each of the four surfaces answer, are the
-**two APIs** serving the source tree in front of you, and is the carnet the
-public API returns **not empty**. Only the APIs carry the freshness header, so a
-stale static server is not caught — see "Freshness" below.
+asks four separate questions: do all five surfaces answer, are the **two APIs**
+serving the source tree in front of you, is the carnet the public API returns
+**not empty**, and is the plan the current branded version. Only the APIs carry
+the freshness header, so a stale web/admin static server is not caught — see
+"Freshness" below.
 
 `npm run local` itself is not a verdict: its children are supervisors, and a
 supervisor outlives the server it supervises, so a service that never binds its
@@ -369,8 +371,21 @@ tables, **seeds them**, brings up **MinIO** (:9100, console :9101) as the
 S3-compatible document store behind the storage port (ADR 0032), runs the API
 against them (:8788), serves the web app (:4173), and brings up the admin
 surface too — the admin API (:8790) and the admin console (:4174), mirroring
-production's two-table, two-Lambda split. Both stores write to named volumes, so
+production's two-table, two-Lambda split. The pitch deck is served at
+`http://localhost:4175/`; the full interactive business plan remains at
+`/business-plan.html`, with its French summary and generated planning evidence.
+Both stores write to named volumes, so
 a restart is a restart and not a wipe.
+
+To exercise the share hostnames locally, add `127.0.0.1 plan.gonata.ca
+pitch.gonota.ca` to your hosts file, then open `http://pitch.gonota.ca:4175/`
+for the pitch deck or `http://plan.gonata.ca:4175/` for the business plan.
+The local server selects the document from the Host header, matching the
+CloudFront rewrite used in production. The production hosts are
+`https://pitch.gonota.ca/` and
+`https://plan.gonata.ca/` once their Terraform settings are applied and the
+corresponding DNS zones are delegated. The active public site zone is
+currently `gonota.ca`.
 
 To exercise the **support assistant** (ADR 0046) locally, export a key before
 bringing the stack up — never write it into `docker-compose.yml`, which is
@@ -457,10 +472,24 @@ invalidate the CloudFront cache:
 
 ```bash
 npm run build --workspace @nota/web
+cp docs/business-plan.html apps/web/dist/business-plan.html
+cp docs/pitch-deck.html apps/web/dist/pitch-deck.html
+cp -R docs/pitch-deck apps/web/dist/pitch-deck
+cp docs/plan-affaires-sommaire.md apps/web/dist/plan-affaires-sommaire.md
+mkdir -p apps/web/dist/planning
+cp docs/planning/business-plan-model.json docs/planning/business-plan-review-2026-09-09.md apps/web/dist/planning/
 aws s3 sync apps/web/dist "s3://$(terraform -chdir=infra output -raw web_bucket_name)" --delete
 aws cloudfront create-invalidation \
   --distribution-id <distribution-id> --paths '/*'
 ```
+
+The GitHub `Deploy` workflow performs the same plan and pitch deck copy automatically. Set its
+optional `PLAN_URL` repository variable to `https://plan.gonata.ca` and
+`PITCH_URL` to `https://pitch.gonota.ca` once DNS and ACM are live. The
+post-deploy smoke tests then verify both share pages and the current brand
+color. Feature-branch CI also assembles and retains the same
+bundle as a `nota-business-plan-<commit>` artifact, so every branch validates
+the complete plan before merge.
 
 The Lambda function URL is **AuthType `AWS_IAM`** and is invoked only via
 CloudFront's Origin Access Control (SigV4) — never public. See

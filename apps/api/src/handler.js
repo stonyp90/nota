@@ -194,7 +194,13 @@ function createApp(repo, opts = {}) {
   }
   async function notifyNotary(bid, kind, corps) {
     if (!bid || !bid.notaryId) return;
-    const p = await repo.getNotary(bid.notaryId);
+    await notifyNotaryById(bid.notaryId, bid, kind, corps);
+  }
+  // The same row for a notary who is NOT (yet) the retaining one — the author
+  // of a proposition the client just answered (2026-09-11).
+  async function notifyNotaryById(notaryId, bid, kind, corps) {
+    if (!notaryId || !bid || !bid.id) return;
+    const p = await repo.getNotary(notaryId);
     if (!p || !p.email) return;
     await notifIn(notaryNotifSubject(p.email), {
       audience: 'notaire', kind, corps: corps || null, refId: bid.id, lien: '#notaires&acte=' + bid.id,
@@ -258,6 +264,7 @@ function createApp(repo, opts = {}) {
       timeZone: TIME_ZONE,
       onboardingReturnUrl: process.env.NOTA_ONBOARDING_RETURN_URL,
       onboardingRefreshUrl: process.env.NOTA_ONBOARDING_REFRESH_URL,
+      onEvent: event => aiBilling() ? aiBilling().applyEvent(event) : null,
       // ADR 0031 / 0034 — plus aucun taux à passer. La facturation ne connaît
       // qu'une GRILLE, résolue par `prix-nota-config.resolveGrille` : celle
       // stockée par l'opérateur, sinon celle du déploiement (`NOTA_PRIX_GRILLE`
@@ -297,6 +304,21 @@ function createApp(repo, opts = {}) {
   // n'avait aucun retour, et `handleCheckoutReturn()` ne s'exécutait jamais.
   const env = opts.env || process.env;
   const siteUrl = opts.siteUrl || env.NOTA_SITE_URL || env.NOTA_BASE_URL || '';
+  // The AI assistant has its own entitlement ledger. It never changes the
+  // free marketplace or Connect payout access.
+  const { createNotaryAIAccess, createNotaryAIBilling } = require('./ai-access');
+  const aiAccess = opts.aiAccess || createNotaryAIAccess({ repo, env, nowMs });
+  let aiBillingInstance = opts.aiBilling || null;
+  const aiBillingAvailable = !!opts.aiBilling || !!env.STRIPE_SECRET_KEY;
+  function aiBilling() {
+    if (aiBillingInstance) return aiBillingInstance;
+    if (!aiBillingAvailable) return null;
+    const { createStripeAdapter } = require('./stripe-port');
+    const stripe = createStripeAdapter({ secretKey: env.STRIPE_SECRET_KEY,
+      webhookSecret: env.STRIPE_WEBHOOK_SECRET, connectWebhookSecret: env.STRIPE_CONNECT_WEBHOOK_SECRET });
+    aiBillingInstance = createNotaryAIBilling({ stripe, access: aiAccess, env, siteUrl });
+    return aiBillingInstance;
+  }
   // --- Free notary signup + funnel beacon throttles (2026-09-02) -------------
   // The signup door shares the sign-in request's window and ceiling (it is the
   // same kind of door: public, unauthenticated, one mail per call). The funnel
@@ -376,6 +398,13 @@ function createApp(repo, opts = {}) {
     const { createSesAdapter } = require('./notify-port');
     const { createNotifier } = require('./notifications');
     const mailer = createSesAdapter({ from: process.env.NOTA_FROM_EMAIL, region: process.env.AWS_REGION });
+    // ADR 0051 — the SMS leg, opt-in by deployment (infra/sms.tf sets
+    // NOTA_SMS_ENABLED with the sns:Publish grant and the spend ceiling).
+    // Absent, the notifier texts nobody; present, it texts only recorded
+    // express consent (repo.getSmsConsent), and only the flagged templates.
+    const sms = process.env.NOTA_SMS_ENABLED === 'true'
+      ? require('./sms-port').createSnsSmsAdapter({ region: process.env.AWS_REGION, senderId: process.env.NOTA_SMS_SENDER_ID })
+      : null;
     // ADR 0033 §2.7 — the client's signed, device-independent link to THEIR
     // act, good for 30 days: the CTA of every client act mail. Minted here
     // because the handler holds the signing secret and the public origin.
@@ -383,6 +412,7 @@ function createApp(repo, opts = {}) {
     notifierInstance = createNotifier({
       repo,
       mailer,
+      sms,
       baseUrl: process.env.NOTA_BASE_URL,
       // Où vit réellement l'API vue de l'extérieur. Par défaut `<base>/api`,
       // le chemin que CloudFront route vers la Lambda ; surchargeable pour un
@@ -1686,6 +1716,7 @@ function createApp(repo, opts = {}) {
     audit: (action, meta, owner) => appendAudit(action, meta, acteur(ACTEUR.NOTAIRE, owner)),
     canAccessWorkPacket: opts.canAccessWorkPacket || notaPaidForBid,
     learning: notaryLearning,
+    aiAccess,
   });
   const actAIRoutes = require('./act-ai-routes').createActAIRoutes({
     repo, env, nowMs, newId, json, parseBody, port: opts.actAIPort,
@@ -1694,6 +1725,7 @@ function createApp(repo, opts = {}) {
     audit: (action, meta, owner) => appendAudit(action, meta, acteur(ACTEUR.NOTAIRE, owner)),
     canAccessWorkPacket: opts.canAccessWorkPacket || notaPaidForBid,
     learning: notaryLearning,
+    aiAccess,
   });
   const oauth = opts.oauth || require('./oauth').createOAuth({ repo, env, now: nowMs });
   const oauthRoutes = require('./oauth-routes').createOAuthRoutes({
@@ -1733,6 +1765,69 @@ function createApp(repo, opts = {}) {
     }
 
     if (route.startsWith('/signing-beta/')) return signingRoutes(request, route, method, query);
+    // AI preparation is an opt-in product. The normal dossier remains
+    // available to every notary; only these endpoints expose beta/subscription
+    // state or create a paid entitlement.
+    if (route === '/notary/ai-access' && method === 'GET') {
+      const notaryId = requireScope(bearer(request), SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      const access = await aiAccess.get(notaryId);
+      if (!access) return json(404, { errors: [{ code: 'introuvable' }] });
+      return json(200, { ...access, plans: aiAccess.plans(), maxPieceQuantity: aiAccess.maxPieceQuantity });
+    }
+    if (route === '/notary/ai-beta/enroll' && method === 'POST') {
+      const notaryId = requireScope(bearer(request), SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      const result = await aiAccess.enroll(notaryId);
+      if (!result.ok) return json(result.code === 'notaire_introuvable' ? 404 : 409, { errors: [{ code: result.code }] });
+      return json(200, { ok: true, access: result.access });
+    }
+    if (route === '/notary/ai/checkout' && method === 'POST') {
+      const notaryId = requireScope(bearer(request), SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      if (!aiBillingAvailable) return json(503, { errors: [{ code: 'paiement_indisponible', message: 'Le paiement IA est momentanément indisponible.' }] });
+      let payload;
+      try { payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {}; }
+      catch { return json(400, { errors: [{ code: 'json_invalide' }] }); }
+      const notary = await repo.getNotary(notaryId);
+      if (!notary || !domain.isEmail(notary.email)) return json(422, { errors: [{ code: 'courriel_invalide' }] });
+      const kind = payload.kind === 'usage' ? 'usage' : 'subscription';
+      const planId = String(payload.planId || '');
+      const requestId = typeof payload.requestId === 'string' && /^[a-zA-Z0-9_-]{8,100}$/.test(payload.requestId)
+        ? payload.requestId : null;
+      const language = require('./language').requestLanguage(request) || 'fr-CA';
+      try {
+        const result = kind === 'usage'
+          ? await aiBilling().usage({ notaryId, email: notary.email, planId, quantity: payload.quantity, language, requestId })
+          : await aiBilling().subscription({ notaryId, email: notary.email, planId, language });
+        if (!result.ok) return json(422, { errors: [{ code: result.code, message: result.code === 'prix_non_configure' ? 'Cette formule n’est pas encore ouverte à la vente.' : result.code === 'abonnement_deja_actif' ? 'Un abonnement IA est déjà actif pour ce compte.' : 'La requête de paiement est invalide.' }] });
+        return json(200, { ok: true, url: result.url, sessionId: result.sessionId });
+      } catch { return json(503, { errors: [{ code: 'paiement_indisponible', message: 'Le paiement IA est momentanément indisponible.' }] }); }
+    }
+    if (route === '/notary/ai-feedback' && method === 'POST') {
+      const notaryId = requireScope(bearer(request), SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      const parsed = parseBody(request);
+      if (parsed.error) return parsed.error;
+      const payload = parsed.payload;
+      if (!payload || typeof payload.id !== 'string' || !domain.isISODate(payload.dateISO)) {
+        return json(422, { errors: [{ code: 'requete_invalide' }] });
+      }
+      const bid = await repo.get(payload.id, payload.dateISO, { consistentRead: true });
+      if (!bid) return json(404, { errors: [{ code: 'introuvable' }] });
+      if (bid.notaryId !== notaryId) return json(403, { errors: [{ code: 'interdit' }] });
+      if (bid.status !== domain.STATUS.RETENUE || bid.efface) return json(409, { errors: [{ code: 'dossier_indisponible' }] });
+      const analysis = ['financement', 'refinancement'].includes(bid.serviceId) ? bid.financingAnalysis : bid.actAnalysis;
+      const checked = domain.validateNotaryAIUncertaintyResponse(bid.serviceId, analysis?.preparation, payload);
+      if (!checked.ok) return json(422, { errors: checked.errors });
+      const eventId = 'question-' + require('node:crypto').createHash('sha256')
+        .update(JSON.stringify([notaryId, payload.id, payload.dateISO, analysis?.id, checked.value.questionId, checked.value.decision]))
+        .digest('hex').slice(0, 48);
+      const event = await notaryLearning.uncertaintyFeedback({
+        bid, analysis, feedback: checked.value, owner: notaryId, eventId,
+      });
+      return json(200, { ok: true, feedback: checked.value, recorded: !!event });
+    }
     if (route === '/notary/financing/preparation' || route === '/notary/financing/review') {
       return financingAIRoutes(request, route, method, query);
     }
@@ -1859,6 +1954,15 @@ function createApp(repo, opts = {}) {
       const telV = domain.validateTelephone(payload.telephone);
       if (!telV.ok) errors.push(telV.error);
       const telephone = telV.value;
+      // ADR 0051 — le texto est un canal de consentement EXPRÈS : la case
+      // cochée voyage comme `smsConsent` (booléen strict, jamais déduit), et
+      // consentir sans numéro composable n'a pas de sens — 422, pas un silence.
+      const smsV = domain.validateSmsConsent(payload.smsConsent);
+      if (!smsV.ok) errors.push(smsV.error);
+      const smsConsent = smsV.ok ? smsV.value : false;
+      if (smsV.ok && smsConsent && !domain.toE164(telephone)) {
+        errors.push({ code: 'telephone_requis_sms', message: 'Pour recevoir des textos, indiquez un numéro de téléphone mobile valide.' });
+      }
       if (errors.length) return json(422, { errors });
 
       // Referral attribution (ADR 0011): a partner's code rides along on the
@@ -2023,11 +2127,28 @@ function createApp(repo, opts = {}) {
       await recordStats(statsDeltasForOffer(bid));
       await recordStats(statsDeltasForFunnel('publie', now(), analyticsContext(request, payload.analytics))); // authoritative publication, with bounded arrival context
 
+      // ADR 0051 — le consentement au texto, écrit AVANT le premier courriel
+      // pour que la jambe texto du notifieur le trouve. Clé = courriel, comme
+      // toute préférence ; le registre n'est touché que si l'offre s'est
+      // prononcée (`smsConsent` présent) : « faux » est un retrait exprès,
+      // « absent » ne retire rien. Jamais un attribut de l'offre, jamais dans
+      // une projection. Best-effort, comme l'index et les statistiques.
+      if (bid.courriel && payload.smsConsent !== undefined && payload.smsConsent !== null && typeof repo.putSmsConsent === 'function') {
+        try {
+          await repo.putSmsConsent(bid.courriel, { telephone: bid.telephone, consent: smsConsent, at: now() });
+        } catch {
+          /* best-effort */
+        }
+      }
+
       // Await delivery before Lambda can freeze. A failed notification never
       // rejects a persisted lead; the scheduled pass retries idempotently.
       await rememberLanguage(bid.courriel, request);
       const n = notifier();
       if (n) { try { await n.onOfferCreated(bid); } catch { /* scheduled recovery */ } }
+      // The bell's first row (2026-09-11): the publication itself. Language-
+      // neutral body — the interface owns the words.
+      await notifyClient(bid, 'publiee', domain.money(bid.montant) + ' · ' + bid.dateISO);
 
       // The client's per-bid key (no account): scope CLIENT, sub = bid id. It is
       // returned ONCE here and never echoed by any other route.
@@ -2875,6 +2996,13 @@ function createApp(repo, opts = {}) {
           })
         ).catch(() => {});
       }
+      // The bell (2026-09-11), both sides, at the FIRST settlement only — a
+      // duplicate submit settles idempotently and must ring nothing new.
+      if (!result.alreadyCompleted && !result.alreadyPaid) {
+        const ligne = domain.money(payload.actAmount) + ' · ' + bid.dateISO;
+        await notifyClient(bid, 'acte', ligne);
+        await notifyNotary(bid, 'acte', ligne);
+      }
       const settledLedger = typeof repo.getActCompletion === 'function'
         ? await repo.getActCompletion(payload.bidId) : null;
       const notaPaid = notaPaymentRecorded(settledLedger);
@@ -2990,13 +3118,28 @@ function createApp(repo, opts = {}) {
         let payload;
         try { payload = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {}; } catch { return json(400, { error: 'json_invalide' }); }
         if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return json(422, { error: 'preferences_invalides' });
-        if ((payload.preferences === undefined && payload.emailLanguage === undefined) ||
+        // ADR 0051 — `smsConsent` : le retrait (ou le retour) du texto depuis
+        // l'écran des préférences, sur le numéro DÉJÀ enregistré. Booléen
+        // strict ; consentir sans numéro connu → 422 telephone_requis_sms.
+        const smsV = domain.validateSmsConsent(payload.smsConsent);
+        if ((payload.preferences === undefined && payload.emailLanguage === undefined && payload.smsConsent === undefined) ||
             (payload.preferences !== undefined && !preferences.validate(payload.preferences)) ||
-            (payload.emailLanguage !== undefined && !['fr', 'en'].includes(payload.emailLanguage))) return json(422, { error: 'preferences_invalides' });
+            (payload.emailLanguage !== undefined && !['fr', 'en'].includes(payload.emailLanguage)) ||
+            !smsV.ok) return json(422, { error: 'preferences_invalides' });
+        if (payload.smsConsent !== undefined && payload.smsConsent !== null) {
+          const stored = typeof repo.getSmsConsent === 'function' ? await repo.getSmsConsent(email) : null;
+          const telephone = (stored && stored.telephone) || null;
+          if (smsV.value && !domain.toE164(telephone)) return json(422, { error: 'telephone_requis_sms' });
+          await repo.putSmsConsent(email, { telephone, consent: smsV.value, at: new Date(nowMs()).toISOString() });
+        }
         if (payload.preferences !== undefined) await repo.putNotificationPreferences(email, payload.preferences);
         if (payload.emailLanguage !== undefined) await repo.putEmailLanguage(email, payload.emailLanguage);
       }
-      return json(200, { catalog: preferences.catalog(), preferences: await repo.getNotificationPreferences(email), emailLanguage: await repo.getEmailLanguage(email) });
+      // Le numéro ne sort jamais en clair : quatre chiffres, assez pour
+      // reconnaître SON téléphone (domain.maskTelephone).
+      const smsConsent = typeof repo.getSmsConsent === 'function' ? await repo.getSmsConsent(email) : null;
+      const smsView = { consent: !!(smsConsent && smsConsent.consent === true), telephone: domain.maskTelephone(smsConsent && smsConsent.telephone) };
+      return json(200, { catalog: preferences.catalog(), preferences: await repo.getNotificationPreferences(email), emailLanguage: await repo.getEmailLanguage(email), sms: smsView });
     }
 
     if (route === '/unsubscribe' && (method === 'GET' || method === 'POST')) {
@@ -3542,6 +3685,15 @@ function createApp(repo, opts = {}) {
       // Spread the existing record first — the billing identity, the rating
       // aggregates and the commission accumulator must all survive this write.
       const existing = await repo.getNotary(notaryId);
+      // ADR 0051 — l'interrupteur « Alertes par texto » consent au numéro du
+      // profil : celui du corps s'il est envoyé, sinon celui déjà enregistré.
+      // Consentir sans numéro composable est refusé, jamais deviné.
+      const sentTel = Object.prototype.hasOwnProperty.call(payload, 'telephone') && payload.telephone !== undefined;
+      const smsTelephone = sentTel ? v.telephone : (existing && existing.telephone) || null;
+      const smsWanted = !!(v.alertes && v.alertes.sms === true);
+      if (smsWanted && !domain.toE164(smsTelephone)) {
+        return json(422, { errors: [{ code: 'telephone_requis_sms', message: 'Pour recevoir des textos, indiquez le numéro de téléphone mobile de votre profil.' }] });
+      }
       // A field ABSENT from the body keeps its stored value; a field present
       // but empty clears it. The console edits the profile from more than one
       // form (the identity/feed form, the « à votre rythme » alert block), and
@@ -3580,6 +3732,16 @@ function createApp(repo, opts = {}) {
       }
       next.updatedAt = now();
       await repo.putNotary(next);
+      // ADR 0051 — le consentement au texto suit l'interrupteur, à chaque
+      // sauvegarde qui le porte : « on » est un octroi exprès, « off » un
+      // retrait exprès. Un corps sans `alertes` laisse le registre tel quel.
+      if (sent('alertes') && existing && existing.email && typeof repo.putSmsConsent === 'function') {
+        try {
+          await repo.putSmsConsent(existing.email, { telephone: smsTelephone, consent: smsWanted, at: now() });
+        } catch {
+          /* best-effort : le profil est sauvé, le registre se rattrape à la prochaine sauvegarde */
+        }
+      }
       // --- ANGLES MORTS DE LA PISTE (2026-09-05) — 4/7 : LE PÉRIMÈTRE --------
       // `rayonKm` et l'opt-in `urgences` (ADR 0017), avec le secteur de
       // l'étude (ADR 0025), décident QUI voit QUELLE demande : `notaryCanServe`
@@ -3804,6 +3966,8 @@ function createApp(repo, opts = {}) {
 
       const dn = notifier();
       if (dn) Promise.resolve(dn.onDocumentsRequested(bid, demande)).catch(() => {});
+      // The bell (2026-09-11): the documents asked for, by name.
+      await notifyClient(bid, 'documents_demandes', demande.documents.map((d) => d.nom).join(', '));
       return json(200, { demande: notaryDemande(bid, demande) });
     }
 
@@ -4070,19 +4234,23 @@ function createApp(repo, opts = {}) {
       }
 
       const answered = { ...target, status: accepting ? PROPOSITION.ACCEPTEE : PROPOSITION.REFUSEE };
-      const notifyAnswer = (b) => {
+      const notifyAnswer = async (b) => {
         const an = notifier();
         if (an) {
           Promise.resolve(repo.getNotary(answered.notaryId))
             .then((notary) => an.onCounterOfferAnswered(b, answered, notary))
             .catch(() => {});
         }
+        // The bell (2026-09-11): the proposing notary reads the answer — awaited,
+        // like every row, so the Lambda never freezes it mid-write.
+        await notifyNotaryById(answered.notaryId, b, 'proposition_reponse',
+          (accepting ? 'Proposition acceptée : ' : 'Proposition refusée : ') + domain.money(answered.montant));
       };
 
       if (!accepting) {
         const propositions = propositionsOf(bid).map((p) => (p.id === answered.id ? answered : p));
         await repo.update({ ...bid, propositions });
-        notifyAnswer(bid);
+        await notifyAnswer(bid);
         return json(200, { proposition: clientProposition(answered) });
       }
 
@@ -4124,7 +4292,7 @@ function createApp(repo, opts = {}) {
           }, acteur(ACTEUR.CLIENT, bid.id));
         }
       }
-      notifyAnswer(retained);
+      await notifyAnswer(retained);
       return json(200, { bid: publicBid(retained), proposition: clientProposition(answered) });
     }
 
@@ -4336,6 +4504,11 @@ function createApp(repo, opts = {}) {
           .then((notary) => cn.onOfferCancelled(cancelled, { notary, wasRetained }))
           .catch(() => {});
       }
+      // The bell (2026-09-11): the cancellation ITSELF, on both sides when a
+      // notary had retained the act. The money outcome, when there is one,
+      // comes later under `annulation` (reclamerIndemnite / clore / the sweep).
+      await notifyClient(cancelled, 'annulee', bid.dateISO);
+      if (wasRetained && bid.notaryId) await notifyNotary(cancelled, 'annulee', bid.dateISO);
       return json(200, { bid: publicBid(cancelled) });
     }
 

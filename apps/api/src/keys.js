@@ -57,6 +57,14 @@ function eventPK(stripeEventId) {
 }
 const EVENT_SK = 'EVENT';
 
+// A hosted AI usage payment is credited through a transaction that writes this
+// marker together with the notary entitlement. Stripe may deliver the same
+// checkout event to more than one Lambda worker at the same time.
+function notaryAIPaymentPK(paymentId) {
+  return 'NOTARY_AI_PAYMENT#' + String(paymentId);
+}
+const NOTARY_AI_PAYMENT_SK = 'PAYMENT';
+
 // Sent-notification ledger: one item per (bid|subscription id, kind) already
 // mailed, so a reminder/notification is never sent twice.
 function sentPK(refId, kind) {
@@ -779,6 +787,31 @@ function groupSK(groupId) {
 }
 const GROUP_PREFIX = 'GROUP#';
 
+// Permission bundles are deliberately a separate collection from user groups.
+// A user group can attach many bundles, and the same bundle can be reused by
+// many user groups without copying its permission list.
+//
+//   PK = PERMISSION_GROUPS   SK = PERMISSION_GROUP#<id>
+function permissionGroupsPK() {
+  return 'PERMISSION_GROUPS';
+}
+function permissionGroupSK(permissionGroupId) {
+  return 'PERMISSION_GROUP#' + String(permissionGroupId);
+}
+const PERMISSION_GROUP_PREFIX = 'PERMISSION_GROUP#';
+
+// Notarial practices/cabinets are commercial tenant records on the admin
+// table. Membership is stored on the cabinet, not copied into each notary.
+//
+//   PK = CABINETS   SK = CABINET#<id>
+function cabinetsPK() {
+  return 'CABINETS';
+}
+function cabinetSK(cabinetId) {
+  return 'CABINET#' + String(cabinetId);
+}
+const CABINET_PREFIX = 'CABINET#';
+
 function adminPK(adminId) {
   return 'ADMIN#' + String(adminId);
 }
@@ -811,6 +844,18 @@ function adminRlPK(scope, key) {
   return `RL#${scope}#${String(key).trim().toLowerCase()}`;
 }
 const ADMIN_RL_SK = 'RL';
+
+// --- CRM workflow metadata (separate admin table) --------------------------
+// Customer facts remain in the main table and are read through the bounded
+// MONTH# partitions. Operator-only workflow state lives in the admin table so
+// the admin Lambda can update a stage, note or follow-up without opening a
+// write door to customer records.
+function crmLeadPK(bidId) {
+  const id = String(bidId || '').trim();
+  if (!id) throw new Error('crmLeadPK requires bidId');
+  return 'CRM#LEAD#' + id;
+}
+const CRM_LEAD_SK = 'PROFILE';
 
 // GSI1 attribute names — a sparse, overloaded global secondary index on the
 // main table. The GSI1 index itself IS created (see infra/dynamodb.tf); admin
@@ -859,6 +904,8 @@ module.exports = {
   NOTARY_SK,
   eventPK,
   EVENT_SK,
+  notaryAIPaymentPK,
+  NOTARY_AI_PAYMENT_SK,
   sentPK,
   SENT_SK,
   unsubPK,
@@ -972,6 +1019,12 @@ module.exports = {
   groupsPK,
   groupSK,
   GROUP_PREFIX,
+  permissionGroupsPK,
+  permissionGroupSK,
+  PERMISSION_GROUP_PREFIX,
+  cabinetsPK,
+  cabinetSK,
+  CABINET_PREFIX,
   adminLoginPK,
   ADMIN_LOGIN_SK,
   adminSessionPK,
@@ -982,6 +1035,8 @@ module.exports = {
   learningSignalSK,
   adminRlPK,
   ADMIN_RL_SK,
+  crmLeadPK,
+  CRM_LEAD_SK,
   GSI1_PK,
   GSI1_SK,
   OPENBID_GSI1PK,

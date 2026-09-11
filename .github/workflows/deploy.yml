@@ -14,6 +14,8 @@
 #   AWS_DEPLOY_ROLE_ARN  - the OIDC deploy role ARN (terraform output)
 #   WEB_BUCKET           - S3 web assets bucket name
 #   CF_DISTRIBUTION_ID   - CloudFront distribution id
+#   PLAN_URL             - optional public plan URL (for the post-deploy smoke check)
+#   PITCH_URL            - optional public pitch-deck URL (for the post-deploy smoke check)
 
 name: Deploy
 
@@ -73,6 +75,21 @@ jobs:
         env:
           NOTA_GA4_ID: ${{ vars.NOTA_GA4_ID }}
         run: npm run build --workspace @nota/web
+
+      - name: Add shareable business plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The plan is a separate static surface on the same private S3
+          # origin. Keep its linked summary/model/review beside it so the
+          # shareable hostname does not point back into the repository.
+          cp docs/business-plan.html apps/web/dist/business-plan.html
+          cp docs/pitch-deck.html apps/web/dist/pitch-deck.html
+          cp -R docs/pitch-deck apps/web/dist/pitch-deck
+          cp docs/plan-affaires-sommaire.md apps/web/dist/plan-affaires-sommaire.md
+          cp docs/nota-pitch-deck-legal.pptx apps/web/dist/nota-pitch-deck-legal.pptx
+          mkdir -p apps/web/dist/planning
+          cp docs/planning/business-plan-model.json docs/planning/business-plan-review-2026-09-09.md apps/web/dist/planning/
 
       - name: Verify build output
         shell: bash
@@ -266,9 +283,34 @@ jobs:
       - name: Smoke-test production routing
         env:
           PUBLIC_URL: ${{ vars.PUBLIC_URL }}
+          PLAN_URL: ${{ vars.PLAN_URL }}
+          PITCH_URL: ${{ vars.PITCH_URL }}
         run: |
           set -euo pipefail
           test -n "$PUBLIC_URL"
           curl --fail --silent --show-error --retry 5 --retry-all-errors "$PUBLIC_URL/api/health" | jq -e '.ok == true'
           curl --fail --silent --show-error --retry 5 --retry-all-errors "$PUBLIC_URL/" -o /tmp/public.html
           grep -q 'nota:site' /tmp/public.html
+          curl --fail --silent --show-error --retry 5 --retry-all-errors "$PUBLIC_URL/nota-pitch-deck-legal.pptx" -o /tmp/nota-pitch-deck-legal.pptx
+          unzip -tq /tmp/nota-pitch-deck-legal.pptx >/dev/null
+          # The plan is uploaded in the same release. Once DNS/ACM is live,
+          # PLAN_URL makes the deployment fail if the shareable host is stale
+          # or serving the application shell instead of the plan.
+          if [ -n "$PLAN_URL" ]; then
+            curl --fail --silent --show-error --retry 5 --retry-all-errors "$PLAN_URL/" -o /tmp/plan.html
+            grep -q 'Version' /tmp/plan.html
+            grep -qi '#386888' /tmp/plan.html
+            grep -q 'Business plan' /tmp/plan.html
+            if grep -q 'Slide 1 of 16' /tmp/plan.html; then
+              echo 'PLAN_URL is serving the pitch deck instead of the business plan' >&2
+              exit 1
+            fi
+          fi
+          # The pitch hostname is a dedicated entry point to the same
+          # interactive deck. Keep this probe optional until DNS/ACM is live.
+          if [ -n "$PITCH_URL" ]; then
+            curl --fail --silent --show-error --retry 5 --retry-all-errors "$PITCH_URL/" -o /tmp/pitch.html
+            grep -q 'Nota · Pitch deck' /tmp/pitch.html
+            grep -q 'Slide 1 of 16' /tmp/pitch.html
+            grep -q 'Legal framework for notaries' /tmp/pitch.html
+          fi

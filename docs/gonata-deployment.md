@@ -1,8 +1,22 @@
 # GoNota.ca deployment and email operations
 
-Target: `https://gonota.ca`, `https://www.gonota.ca` (redirect), and
-`https://admin.gonota.ca`. GoDaddy stays the registrar; Route 53 becomes the
+Target: `https://gonota.ca`, `https://www.gonota.ca` (redirect),
+`https://admin.gonota.ca`, the pitch deck at `https://pitch.gonota.ca/`, and
+the shareable plan at `https://plan.gonata.ca/`.
+GoDaddy stays the registrar; Route 53 becomes the
 authoritative DNS provider. The app retains the Nota brand.
+
+The plan hostname is configured with `plan_domain_name = "plan.gonata.ca"`.
+That exact hostname is in the retained legacy `gonata.ca` Route 53 zone; the
+legacy zone must therefore be delegated at GoDaddy (or `plan_hosted_zone_id`
+must point at the authoritative zone) before ACM validation and DNS can work.
+The active public application zone remains `gonota.ca`.
+
+The pitch hostname is configured with `pitch_domain_name = "pitch.gonota.ca"`.
+It is an alternate CloudFront alias that opens the interactive pitch deck at
+`pitch-deck.html`. Its ACM validation and A/AAAA aliases use the authoritative
+`gonota.ca` zone, or the explicit `pitch_hosted_zone_id` when the hostname is
+delegated elsewhere.
 
 ## Current deployment boundary
 
@@ -67,7 +81,8 @@ storage for new secrets does not remove values from old state backups.
    set `stripe_mode` to the verified payment mode, then plan/apply the **entire**
    stack. Review any replacement or deletion before applying. ACM validation
    waits for delegation; public and admin certificates are in `us-east-1`.
-7. Deploy both app surfaces through GitHub Actions, check the domains and SES,
+7. Deploy the app surfaces through GitHub Actions, check the public, admin,
+   plan, and pitch domains and SES,
    and perform actual mailbox delivery tests before calling the migration done.
 
 DNS records cover apex/WWW/admin, ACM validation, SES Easy DKIM, a custom
@@ -155,7 +170,9 @@ the Lambda waiter. No long-lived AWS keys belong in GitHub.
 Set existing AWS role/bucket/distribution variables from Terraform outputs.
 Also set `PUBLIC_URL` and `ADMIN_URL` to the domains currently serving production
 (the existing CloudFront URLs until delegation is ready, then gonota.ca and
-admin.gonota.ca). Apply waiter IAM permissions before releasing the new workflow.
+admin.gonota.ca). Set `PITCH_URL=https://pitch.gonota.ca` and
+`PLAN_URL=https://plan.gonata.ca` after DNS and ACM are live. Apply waiter IAM
+permissions before releasing the new workflow.
 Infrastructure itself is applied with Terraform using the existing state;
 these deployment workflows ship application code and assets, not Terraform.
 

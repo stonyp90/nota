@@ -62,6 +62,7 @@ async function boot(t, { analysis = null, lang = 'fr', route, count = 1 } = {}) 
           state.analysis.review = { ...call.body, reviewedAt: '2026-09-09T12:05:00Z' };
           return reply({ ok: true, review: structuredClone(state.analysis.review) });
         }
+        if (path.endsWith('/notary/ai-feedback')) return reply({ ok: true, recorded: true, feedback: call.body });
         if (path.endsWith('/notary/session/request')) return reply({ ok: true, devToken: 'challenge' });
         if (path.endsWith('/notary/session/verify')) return reply({ token: 'session-token', feedToken: 'feed-token', email: 'notary@example.ca' });
         if (path.endsWith('/notary/bids')) return reply({ bids: [], retained,
@@ -420,6 +421,21 @@ test('empty extraction shows abstention and missing labels with no review to app
   assert.match(panel.textContent, /Aucune proposition extraite/);
   assert.match(panel.textContent, /Noms des emprunteurs/);
   assert.equal(reviewForm(panel), null);
+});
+
+test('an uncertainty question records a structured notary decision without sending source text', async t => {
+  const { panel, calls } = await boot(t, { analysis: fixture() });
+  await toggle(panel);
+  const question = panel.querySelector('.nc-ai-question-feedback');
+  assert.ok(question);
+  const select = question.querySelector('select');
+  input(select, 'confirmed', 'change');
+  await submit(question);
+  const feedback = calls.find(call => call.url.endsWith('/notary/ai-feedback'));
+  assert.equal(feedback.body.decision, 'confirmed');
+  assert.match(feedback.body.questionId, /^(missing|conflict):/);
+  assert.equal(Object.prototype.hasOwnProperty.call(feedback.body, 'text'), false);
+  assert.match(question.textContent, /Réponse enregistrée/);
 });
 
 test('English translates the workflow and domain labels while hostile evidence, values and provenance remain verbatim text', async t => {

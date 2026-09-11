@@ -1,5 +1,6 @@
 /* Preserve campaign labels and real referral codes across acquisition links.
- * Only a coarse arrival category is forwarded; analytics has no visitor IDs. */
+ * Only a coarse arrival category is forwarded; analytics has no visitor IDs.
+ * No cookies, visitor IDs, network beacons or personal query parameters. */
 (() => {
   const analytics = window.NotaAnalytics;
   if (analytics) analytics.send('page_service_vue');

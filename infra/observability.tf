@@ -42,6 +42,10 @@ locals {
       function_name = aws_lambda_function.customer_improvement.function_name
       timeout_ms    = aws_lambda_function.customer_improvement.timeout * 1000
     }
+    notary_learning_review = {
+      function_name = aws_lambda_function.notary_learning_review.function_name
+      timeout_ms    = aws_lambda_function.notary_learning_review.timeout * 1000
+    }
     }, var.enable_admin ? {
     admin = {
       function_name = aws_lambda_function.admin[0].function_name

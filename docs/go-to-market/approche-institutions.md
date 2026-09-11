@@ -60,7 +60,7 @@ signer.
 Merci de votre temps,
 
 Anthony Paquet
-[adresse postale] · [téléphone] · anthonypaquet1508@gmail.com
+[adresse postale] · [téléphone] · info@gonota.ca
 ```
 
 **Si l'AJNQ dit oui au point 1**, le texte à leur fournir est E1 de
@@ -127,7 +127,7 @@ séparément et à un prix publié d'avance.
 Merci,
 
 Anthony Paquet
-[adresse postale] · [téléphone] · anthonypaquet1508@gmail.com
+[adresse postale] · [téléphone] · info@gonota.ca
 ```
 
 ---
@@ -234,7 +234,7 @@ volontiers les conclusions.
 Merci,
 
 Anthony Paquet
-[adresse postale] · [téléphone] · anthonypaquet1508@gmail.com
+[adresse postale] · [téléphone] · info@gonota.ca
 ```
 
 ---

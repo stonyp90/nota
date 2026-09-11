@@ -38,6 +38,11 @@ resource "aws_route53_delegation_set" "production" {
 
 locals {
   dns_zone_id = var.create_hosted_zone && var.domain_name != "" ? aws_route53_zone.public[0].zone_id : var.hosted_zone_id
+  plan_dns_zone_id = var.plan_hosted_zone_id != null ? var.plan_hosted_zone_id : (
+    endswith(var.plan_domain_name, ".gonata.ca") ? aws_route53_zone.legacy_gonata.zone_id : local.dns_zone_id
+  )
+  pitch_dns_zone_id = var.pitch_hosted_zone_id != null ? var.pitch_hosted_zone_id : local.dns_zone_id
+  brand_dns_zone_id = var.brand_hosted_zone_id != null ? var.brand_hosted_zone_id : local.dns_zone_id
 }
 
 resource "aws_route53_record" "www" {
@@ -45,6 +50,84 @@ resource "aws_route53_record" "www" {
   zone_id  = local.dns_zone_id
   name     = "www.${var.domain_name}"
   type     = each.value
+  alias {
+    name                   = aws_cloudfront_distribution.web.domain_name
+    zone_id                = aws_cloudfront_distribution.web.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "plan_a" {
+  count   = var.plan_domain_name != "" ? 1 : 0
+  zone_id = local.plan_dns_zone_id
+  name    = var.plan_domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.web.domain_name
+    zone_id                = aws_cloudfront_distribution.web.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "plan_aaaa" {
+  count   = var.plan_domain_name != "" ? 1 : 0
+  zone_id = local.plan_dns_zone_id
+  name    = var.plan_domain_name
+  type    = "AAAA"
+
+  alias {
+    name                   = aws_cloudfront_distribution.web.domain_name
+    zone_id                = aws_cloudfront_distribution.web.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "pitch_a" {
+  count   = var.pitch_domain_name != "" ? 1 : 0
+  zone_id = local.pitch_dns_zone_id
+  name    = var.pitch_domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.web.domain_name
+    zone_id                = aws_cloudfront_distribution.web.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "pitch_aaaa" {
+  count   = var.pitch_domain_name != "" ? 1 : 0
+  zone_id = local.pitch_dns_zone_id
+  name    = var.pitch_domain_name
+  type    = "AAAA"
+
+  alias {
+    name                   = aws_cloudfront_distribution.web.domain_name
+    zone_id                = aws_cloudfront_distribution.web.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "brand_a" {
+  count   = var.brand_domain_name != "" ? 1 : 0
+  zone_id = local.brand_dns_zone_id
+  name    = var.brand_domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_cloudfront_distribution.web.domain_name
+    zone_id                = aws_cloudfront_distribution.web.hosted_zone_id
+    evaluate_target_health = false
+  }
+}
+
+resource "aws_route53_record" "brand_aaaa" {
+  count   = var.brand_domain_name != "" ? 1 : 0
+  zone_id = local.brand_dns_zone_id
+  name    = var.brand_domain_name
+  type    = "AAAA"
+
   alias {
     name                   = aws_cloudfront_distribution.web.domain_name
     zone_id                = aws_cloudfront_distribution.web.hosted_zone_id

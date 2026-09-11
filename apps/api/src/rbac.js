@@ -3,11 +3,13 @@
 // ---------------------------------------------------------------------------
 // Decoupled RBAC primitives — PURE (no I/O, no repo).
 //
-// User, Group and Permission are three independent concepts:
+// User, User Group, Permission Group and Permission are four independent concepts:
 //   • a Permission is a `resource:action` capability key (the catalog below);
-//   • a Group bundles permissions and can hold many users;
-//   • a User's EFFECTIVE permissions = the union of their DIRECT grants and the
-//     permissions of EVERY group they belong to (plus an optional legacy role
+//   • a Permission Group bundles permissions and can be reused;
+//   • a User Group can attach many Permission Groups and hold many users;
+//   • a User's EFFECTIVE permissions = the union of their DIRECT grants, every
+//     attached Permission Group and the permissions of EVERY user group they
+//     belong to (plus an optional legacy role
 //     bundle, kept only for back-compat with the existing admin.role string).
 //
 // `can()` is fail-closed: no permission unless it is explicitly present (or the
@@ -23,6 +25,8 @@ const WILDCARD = '*';
 // a user — decoupled from any role.
 const PERMISSIONS = Object.freeze([
   'analytics:read', // dashboards / metrics
+  'leads:read', // CRM pipeline and conversion facts
+  'leads:write', // CRM stages, notes and follow-up dates
   'pii:read', // reveal customer personal data
   'support:read', // read the shared customer-support inbox
   'support:write', // reply in existing customer-support conversations
@@ -30,6 +34,8 @@ const PERMISSIONS = Object.freeze([
   'settings:write', // global settings
   'users:read',
   'users:write', // create/edit admins, assign groups + grants
+  'cabinets:read', // view firms, plans and memberships
+  'cabinets:write', // create/edit firms, plans and notary memberships
   'groups:read',
   'groups:write', // create/edit groups + their permissions
   'permissions:read', // read the permission catalog
@@ -82,15 +88,20 @@ function isKnownPermission(key) {
   return PERMISSIONS.indexOf(key) !== -1;
 }
 
-// Union a user's role bundle + direct grants + every group's permissions into a
-// de-duplicated effective set. `groups` is an array of group records that each
-// expose a `permissions` array.
-function resolvePermissions({ role, directPermissions = [], groups = [] } = {}) {
+// Union a user's role bundle + direct grants + every group's permission bundles
+// into a de-duplicated effective set. The legacy `group.permissions` field is
+// still read so existing records remain valid while administrators migrate them
+// to reusable permission groups.
+function resolvePermissions({ role, directPermissions = [], groups = [], permissionGroups = [] } = {}) {
   const set = new Set();
   for (const p of permissionsForRole(role)) set.add(p);
   for (const p of directPermissions || []) if (p) set.add(p);
   for (const g of groups || []) {
     for (const p of (g && g.permissions) || []) if (p) set.add(p);
+    for (const id of (g && (g.groupesPermissions || g.permissionGroups)) || []) {
+      const pg = (permissionGroups || []).find((candidate) => candidate && candidate.id === id);
+      for (const p of (pg && pg.permissions) || []) if (p) set.add(p);
+    }
   }
   return Array.from(set);
 }

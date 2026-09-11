@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#386888">
+  <link rel="canonical" href="https://brand.nota.ca/">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@700;800&display=swap">
+  <title>Nota — brand kit</title>
+  <style>
+    /* A standalone page: it cannot inherit styles.css, so the ADR 0048 colour
+       roles and the ADR 0050 type scale are copied here, verbatim, from
+       apps/web/public/styles.css :root (light). Change them there first. */
+    :root {
+      color-scheme: light;
+      --ink: #173b52; --muted: #607986; --subtitle-ink: #000000;
+      --canvas: #eef5f7; --surface: #fbfdfd; --surface-inset: #e6f0f4;
+      --line: #c5d8df; --line-strong: #a9c3ce;
+      --blue: #386888; --blue-deep: #274a62; --cyan: #407598; --deep: #264961; --midnight: #101b26;
+      --orange: #b45309; --orange-dark: #f79009; --wash: #ebf1f5;
+      --ink-dark-canvas: #f4f8fa; --muted-dark-canvas: #afc2cf;
+      --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      --font-display: 'Sora', var(--font-sans); --weight-display: 800;
+      --type-h1: clamp(42px, 4.25vw, 68px); --type-h1-lh: 1.02; --type-h1-ls: -.055em;
+      --type-h2: clamp(24px, 2.35vw, 34px); --type-h2-lh: 1.15; --type-h2-ls: -.045em;
+      --type-h3: 17px; --type-h3-lh: 1.3; --type-h3-ls: -.02em;
+      --type-lead: 17px; --type-lead-lh: 1.7;
+      --type-eyebrow: 12px; --type-eyebrow-ls: .1em;
+      --radius: 8px; --radius-sm: 6px; --radius-lg: 12px; --shadow: 0 14px 36px rgb(16 27 38 / .09);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--canvas); color: var(--ink); font: 15px/1.55 var(--font-sans); }
+    a { color: inherit; }
+    button { font: inherit; cursor: pointer; }
+    h1, h2, h3, p { margin: 0; }
+    h1, h2, h3 { font-family: var(--font-display); font-weight: var(--weight-display); }
+    h1 { max-width: 760px; margin: 10px 0 12px; font-size: var(--type-h1); line-height: var(--type-h1-lh); letter-spacing: var(--type-h1-ls); }
+    h2 { font-size: var(--type-h2); line-height: var(--type-h2-lh); letter-spacing: var(--type-h2-ls); }
+    h3 { font-size: var(--type-h3); line-height: var(--type-h3-lh); letter-spacing: var(--type-h3-ls); }
+    .page { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 34px 0 68px; }
+    .top { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding-bottom: 30px; }
+    .lockup { display: inline-flex; align-items: center; gap: 10px; font-family: var(--font-display); font-size: 24px; font-weight: var(--weight-display); letter-spacing: -.06em; text-decoration: none; }
+    .lockup img { width: 36px; height: 36px; }
+    .lockup-dot { color: var(--cyan); }
+    .top-links { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+    .top-links a, .top-links button { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 8px 11px; text-decoration: none; color: var(--blue); }
+    .top-links a:hover, .top-links button:hover { border-color: var(--blue); }
+    .eyebrow { display: inline-flex; padding: 5px 8px; border-radius: var(--radius-sm); background: var(--wash); color: var(--subtitle-ink); font-size: var(--type-eyebrow); font-weight: var(--weight-display); letter-spacing: var(--type-eyebrow-ls); text-transform: uppercase; }
+    .lede { max-width: 680px; color: var(--muted); font-size: var(--type-lead); line-height: var(--type-lead-lh); }
+    .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .45fr); gap: 36px; align-items: end; padding: 44px 0 54px; }
+    .hero-mark { display: grid; place-items: center; min-height: 220px; padding: 35px; background: var(--deep); border-radius: var(--radius-lg); box-shadow: var(--shadow); }
+    .hero-mark img { width: min(170px, 48%); height: auto; }
+    .section { border-top: 1px solid var(--line); padding: 34px 0 0; margin-top: 30px; }
+    .section-head { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 20px; }
+    .section-head p { max-width: 480px; color: var(--muted); font-size: 13px; }
+    .swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+    .swatch { appearance: none; display: grid; gap: 6px; min-width: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); text-align: left; color: var(--ink); }
+    .swatch:hover { border-color: var(--blue); box-shadow: var(--shadow); }
+    .swatch-color { height: 76px; background: var(--swatch); }
+    .swatch-copy { padding: 9px 10px 11px; }
+    .swatch strong, .swatch code { display: block; }
+    .swatch strong { font-size: 12px; }
+    .swatch code { margin-top: 2px; color: var(--muted); font-size: 11px; }
+    .buttons { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+    .btn { min-height: 44px; padding: 10px 15px; border: 1px solid transparent; border-radius: var(--radius); font-weight: 700; }
+    .btn-primary { background: var(--blue); color: #ffffff; }
+    .btn-primary:hover { background: var(--blue-deep); }
+    .btn-secondary { background: var(--surface); border-color: var(--line); color: var(--blue); }
+    .btn-secondary:hover { border-color: var(--blue); }
+    .variants { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .variant { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+    .variant-mark { display: grid; place-items: center; min-height: 112px; padding: 18px; background: var(--variant-bg, var(--wash)); border-radius: var(--radius); }
+    .variant-mark svg { width: 88px; height: 88px; }
+    .variant-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+    .variant-number { color: var(--subtitle-ink); font-size: 11px; font-weight: var(--weight-display); letter-spacing: var(--type-eyebrow-ls); }
+    .variant p { color: var(--muted); font-size: 12px; }
+    .variant-dark { --variant-bg: var(--midnight); }
+    .variant-dark h3 { color: var(--ink-dark-canvas); }
+    .variant-dark p { color: var(--muted-dark-canvas); }
+    .copy { align-self: flex-start; padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: transparent; color: var(--blue); font-size: 12px; font-weight: 700; }
+    .copy:hover { border-color: var(--blue); background: var(--wash); }
+    .usage { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .usage-card { min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+    .usage-card p { margin-top: 7px; color: var(--muted); font-size: 13px; }
+    pre { margin: 14px 0 0; padding: 13px; overflow-x: auto; background: var(--midnight); color: var(--ink-dark-canvas); border-radius: var(--radius); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .footer { display: flex; justify-content: space-between; gap: 20px; padding-top: 34px; color: var(--muted); font-size: 12px; }
+    .footer a { color: var(--blue); }
+    :focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+    @media (max-width: 800px) { .hero { grid-template-columns: 1fr; } .hero-mark { min-height: 150px; } .variants { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 540px) { .page { width: min(100% - 24px, 430px); padding-top: 20px; } .top { align-items: flex-start; } .top-links { flex-direction: column; align-items: stretch; } .hero { padding-top: 28px; } .swatches, .variants, .usage { grid-template-columns: 1fr; } .section-head { display: block; } .section-head p { margin-top: 8px; } .footer { display: block; } .footer a { display: block; margin-top: 7px; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .001ms !important; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="top">
+      <a class="lockup" href="/" aria-label="Retour à Nota"><img src="favicon.svg" alt="">nota<span class="lockup-dot">.</span></a>
+      <nav class="top-links" aria-label="Ressources de marque">
+        <a href="favicon.svg" download>Télécharger le logo</a>
+        <a href="brand-explorations.html">Planche complète</a>
+      </nav>
+    </header>
+
+    <section class="hero" aria-labelledby="brand-title">
+      <div>
+        <span class="eyebrow">brand.nota.ca · Nota</span>
+        <h1 id="brand-title">Une identité claire, partout où Nota apparaît.</h1>
+        <p class="lede">Le logo, les couleurs et les boutons de Nota sont ici. Utilisez les ressources directement dans votre site, votre présentation ou votre signature de courriel.</p>
+        <div class="buttons">
+          <a class="btn btn-primary" href="favicon.svg" download>Obtenir le logo SVG</a>
+          <a class="btn btn-secondary" href="og.svg" download>Obtenir la carte sociale</a>
+        </div>
+      </div>
+      <div class="hero-mark" aria-label="Logo Nota officiel"><img src="favicon.svg" alt="Logo Nota"></div>
+    </section>
+
+    <section class="section" aria-labelledby="colors-title">
+      <div class="section-head"><h2 id="colors-title">Couleurs de marque</h2><p>Cliquez sur une couleur pour copier sa valeur hexadécimale. Les couleurs de service de l’application restent réservées aux données.</p></div>
+      <div class="swatches">
+        <button class="swatch" data-copy="#264961" style="--swatch:#264961"><span class="swatch-color"></span><span class="swatch-copy"><strong>Carré du logo</strong><code>#264961</code></span></button>
+        <button class="swatch" data-copy="#386888" style="--swatch:#386888"><span class="swatch-color"></span><span class="swatch-copy"><strong>Blue-teal · action</strong><code>#386888</code></span></button>
+        <button class="swatch" data-copy="#407598" style="--swatch:#407598"><span class="swatch-color"></span><span class="swatch-copy"><strong>Cyan signal</strong><code>#407598</code></span></button>
+        <button class="swatch" data-copy="#101b26" style="--swatch:#101b26"><span class="swatch-color"></span><span class="swatch-copy"><strong>Midnight ink</strong><code>#101B26</code></span></button>
+        <button class="swatch" data-copy="#b45309" style="--swatch:#b45309"><span class="swatch-color"></span><span class="swatch-copy"><strong>Warm accent</strong><code>#B45309 · #F79009 en sombre</code></span></button>
+        <button class="swatch" data-copy="#ebf1f5" style="--swatch:#ebf1f5"><span class="swatch-color"></span><span class="swatch-copy"><strong>Lavis Québec</strong><code>#EBF1F5</code></span></button>
+        <button class="swatch" data-copy="#eef5f7" style="--swatch:#eef5f7"><span class="swatch-color"></span><span class="swatch-copy"><strong>Canevas</strong><code>#EEF5F7 · surface #FBFDFD</code></span></button>
+      </div>
+      <div class="buttons" aria-label="Exemples de boutons">
+        <button class="btn btn-primary" data-copy="background:#386888;color:#ffffff;border-radius:8px">Action primaire · #386888</button>
+        <button class="btn btn-secondary" data-copy="border:1px solid #c5d8df;color:#386888;border-radius:8px">Action secondaire · contour</button>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="variants-title">
+      <div class="section-head"><h2 id="variants-title">Neuf directions de logo</h2><p>La direction 01 est la marque de production. Les huit autres restent disponibles pour explorer une campagne, une présentation ou une déclinaison éditoriale.</p></div>
+      <div class="variants">
+        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="5" y="5" width="54" height="54" rx="9" fill="#264961"/><path d="M19 45V19h6l14 19V19h6v26h-6L25 26v19z" fill="#ffffff"/><circle cx="48" cy="16" r="6" fill="#407598" stroke="#101b26" stroke-width="2"/></svg></div><div class="variant-meta"><span class="variant-number">01 · PRODUCTION</span><h3>Monogramme lié</h3></div><p>Le N ouvre directement le mot. Lisible en petit format.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><rect x="5" y="5" width="54" height="54" rx="9" fill="#264961"/><path d="M19 45V19h6l14 19V19h6v26h-6L25 26v19z" fill="#ffffff"/><circle cx="48" cy="16" r="6" fill="#407598" stroke="#101b26" stroke-width="2"/></svg>'>Copier le SVG</button></article>
+        <article class="variant variant-dark"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="none" stroke="#f79009" stroke-width="3"/><path d="M21 46V18h6l11 16V18h6v28h-6L27 30v16z" fill="#ffffff"/></svg></div><div class="variant-meta"><span class="variant-number">02</span><h3>Sceau</h3></div><p>Institutionnel, sans être froid.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#f79009" stroke-width="3"/><path d="M21 46V18h6l11 16V18h6v28h-6L27 30v16z" fill="#ffffff"/></svg>'>Copier le SVG</button></article>
+        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M13 7h30l8 8v42H13z" fill="#ffffff" stroke="#386888" stroke-width="3"/><path d="M43 7v10h8M22 28h20M22 37h20M22 46h14" fill="none" stroke="#386888" stroke-width="3" stroke-linecap="round"/><path d="m20 15 7 9 7-9" fill="none" stroke="#b45309" stroke-width="3" stroke-linecap="round"/></svg></div><div class="variant-meta"><span class="variant-number">03</span><h3>Feuillet d’acte</h3></div><p>Le document devient le signe.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><path d="M13 7h30l8 8v42H13z" fill="#ffffff" stroke="#386888" stroke-width="3"/><path d="M43 7v10h8M22 28h20M22 37h20M22 46h14" fill="none" stroke="#386888" stroke-width="3"/></svg>'>Copier le SVG</button></article>
+        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M17 47V17h7l15 21V17h8v30h-8L25 26v21z" fill="#386888"/><path d="M8 49c12-7 17 5 27-2 8-5 12-1 21-9" fill="none" stroke="#b45309" stroke-width="3" stroke-linecap="round"/></svg></div><div class="variant-meta"><span class="variant-number">04</span><h3>Paraphe continu</h3></div><p>Une ligne de signature traverse le nom.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><path d="M17 47V17h7l15 21V17h8v30h-8L25 26v21z" fill="#386888"/><path d="M8 49c12-7 17 5 27-2 8-5 12-1 21-9" fill="none" stroke="#b45309" stroke-width="3"/></svg>'>Copier le SVG</button></article>
+        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="10" width="48" height="44" rx="5" fill="none" stroke="#407598" stroke-width="3"/><path d="M20 10v44M27 20h20M27 30h20M27 40h13" fill="none" stroke="#386888" stroke-width="3" stroke-linecap="round"/><path d="M14 17h5" fill="none" stroke="#b45309" stroke-width="3" stroke-linecap="round"/></svg></div><div class="variant-meta"><span class="variant-number">05</span><h3>Registre</h3></div><p>Des lignes qui évoquent le carnet public.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><rect x="8" y="10" width="48" height="44" rx="5" fill="none" stroke="#407598" stroke-width="3"/><path d="M20 10v44M27 20h20M27 30h20M27 40h13" fill="none" stroke="#386888" stroke-width="3"/></svg>'>Copier le SVG</button></article>
+        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M11 46V18h7l14 18 14-18h7v28h-7V30L32 48 18 30v16z" fill="#386888"/><path d="M18 52h28" fill="none" stroke="#b45309" stroke-width="4" stroke-linecap="round"/></svg></div><div class="variant-meta"><span class="variant-number">06</span><h3>Pont notarial</h3></div><p>Le N relie client, notaire et date.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><path d="M11 46V18h7l14 18 14-18h7v28h-7V30L32 48 18 30v16z" fill="#386888"/><path d="M18 52h28" fill="none" stroke="#b45309" stroke-width="4"/></svg>'>Copier le SVG</button></article>
+        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="10" y="14" width="44" height="39" rx="6" fill="#386888"/><path d="M10 25h44M20 9v12M44 9v12M22 35h20M22 43h12" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/><circle cx="46" cy="43" r="7" fill="#b45309" stroke="#101b26" stroke-width="3"/></svg></div><div class="variant-meta"><span class="variant-number">07</span><h3>Date réservée</h3></div><p>Le repère devient notre signature.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><rect x="10" y="14" width="44" height="39" rx="6" fill="#386888"/><circle cx="46" cy="43" r="7" fill="#b45309"/></svg>'>Copier le SVG</button></article>
+        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M22 9H9v13M42 9h13v13M9 42v13h13M55 42v13H42" fill="none" stroke="#b45309" stroke-width="4" stroke-linecap="round"/><path d="M22 46V18h6l10 15V18h6v28h-6L28 31v15z" fill="#386888"/></svg></div><div class="variant-meta"><span class="variant-number">08</span><h3>Cadre de preuve</h3></div><p>Des coins qui rappellent l’acte encadré.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><path d="M22 9H9v13M42 9h13v13M9 42v13h13M55 42v13H42" fill="none" stroke="#b45309" stroke-width="4"/><path d="M22 46V18h6l10 15V18h6v28h-6L28 31v15z" fill="#386888"/></svg>'>Copier le SVG</button></article>
+        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 5l8 19 19 8-19 8-8 19-8-19-19-8 19-8z" fill="#ebf1f5" stroke="#386888" stroke-width="3"/><path d="M24 46V18h6l10 15V18h5v28h-5L30 31v15z" fill="#386888"/><circle cx="50" cy="14" r="5" fill="#b45309"/></svg></div><div class="variant-meta"><span class="variant-number">09</span><h3>Rosace de Québec</h3></div><p>Une géométrie patrimoniale, plus mémorable.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><path d="M32 5l8 19 19 8-19 8-8 19-8-19-19-8 19-8z" fill="#ebf1f5" stroke="#386888" stroke-width="3"/><path d="M24 46V18h6l10 15V18h5v28h-5L30 31v15z" fill="#386888"/></svg>'>Copier le SVG</button></article>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="usage-title">
+      <div class="section-head"><h2 id="usage-title">Utiliser Nota correctement</h2><p>Gardez le logo intact, conservez son espace libre et utilisez les tokens sémantiques plutôt que des couleurs arbitraires.</p></div>
+      <div class="usage">
+        <article class="usage-card"><h3>Logo hébergé</h3><p>Pour une référence toujours à jour, utilisez l’asset public :</p><pre>&lt;img src="https://brand.nota.ca/favicon.svg"
+  alt="Nota" width="64" height="64"&gt;</pre><button class="copy" data-copy='<img src="https://brand.nota.ca/favicon.svg" alt="Nota" width="64" height="64">'>Copier le HTML</button></article>
+        <article class="usage-card"><h3>Tokens CSS</h3><p>Les mêmes rôles fonctionnent dans un site partenaire :</p><pre>:root {
+  --nota-ink: #101b26;
+  --nota-mark: #264961;
+  --nota-blue: #386888;
+  --nota-signal: #407598;
+  --nota-accent: #b45309;
+}</pre><button class="copy" data-copy=':root { --nota-ink:#101b26; --nota-mark:#264961; --nota-blue:#386888; --nota-signal:#407598; --nota-accent:#b45309; }'>Copier les tokens</button></article>
+      </div>
+    </section>
+
+    <footer class="footer"><span>Nota · kit de marque public · 2026</span><a href="mailto:bonjour@gonota.ca">Une question sur l’utilisation du logo?</a></footer>
+  </main>
+  <script>
+    (function () {
+      var buttons = document.querySelectorAll('[data-copy]');
+      buttons.forEach(function (button) {
+        button.addEventListener('click', function () {
+          var value = button.getAttribute('data-copy') || '';
+          var done = function () { var old = button.textContent; button.textContent = 'Copié'; window.setTimeout(function () { button.textContent = old; }, 1400); };
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(value).then(done).catch(function () {});
+          else { var area = document.createElement('textarea'); area.value = value; area.setAttribute('readonly', ''); area.style.position = 'fixed'; area.style.opacity = '0'; document.body.appendChild(area); area.select(); try { document.execCommand('copy'); done(); } catch (e) {} area.remove(); }
+        });
+      });
+    }());
+  </script>
+</body>
+</html>

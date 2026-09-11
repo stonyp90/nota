@@ -84,6 +84,12 @@ no legal services.
 
 ## Liens
 
+- Financement : https://gonota.ca/notaire-financement-quebec.html
+- Refinancement : https://gonota.ca/notaire-refinancement-quebec.html
+- Mortgage financing : https://gonota.ca/mortgage-financing-notary-quebec-city.html
+- Mortgage refinancing : https://gonota.ca/mortgage-refinancing-notary-quebec-city.html
 - Site : https://gonota.ca/
 - Version anglaise : https://gonota.ca/?lang=en
 - Carnet public (JSON) : https://gonota.ca/api/bids
+- Vidéos Nota : https://www.youtube.com/@gonotaca
+- Page LinkedIn officielle : https://www.linkedin.com/company/gonota/

@@ -20,6 +20,47 @@ const crypto = require('node:crypto');
  */
 
 const domain = require('@nota/domain');
+const { notaryNotifSubject, clientNotifSubject } = require('./keys');
+
+// --- The bell (2026-09-11) -----------------------------------------------------
+// The daily pass holds the repo, so it writes the in-app rows the HTTP handler
+// would (same shape as handler.js `notifIn`: sujet, kind, titre from the
+// domain catalogue, corps, lien, refId, at). Three differences, all deliberate:
+//   • the row's `id` is DETERMINISTIC (`rappel:<bid>:<j7>`) and `at` is the
+//     civil day the pass runs on — the repos refuse a duplicate (at, id), so a
+//     pass re-run the same day never doubles a row;
+//   • best-effort, like every notifier call: a failed write never fails the pass;
+//   • an older repo without the door simply writes nothing.
+function bellAt(todayISO) {
+  return todayISO + 'T00:00:00.000Z';
+}
+async function bell(repo, sujet, avis, todayISO) {
+  if (typeof repo.appendNotification !== 'function' || !domain.isNotifKind(avis.kind)) return;
+  const k = domain.NOTIF_KINDS.find((x) => x.id === avis.kind);
+  try {
+    await repo.appendNotification({ ...avis, titre: k.titre, sujet, at: bellAt(todayISO) });
+  } catch {
+    /* best-effort */
+  }
+}
+async function bellClient(repo, bid, kind, corps, id, todayISO) {
+  if (!bid || !bid.id) return;
+  await bell(repo, clientNotifSubject(bid.id), {
+    id, audience: 'client', kind, corps: corps || null, refId: bid.id,
+    lien: bid.dateISO ? '#offre=' + bid.id + '&d=' + bid.dateISO : null,
+  }, todayISO);
+}
+async function bellNotary(repo, bid, kind, corps, id, todayISO) {
+  if (!bid || !bid.id || !bid.notaryId || typeof repo.getNotary !== 'function') return;
+  let p = null;
+  try { p = await repo.getNotary(bid.notaryId); } catch { return; }
+  if (!p || !p.email) return;
+  await bell(repo, notaryNotifSubject(p.email), {
+    id, audience: 'notaire', kind, corps: corps || null, refId: bid.id, lien: '#notaires&acte=' + bid.id,
+  }, todayISO);
+}
+// The date reminders ring the bell; the dossier nudge stays an email.
+const RAPPEL_JOURS = { j7: 7, j3: 3, j1: 1, j0: 0 };
 
 async function runReminders({ repo, notifier, billing, now } = {}) {
   if (!repo) throw new Error('runReminders: repo is required');
@@ -53,6 +94,11 @@ async function runReminders({ repo, notifier, billing, now } = {}) {
     const kinds = domain.dueReminders(bid, todayISO);
     for (const kind of kinds) {
       due += 1;
+      // The bell row first (best-effort, day-keyed): a client without a
+      // courriel still has a bell, and a failed mail never hides the day.
+      if (RAPPEL_JOURS[kind] != null) {
+        await bellClient(repo, bid, 'rappel', 'J-' + RAPPEL_JOURS[kind] + ' · ' + bid.dateISO, 'rappel:' + bid.id + ':' + kind, todayISO);
+      }
       try {
         const r = await notifier.onReminderDue(bid, kind, todayISO);
         if (r && r.sent) sent += 1;
@@ -190,8 +236,11 @@ async function runReminders({ repo, notifier, billing, now } = {}) {
         // l'insistance (art. 56 1°), pas de l'information.
         if (r && r.code === 'caution_refusee') {
           caution.refusee += 1;
-          if (!bid.cautionRefus && typeof notifier.onCautionRefusee === 'function') {
-            await notifier.onCautionRefusee(bid, r.refus);
+          if (!bid.cautionRefus) {
+            if (typeof notifier.onCautionRefusee === 'function') await notifier.onCautionRefusee(bid, r.refus);
+            // The bell, both sides (the notary only when one retained the act).
+            await bellClient(repo, bid, 'caution', bid.dateISO, 'caution:' + bid.id, todayISO);
+            await bellNotary(repo, bid, 'caution', bid.dateISO, 'caution:' + bid.id, todayISO);
           }
           continue;
         }
@@ -262,6 +311,11 @@ async function runReminders({ repo, notifier, billing, now } = {}) {
             await repo.removeRetained(bid.notaryId, { id: bid.id, dateISO: bid.dateISO });
           }
           await journalIndemniteEchue(repo, updated, todayISO);
+          // The bell: the money outcome, in the words the handler's `clore`
+          // uses for the same decision (annulation = the indemnity's fate).
+          await bellClient(repo, updated, 'annulation',
+            'Aucune indemnité n’a été réclamée dans le délai : rien n’est retenu, et la somme réservée est libérée.',
+            'annulation:' + bid.id + ':expiree', todayISO);
           if (typeof notifier.onIndemniteDecidee === 'function') {
             let notary = null;
             try { notary = bid.notaryId && typeof repo.getNotary === 'function' ? await repo.getNotary(bid.notaryId) : null; } catch { /* moins de faits dans le courriel */ }

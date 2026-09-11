@@ -2,8 +2,9 @@
  * Tests DOM de la section « Accès » — le découplage utilisateur / groupe /
  * permission, vu depuis la console.
  *
- * Trois concepts indépendants : une PERMISSION est une capacité, un GROUPE en
- * réunit, un UTILISATEUR reçoit des groupes ET des permissions directes. Un
+ * Quatre concepts indépendants : une PERMISSION est une capacité, un GROUPE DE
+ * PERMISSIONS en réunit, un GROUPE D’USAGERS les attache, et un UTILISATEUR
+ * reçoit des groupes ET des permissions directes. Un
  * rôle est un raccourci de compatibilité, jamais la seule granularité offerte —
  * un opérateur doit pouvoir ouvrir une capacité sans promouvoir personne, et la
  * refermer sans rétrograder personne.
@@ -83,7 +84,10 @@ const CATALOGUE = [
   { cle: 'groups:write', libelle: 'Créer et modifier les groupes', libelleEn: 'Create and edit groups' },
 ];
 const GROUPES = [
-  { id: 'soutien', nom: 'Soutien', description: 'Lecture des dossiers', permissions: ['audit:read'], updatedAt: '2026-09-02T12:00:00.000Z' },
+  { id: 'soutien', nom: 'Soutien', description: 'Lecture des dossiers', permissions: ['audit:read'], groupesPermissions: ['dossiers'], updatedAt: '2026-09-02T12:00:00.000Z' },
+];
+const GROUPES_PERMISSIONS = [
+  { id: 'dossiers', nom: 'Dossiers', description: 'Lecture et audit', permissions: ['audit:read'], updatedAt: '2026-09-02T12:00:00.000Z' },
 ];
 const UTILISATEURS = [
   { email: 'ops@nota.ca', id: 'a1', role: 'super_admin', disabled: false, groupes: [], permissions: ['*'], effectives: ['*'], derniereConnexion: '2026-09-02T09:00:00.000Z' },
@@ -98,10 +102,13 @@ function api(over = {}) {
     if (url.includes('/metrics/overview')) return [200, { kpis: {}, gauge: {}, series: { offersPerDay: [], byService: [] } }];
     if (url.endsWith('/me')) return [200, { email: 'ops@nota.ca', role: over.role || 'super_admin', permissions: over.permissions || ['*'] }];
     if (url.endsWith('/permissions')) return [200, { ok: true, permissions: CATALOGUE }];
+    if (url.endsWith('/permission-groups') && method === 'GET') return [200, { ok: true, groupes: over.groupesPermissions || GROUPES_PERMISSIONS }];
     if (url.endsWith('/groups') && method === 'GET') return [200, { ok: true, groupes: over.groupes || GROUPES }];
     if (url.endsWith('/users') && method === 'GET') return [200, { ok: true, utilisateurs: over.utilisateurs || UTILISATEURS }];
     if (url.includes('/groups/') && method === 'PUT') return over.putGroup ? over.putGroup(body) : [200, { ok: true, groupe: { id: 'x', nom: body.nom, permissions: body.permissions || [] } }];
     if (url.includes('/groups/') && method === 'DELETE') return [200, { ok: true }];
+    if (url.includes('/permission-groups/') && method === 'PUT') return over.putPermissionGroup ? over.putPermissionGroup(body) : [200, { ok: true, groupe: { id: 'x', nom: body.nom, permissions: body.permissions || [] } }];
+    if (url.includes('/permission-groups/') && method === 'DELETE') return [200, { ok: true }];
     if (url.includes('/users/') && method === 'PUT') return over.putUser ? over.putUser(body) : [200, { ok: true, utilisateur: {} }];
     return [404, null];
   };
@@ -115,6 +122,22 @@ test('le rail porte une entrée « Accès » qui route vers #/acces', async () =
   click(win, lien);
   await waitFor(win, '.acces-groupes');
   assert.equal(win.location.hash, '#/acces');
+});
+
+test('la console rend les groupes de permissions séparément et permet de les créer', async () => {
+  const recus = [];
+  const { win, doc } = await boot(api({ putPermissionGroup: (b) => { recus.push(b); return [200, { ok: true, groupe: { id: 'lecture', ...b } }]; } }), '#/auth?token=T');
+  await waitFor(win, '.admin-rail');
+  win.location.hash = '#/acces';
+  await waitFor(win, '.acces-groupes-permissions');
+  assert.match(text(doc.querySelector('.acces-groupes-permissions')), /Dossiers/);
+  const form = await waitFor(win, '.acces-groupe-permission-form');
+  type(win, form.querySelector('[name="id"]'), 'lecture');
+  type(win, form.querySelector('[name="nom"]'), 'Lecture');
+  form.querySelector('input[value="audit:read"]').checked = true;
+  submit(win, form);
+  for (let i = 0; i < 4; i++) await wait(10);
+  assert.deepEqual(recus[0].permissions, ['audit:read']);
 });
 
 test('la vue liste les groupes, leurs permissions, et les utilisateurs avec leurs accès effectifs', async () => {

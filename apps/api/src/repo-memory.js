@@ -50,6 +50,7 @@ function createMemoryRepo(seed = []) {
   // for idempotency.
   const byNotary = new Map();
   const events = new Map();
+  const notaryAIPayments = new Map();
   const acts = new Map(); // bidId -> completed-act record (idempotency ledger)
   const partners = new Map(); // CODE -> registered referral partner (ADR 0011)
   const referralEarnings = new Map(); // `${CODE}#${TRACK}#${refId}` -> durable earning event
@@ -60,6 +61,8 @@ function createMemoryRepo(seed = []) {
   // Notification ledgers: sent (idempotency) and unsubscribe (suppression).
   const notificationPreferences = new Map();
   const emailLanguages = new Map();
+  // ADR 0051 — le consentement au texto, par destinataire (clé = courriel).
+  const smsConsents = new Map(); // lowercased email -> { telephone, consent, at }
   const notified = new Map(); // `${refId}#${kind}` -> timestamp
   const unsubscribed = new Set(); // lowercased emails
 
@@ -67,10 +70,13 @@ function createMemoryRepo(seed = []) {
   // key, mirroring the CONFIG#EMAIL / TPL#<key> partition on the main table.
   const emailOverrides = new Map(); // templateKey -> { key, enabled, subjectFr, subjectEn, updatedAt }
 
-  // Groupes d'administrateurs (RBAC découplé) : un groupe réunit des
-  // permissions et s'attribue à des utilisateurs. Miroir de la partition
-  // GROUPS / GROUP#<id> de la table admin.
-  const groupes = new Map(); // id -> { id, nom, description, permissions[], updatedAt }
+  // Groupes d'administrateurs (RBAC découplé) : les utilisateurs appartiennent
+  // à des groupes, et les groupes attachent des groupes de permissions. Les
+  // deux collections sont séparées pour qu'un paquet de permissions soit
+  // réutilisable sans recopier les clés sur chaque groupe.
+  const groupes = new Map(); // id -> { id, nom, description, groupesPermissions[], permissions[], updatedAt }
+  const groupesPermissions = new Map(); // id -> { id, nom, description, permissions[], updatedAt }
+  const cabinets = new Map(); // id -> { id, nom, planId, notaires[], ... }
 
   // Campagnes ciblées (segments.js). TROIS registres distincts, et la distinction
   // porte : `audienceGroupes` est une liste de DESTINATAIRES — rien à voir avec
@@ -200,6 +206,7 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
   // Admin table: identities, single-use login challenges, revocable sessions,
   // the append-only audit log, and rate-limit counters.
   const admins = new Map(); // adminId -> profile
+  const crmLeads = new Map(); // bidId -> operator workflow metadata
   const challenges = new Map(); // challengeId -> record
   const sessions = new Map(); // sessionId -> record
   const audit = []; // { id, ts, action, adminId, email, ip, meta }
@@ -209,6 +216,9 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
   const oauthTickets = new Map();
   const oauthIdentities = new Map();
   return {
+    // Memory mode exposes both surfaces through one process, so its admin
+    // records are available to the local admin seed as well.
+    adminTableConfigured: true,
     async getSigningSession(bidId) {
       const value = signingSessions.get(bidId);
       return value ? structuredClone(value) : null;
@@ -512,6 +522,34 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
       byNotary.set(notary.id, { ...notary });
       return notary;
     },
+    // AI entitlement is a separate, revisioned sub-document on the notary
+    // profile. Keeping the compare-and-set here makes a concurrent first-use
+    // request consume one unit, never two.
+    async updateNotaryAI(notaryId, aiAccess, expectedRevision = 0) {
+      const current = byNotary.get(notaryId);
+      if (!current) return false;
+      const currentRevision = Number(current.aiAccess && current.aiAccess.revision) || 0;
+      if (currentRevision !== Number(expectedRevision) || Number(aiAccess.revision) !== currentRevision + 1) return false;
+      byNotary.set(notaryId, { ...current, aiAccess: structuredClone(aiAccess) });
+      return true;
+    },
+    async applyNotaryAIPayment(notaryId, paymentId, aiAccess, expectedRevision = 0, at = null) {
+      const current = byNotary.get(notaryId);
+      if (!current) return { ok: false };
+      const payment = String(paymentId || '');
+      if (!payment) return { ok: false };
+      if (notaryAIPayments.has(payment)) {
+        const previous = notaryAIPayments.get(payment);
+        return previous.notaryId === notaryId
+          ? { ok: true, applied: false, aiAccess: structuredClone(current.aiAccess || {}) }
+          : { ok: false };
+      }
+      const currentRevision = Number(current.aiAccess && current.aiAccess.revision) || 0;
+      if (currentRevision !== Number(expectedRevision) || Number(aiAccess.revision) !== currentRevision + 1) return { ok: false };
+      byNotary.set(notaryId, { ...current, aiAccess: structuredClone(aiAccess) });
+      notaryAIPayments.set(payment, { notaryId, quantity: aiAccess.paidUses, at: at || null });
+      return { ok: true, applied: true, aiAccess: structuredClone(aiAccess) };
+    },
     // Mirrors the Dynamo sparse-GSI1 read: only ACTIVE notaries are enumerable.
     async listActiveNotaries() {
       // 2026-09-02: an operator-approved notary (`approuveLe`) is active on
@@ -575,6 +613,24 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
     },
     async putNotificationPreferences(email, preferences) {
       notificationPreferences.set(String(email).trim().toLowerCase(), { ...preferences });
+    },
+    // --- Le consentement au texto (ADR 0051) ---------------------------------
+    // Un fait par personne, écrasable : la DERNIÈRE décision compte, et le
+    // retrait (consent: false) s'écrit comme l'octroi — c'est un geste exprès,
+    // pas une absence. Le journal de consentement porte l'histoire.
+    async getSmsConsent(email) {
+      const c = smsConsents.get(String(email).trim().toLowerCase());
+      return c ? { ...c } : null;
+    },
+    async putSmsConsent(email, { telephone, consent, at } = {}) {
+      const key = String(email).trim().toLowerCase();
+      if (!key) throw new Error('putSmsConsent: email is required');
+      const item = { telephone: telephone == null ? null : String(telephone), consent: consent === true, at: at || null };
+      smsConsents.set(key, item);
+      return { ...item };
+    },
+    async deleteSmsConsent(email) {
+      smsConsents.delete(String(email).trim().toLowerCase());
     },
     async getEmailOverride(key) {
       const o = emailOverrides.get(String(key));
@@ -806,6 +862,24 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
       return admin;
     },
 
+    // --- CRM workflow metadata (separate admin table) ----------------------
+    async getCrmLead(bidId) {
+      const lead = crmLeads.get(String(bidId));
+      return lead ? structuredClone(lead) : null;
+    },
+    async putCrmLead(lead, expectedRevision = null) {
+      const id = String(lead && lead.bidId || '');
+      const current = crmLeads.get(id);
+      const currentRevision = Number(current && current.revision) || 0;
+      if (expectedRevision !== null && currentRevision !== Number(expectedRevision)) {
+        const error = new Error('crm_conflit');
+        error.name = 'ConditionalCheckFailedException';
+        throw error;
+      }
+      crmLeads.set(id, structuredClone(lead));
+      return structuredClone(lead);
+    },
+
     // --- Groupes d'administrateurs (RBAC découplé) --------------------------
     async getGroup(id) {
       const g = groupes.get(String(id));
@@ -821,6 +895,40 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
     },
     async listGroups() {
       return [...groupes.values()].map((g) => ({ ...g })).sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    },
+    async getPermissionGroup(id) {
+      const g = groupesPermissions.get(String(id));
+      return g ? { ...g, permissions: [...(g.permissions || [])] } : null;
+    },
+    async putPermissionGroup(groupe, updatedAt) {
+      const item = { ...groupe, permissions: [...(groupe.permissions || [])], updatedAt };
+      groupesPermissions.set(String(groupe.id), item);
+      return { ...item, permissions: [...item.permissions] };
+    },
+    async deletePermissionGroup(id) {
+      groupesPermissions.delete(String(id));
+    },
+    async listPermissionGroups() {
+      return [...groupesPermissions.values()]
+        .map((g) => ({ ...g, permissions: [...(g.permissions || [])] }))
+        .sort((a, b) => String(a.id).localeCompare(String(b.id)));
+    },
+    async getCabinet(id) {
+      const cabinet = cabinets.get(String(id));
+      return cabinet ? { ...cabinet, notaires: [...(cabinet.notaires || [])] } : null;
+    },
+    async putCabinet(cabinet, updatedAt) {
+      const item = { ...cabinet, notaires: [...(cabinet.notaires || [])], updatedAt };
+      cabinets.set(String(cabinet.id), item);
+      return { ...item, notaires: [...item.notaires] };
+    },
+    async deleteCabinet(id) {
+      cabinets.delete(String(id));
+    },
+    async listCabinets() {
+      return [...cabinets.values()]
+        .map((cabinet) => ({ ...cabinet, notaires: [...(cabinet.notaires || [])] }))
+        .sort((a, b) => String(a.nom).localeCompare(String(b.nom)) || String(a.id).localeCompare(String(b.id)));
     },
 
     // --- Campagnes ciblées : audience, consentement, fréquence ---------------

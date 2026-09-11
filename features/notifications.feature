@@ -95,3 +95,38 @@ Fonctionnalité: Cycle de vie des notifications
     Alors la réponse a le statut 201
     Et aucun courriel client n'est tenté
     Et l'opérateur reçoit le courriel "nouveau lead"
+
+  # ADR 0051 — le texto est un canal de consentement EXPRÈS. LCAP : un texto est
+  # un message électronique commercial, et Nota n'y lit aucune exemption
+  # transactionnelle. Sans la case cochée, aucun texto, jamais — le courriel,
+  # lui, part comme avant. Le texto est UNE ligne : le sujet du courriel et le
+  # lien vers l'acte, dans la langue du destinataire.
+  Scénario: un client qui a coché le texto reçoit un SMS quand un notaire retient sa demande
+    Étant donné un notaire actif et joignable "jeanne@etude.ca"
+    Quand un client nommé "Marie Roy" au téléphone "418 555-0100" publie une offre avec le courriel "marie@exemple.ca" pour "refinancement" à 2500 dans 10 jours en cochant le texto
+    Et le notaire "jeanne@etude.ca" retient l'offre
+    Alors le client "marie@exemple.ca" reçoit le courriel "offre retenue"
+    Et le numéro "+14185550100" reçoit exactement 1 texto
+    Et ce texto porte le sujet de ce courriel et le lien vers l'acte
+
+  Scénario: sans la case cochée, un client n'est jamais texté — même avec un téléphone
+    Étant donné un notaire actif et joignable "jeanne@etude.ca"
+    Quand un client nommé "Marie Roy" au téléphone "418 555-0100" publie une offre avec le courriel "marie@exemple.ca" pour "refinancement" à 2500 dans 10 jours
+    Et le notaire "jeanne@etude.ca" retient l'offre
+    Alors le client "marie@exemple.ca" reçoit le courriel "offre retenue"
+    Et aucun texto n'est envoyé
+
+  # 2026-09-11 — chaque événement d'affaires sonne dans l'application, des deux
+  # côtés. L'inventaire trouvait la cloche du client muette sur la publication
+  # et sur l'annulation, et celle du notaire muette sur l'annulation d'une
+  # demande qu'il avait retenue. Le titre de chaque avis est celui du
+  # catalogue du domaine (NOTIF_KINDS), jamais une chaîne retapée.
+  Scénario: la cloche du client et celle du notaire portent la publication puis l'annulation d'une demande retenue
+    Étant donné un notaire actif et joignable "jeanne@etude.ca"
+    Quand un client publie une offre avec le courriel "client@exemple.ca" pour "refinancement" à 2500 dans 10 jours
+    Alors la cloche du client porte un avis "publiee"
+    Quand le notaire "jeanne@etude.ca" retient l'offre
+    Et le client annule son offre
+    Alors la cloche du client porte un avis "annulee"
+    Et la cloche du notaire "jeanne@etude.ca" porte un avis "annulee"
+    Et cet avis mène à l'acte sur la console

@@ -3029,6 +3029,20 @@
     // le client n'apprenait jamais, dans l'application, ce qui avait été
     // retenu sur sa carte ou libéré.
     { id: 'annulation',  titre: 'Suite de votre annulation', titreEn: 'About your cancellation', audiences: ['client'] },
+    // 2026-09-11 — chaque événement d'affaires sonne dans l'application.
+    // L'inventaire trouvait sept trous : la cloche du client n'apprenait ni la
+    // publication, ni une demande de documents, ni les rappels J-7/3/1/0, ni
+    // l'annulation elle-même, ni l'acte réglé, ni une carte refusée ; celle
+    // du notaire n'apprenait ni la réponse à sa proposition, ni l'annulation,
+    // ni le paiement de l'acte. `annulation` reste l'ISSUE D'ARGENT d'une
+    // annulation (l'indemnité) ; `annulee` est le fait lui-même.
+    { id: 'publiee',             titre: 'Votre offre est publiée',           titreEn: 'Your offer is published',        audiences: ['client'] },
+    { id: 'documents_demandes',  titre: 'Le notaire demande des documents',  titreEn: 'The notary requests documents',  audiences: ['client'] },
+    { id: 'rappel',              titre: 'Votre date approche',               titreEn: 'Your date is approaching',       audiences: ['client'] },
+    { id: 'annulee',             titre: 'Offre annulée',                     titreEn: 'Offer cancelled',                audiences: ['client', 'notaire'] },
+    { id: 'acte',                titre: 'Acte signé',                        titreEn: 'Act signed',                     audiences: ['client', 'notaire'] },
+    { id: 'proposition_reponse', titre: 'Réponse à votre proposition',       titreEn: 'Answer to your proposal',        audiences: ['notaire'] },
+    { id: 'caution',             titre: 'Carte refusée',                     titreEn: 'Card declined',                  audiences: ['client', 'notaire'] },
   ]);
   function isNotifKind(id) {
     return typeof id === 'string' && NOTIF_KINDS.some((k) => k.id === id);
@@ -3354,7 +3368,9 @@
   // string. Absent or null reads as the default; anything else is validated
   // loudly so a corrupted preference never silently mutes a notary.
   const NOTARY_ALERT_PACES = ['instant', 'daily', 'weekly', 'off'];
-  const NOTARY_ALERTES_DEFAULT = Object.freeze({ pace: 'daily', urgentOnly: false });
+  // ADR 0051 — `sms` : le texto est un canal de consentement EXPRÈS. Faux par
+  // défaut, jamais déduit ; un profil antérieur à l'ADR lit « faux ».
+  const NOTARY_ALERTES_DEFAULT = Object.freeze({ pace: 'daily', urgentOnly: false, sms: false });
   function validateNotaryAlertes(raw) {
     if (raw === undefined || raw === null) return { ok: true, value: { ...NOTARY_ALERTES_DEFAULT }, errors: [] };
     if (typeof raw !== 'object' || Array.isArray(raw)) {
@@ -3378,8 +3394,16 @@
         urgentOnly = raw.urgentOnly;
       }
     }
+    let sms = NOTARY_ALERTES_DEFAULT.sms;
+    if (raw.sms !== undefined && raw.sms !== null) {
+      if (typeof raw.sms !== 'boolean') {
+        errors.push({ code: 'alertes_invalides', message: 'L’alerte par texto doit être vrai ou faux.' });
+      } else {
+        sms = raw.sms;
+      }
+    }
     if (errors.length) return { ok: false, value: null, errors };
-    return { ok: true, value: { pace, urgentOnly }, errors: [] };
+    return { ok: true, value: { pace, urgentOnly, sms }, errors: [] };
   }
   // What a STORED profile's alerts are — the default when the notary said
   // nothing, and the default again when the stored value is corrupt: a
@@ -3469,6 +3493,65 @@
     const digits = s.replace(/\D/g, '');
     if (!digits) return null;
     return 'tel:' + (plus ? '+' + digits : '+1' + digits);
+  }
+
+  // The SAME loose rule as validateTelephone, resolved to one canonical shape
+  // for a carrier: E.164, North-American plan. « (418) 555-0100 » and
+  // « 1 418 555 0100 » both become « +14185550100 »; anything that is not a
+  // dialable 10/11-digit NANP number is null — a text message is never sent
+  // to a guess. The port (apps/api/src/sms-port.js) refuses anything else.
+  function toE164(raw) {
+    const s = String(raw == null ? '' : raw).trim();
+    if (!s) return null;
+    const digits = s.replace(/\D/g, '');
+    if (digits.length === 10) return '+1' + digits;
+    if (digits.length === 11 && digits.charAt(0) === '1') return '+' + digits;
+    return null;
+  }
+
+  // --- Le texto : un canal de consentement EXPRÈS (ADR 0051) -----------------
+  // LCAP / CASL : un texto est un message électronique commercial, et Nota n'y
+  // lit aucune exemption transactionnelle. Le consentement est donc un fait
+  // que la personne a POSÉ — une case cochée, un interrupteur — jamais une
+  // déduction. Absent ou nul vaut « non » ; tout ce qui n'est pas un booléen
+  // strict est refusé, parce qu'un « oui » en chaîne est exactement le genre de
+  // valeur qu'un formulaire mal câblé enverrait sans que personne l'ait voulu.
+  function validateSmsConsent(raw) {
+    if (raw === undefined || raw === null) return { ok: true, value: false, error: null };
+    if (typeof raw !== 'boolean') {
+      return { ok: false, value: null, error: { code: 'sms_consent_invalide', message: 'Le consentement aux textos doit être vrai ou faux.' } };
+    }
+    return { ok: true, value: raw, error: null };
+  }
+
+  // Ce qu'un carrier reçoit : UNE ligne, dans la langue du destinataire — le
+  // sujet du gabarit (déjà passé par la surcharge admin) puis le lien profond
+  // que le courriel porte. Un texto est un signal d'ouvrir le courriel ou
+  // l'application, jamais une seconde copie du message. Le plafond est celui
+  // d'un envoi concaténé raisonnable (320 = deux segments GSM-7) ; quand il
+  // faut couper, c'est le sujet qui cède, jamais le lien.
+  const SMS_TEXT_MAX = 320;
+  const SMS_PREFIX = Object.freeze({ fr: 'Nota : ', en: 'Nota: ' });
+  const SMS_SEPARATOR = ' — ';
+  function smsText({ lang, subject, url } = {}) {
+    const prefix = SMS_PREFIX[lang === 'en' ? 'en' : 'fr'];
+    const sujet = String(subject == null ? '' : subject).replace(/\s+/g, ' ').trim();
+    if (!sujet) return null;
+    const lien = String(url == null ? '' : url).trim();
+    const tail = lien ? SMS_SEPARATOR + lien : '';
+    const room = SMS_TEXT_MAX - prefix.length - tail.length;
+    if (room <= 1) return (prefix + tail).slice(0, SMS_TEXT_MAX);
+    const body = sujet.length > room ? sujet.slice(0, room - 1).trimEnd() + '…' : sujet;
+    return prefix + body + tail;
+  }
+
+  // Ce que l'écran des préférences a le droit de montrer du numéro enregistré :
+  // les quatre derniers chiffres, assez pour reconnaître SON téléphone, pas
+  // assez pour le composer.
+  function maskTelephone(raw) {
+    const digits = String(raw == null ? '' : raw).replace(/\D/g, '');
+    if (digits.length < 4) return null;
+    return '••• ••• ' + digits.slice(-4);
   }
 
   // --- Carnet pulse ----------------------------------------------------------
@@ -3895,6 +3978,46 @@
     maxTotalChars: 36000, maxFields: 24, maxValueChars: 1000, maxQuoteChars: 2000,
     maxReasonChars: 500, maxReviewSeconds: 86400, maxExtractionChars: 24000 });
 
+  // AI-assisted dossier preparation is a separate product from the free
+  // marketplace. The prices are deliberately domain data so the API and the
+  // browser cannot drift. A dossier analysis is the billable unit: a reused
+  // analysis and a human review never consume another unit.
+  const NOTARY_AI_BETA_TRIAL_USES = 5;
+  const NOTARY_AI_PLANS = Object.freeze([
+    Object.freeze({ id: 'essentiel', nom: 'Essentiel', nomEn: 'Essential', monthlyCents: 4900, includedUses: 20, overageCents: 900 }),
+    Object.freeze({ id: 'cabinet', nom: 'Cabinet', nomEn: 'Practice', monthlyCents: 12900, includedUses: 75, overageCents: 700 }),
+    Object.freeze({ id: 'equipe', nom: 'Équipe', nomEn: 'Team', monthlyCents: 24900, includedUses: 200, overageCents: 500 }),
+  ]);
+  const NOTARY_AI_QUESTION_DECISIONS = Object.freeze([
+    'confirmed', 'resolved', 'not_applicable', 'escalated',
+  ]);
+  function notaryAIPlan(id) {
+    return NOTARY_AI_PLANS.find(plan => plan.id === id) || null;
+  }
+  function notaryAIPlanPublic(plan) {
+    const p = typeof plan === 'string' ? notaryAIPlan(plan) : plan;
+    if (!p) return null;
+    return { id: p.id, nom: p.nom, nomEn: p.nomEn, monthlyCents: p.monthlyCents,
+      includedUses: p.includedUses, overageCents: p.overageCents };
+  }
+
+  // Commercial tiers for a notarial practice are intentionally separate from
+  // the AI usage plans above. The admin console may negotiate the actual CAD
+  // amount and included seats per cabinet; the domain owns only the stable
+  // tier vocabulary and whether the tier supports multiple notaries.
+  const CABINET_PLANS = Object.freeze([
+    Object.freeze({ id: 'independant', nom: 'Indépendant', nomEn: 'Independent', multiNotaires: false, tarification: 'standard' }),
+    Object.freeze({ id: 'cabinet', nom: 'Cabinet', nomEn: 'Practice', multiNotaires: true, tarification: 'volume' }),
+    Object.freeze({ id: 'reseau', nom: 'Réseau', nomEn: 'Network', multiNotaires: true, tarification: 'sur_mesure' }),
+  ]);
+  function cabinetPlan(id) {
+    return CABINET_PLANS.find(plan => plan.id === id) || null;
+  }
+  function cabinetPlanPublic(plan) {
+    const p = typeof plan === 'string' ? cabinetPlan(plan) : plan;
+    return p ? { ...p } : null;
+  }
+
   // The same evidence-first assistant can reduce intake work for every
   // catalogue act. Each service has a bounded vocabulary of facts. The model may
   // propose values, but a notary must review every proposal before it enters a
@@ -3940,7 +4063,7 @@
   const NOTARY_LEARNING_POLICY_VERSION = '2026-09-09.1';
   const NOTARY_LEARNING_EVENT_KINDS = Object.freeze([
     'customer_input', 'customer_behavior', 'communication', 'ai_output',
-    'notary_review', 'official_outcome', 'client_feedback',
+    'notary_review', 'notary_question', 'official_outcome', 'client_feedback',
   ]);
   const NOTARY_LEARNING_POLICIES = Object.freeze({
     customer_input: Object.freeze({
@@ -3967,6 +4090,11 @@
       strength: 'strong', source: 'notary', labelFields: true,
       rewardRole: 'extraction_preference_only',
       allowedUses: Object.freeze(['notary_verified_preference_dataset', 'regression_case']),
+    }),
+    notary_question: Object.freeze({
+      strength: 'strong', source: 'notary', labelFields: false,
+      rewardRole: 'uncertainty_calibration_only',
+      allowedUses: Object.freeze(['abstention_calibration', 'question_priority', 'regression_case']),
     }),
     official_outcome: Object.freeze({
       strength: 'strong', source: 'official_or_notary', labelFields: false,
@@ -4483,6 +4611,7 @@
       version: FINANCING_WORK_PACKET_VERSION, serviceId: bid.serviceId, customerContext,
       documentInventory: preparation.items.filter(i => i.kind === 'doc').map(i => ({ id: i.id, label: i.nom, status: i.status })),
       draftFields, missing, comparisons, dateFlags, checks,
+      uncertaintyQuestions: notaryAIUncertaintyQuestions(bid.serviceId, analysis?.preparation),
       controlPlanVersion: NOTARY_CONTROL_PLAN_VERSION,
       parameterCoverage: notaryParameterCoverage(bid.serviceId, pricing),
       controls,
@@ -4751,6 +4880,45 @@
     };
   }
 
+  // A structured uncertainty queue for the notary. It is derived from the
+  // validated extraction, never invented by the provider, and deliberately
+  // contains identifiers rather than legal conclusions. The console turns
+  // these items into explicit clarification prompts while the normal dossier
+  // remains available when AI access is absent or exhausted.
+  function notaryAIUncertaintyQuestions(serviceId, preparation) {
+    const fields = serviceId === 'financement' || serviceId === 'refinancement'
+      ? FINANCING_AI_FIELDS : actAIFields(serviceId) || [];
+    const labels = new Map(fields.map(field => [field.id, field.label]));
+    const unique = values => [...new Set(Array.isArray(values) ? values : [])]
+      .filter(id => labels.has(id));
+    return [
+      ...unique(preparation?.missing).map(fieldId => ({
+        id: 'missing:' + fieldId, fieldId, kind: 'missing_evidence', priority: 'high',
+        label: labels.get(fieldId), requiresNotaryAnswer: true,
+      })),
+      ...unique(preparation?.conflicts).map(fieldId => ({
+        id: 'conflict:' + fieldId, fieldId, kind: 'conflicting_evidence', priority: 'critical',
+        label: labels.get(fieldId), requiresNotaryAnswer: true,
+      })),
+    ];
+  }
+
+  function validateNotaryAIUncertaintyResponse(serviceId, preparation, input) {
+    const errors = [];
+    const fail = code => errors.push({ code });
+    const questions = notaryAIUncertaintyQuestions(serviceId, preparation);
+    const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+    const question = questions.find(item => item.id === source.questionId);
+    if (!question) fail('question_invalide');
+    if (!NOTARY_AI_QUESTION_DECISIONS.includes(source.decision)) fail('decision_invalide');
+    const note = typeof source.note === 'string' ? source.note.trim() : '';
+    if (note.length > FINANCING_AI_LIMITS.maxReasonChars) fail('note_trop_longue');
+    return { ok: !errors.length, errors, value: errors.length ? null : {
+      questionId: question.id, fieldId: question.fieldId, kind: question.kind,
+      decision: source.decision, ...(note ? { note } : {}),
+    } };
+  }
+
   function actPreparation(serviceId, saved, pricing) {
     const svc = serviceById(serviceId);
     if (!svc || !['testament', 'procuration'].includes(serviceId)) return null;
@@ -4831,6 +4999,7 @@
       knowledgeVersion: preparation.knowledgeVersion,
       documentInventory: preparation.items.filter(i => i.kind === 'doc').map(i => ({ id: i.id, label: i.nom, status: i.status })),
       draftFields, missing, comparisons: [], dateFlags: [], checks: preparation.checks,
+      uncertaintyQuestions: notaryAIUncertaintyQuestions(bid.serviceId, analysis?.preparation),
       controlPlanVersion: NOTARY_CONTROL_PLAN_VERSION,
       parameterCoverage: notaryParameterCoverage(bid.serviceId, pricing),
       controls,
@@ -5314,6 +5483,25 @@
     { id: 'erreur_script', nom: 'Pages avec erreur JavaScript', nomEn: 'Pages with JavaScript errors' },
     { id: 'promesse_rejetee', nom: 'Pages avec échec asynchrone non traité', nomEn: 'Pages with unhandled asynchronous failures' },
     { id: 'navigation_mesuree', nom: 'Chargements mesurés', nomEn: 'Measured page loads' },
+    // Support journey signals. These are deliberately aggregate event names:
+    // the support content itself stays in the support thread, never in
+    // analytics. Keeping this catalogue in the domain lets the API and admin
+    // console share the same allowlist and labels.
+    { id: 'contact_ouvert', nom: 'Formulaires de contact ouverts', nomEn: 'Contact forms opened' },
+    { id: 'contact_message_commence', nom: 'Messages de contact commencés', nomEn: 'Contact messages started' },
+    { id: 'contact_soumis', nom: 'Messages de contact soumis', nomEn: 'Contact messages submitted' },
+    { id: 'contact_envoye', nom: 'Messages de contact envoyés', nomEn: 'Contact messages sent' },
+    { id: 'contact_echec', nom: 'Échecs de contact', nomEn: 'Contact failures' },
+    { id: 'contact_ferme', nom: 'Formulaires de contact fermés', nomEn: 'Contact forms closed' },
+    { id: 'messagerie_ouverte', nom: 'Messageries ouvertes', nomEn: 'Support chats opened' },
+    { id: 'messagerie_sujet_choisi', nom: 'Sujets de messagerie choisis', nomEn: 'Support topics selected' },
+    { id: 'messagerie_message_commence', nom: 'Messages de messagerie commencés', nomEn: 'Support messages started' },
+    { id: 'messagerie_envoye', nom: 'Messages de messagerie envoyés', nomEn: 'Support messages sent' },
+    { id: 'messagerie_echec', nom: 'Échecs de messagerie', nomEn: 'Support message failures' },
+    { id: 'messagerie_courriel_ouvert', nom: 'Demandes de copie par courriel', nomEn: 'Email reply requests opened' },
+    { id: 'messagerie_courriel_enregistre', nom: 'Courriels de messagerie enregistrés', nomEn: 'Support emails saved' },
+    { id: 'messagerie_reponse_recue', nom: 'Réponses de soutien reçues', nomEn: 'Support replies received' },
+    { id: 'messagerie_fermee', nom: 'Messageries fermées', nomEn: 'Support chats closed' },
   ]);
   function isFunnelEvent(id) {
     return typeof id === 'string' && FUNNEL_EVENTS.some((e) => e.id === id);
@@ -6066,6 +6254,14 @@
     FINANCING_AI_LIMITS,
     ACT_AI_FIELDS,
     ACT_AI_LIMITS,
+    NOTARY_AI_BETA_TRIAL_USES,
+    NOTARY_AI_PLANS,
+    NOTARY_AI_QUESTION_DECISIONS,
+    notaryAIPlan,
+    notaryAIPlanPublic,
+    CABINET_PLANS,
+    cabinetPlan,
+    cabinetPlanPublic,
     actAIFields,
     NOTARY_LEARNING_POLICY_VERSION,
     NOTARY_LEARNING_EVENT_KINDS,
@@ -6088,6 +6284,8 @@
     financingWorkPacket,
     actPreparation,
     actWorkPacket,
+    notaryAIUncertaintyQuestions,
+    validateNotaryAIUncertaintyResponse,
     NOTARY_CONTROL_PLAN_VERSION,
     notaryControlPlan,
     NOTARY_PARAMETER_COVERAGE_VERSION,
@@ -6123,6 +6321,11 @@
     CNQ_LINK_MAX,
     validateNotaryProfile,
     validateTelephone,
+    toE164,
+    validateSmsConsent,
+    SMS_TEXT_MAX,
+    smsText,
+    maskTelephone,
     NOTARY_NAME_MAX,
     NOTARY_ADDRESS_MAX,
     NOTARY_CONTACT_REQUIRED,
