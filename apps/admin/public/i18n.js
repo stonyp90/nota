@@ -24,6 +24,7 @@
 
   // === DICTIONARY — generated from the French sources. =======================
   var TEXT = {
+    'Langue': 'Language',
     'CRM / Leads': 'CRM / Leads',
     'CRM / leads': 'CRM / leads',
     'Source de vérité : base Nota': 'Source of truth: Nota database',
@@ -277,11 +278,17 @@
   "vous@nota.ca": "you@nota.ca",
   "Mot de passe": "Password",
   "Votre mot de passe": "Your password",
+  "Afficher": "Show",
+  "Masquer": "Hide",
+  "Afficher le mot de passe": "Show password",
+  "Masquer le mot de passe": "Hide password",
+  "Mot de passe facultatif. Laissez vide pour recevoir un lien sécurisé.": "Password optional. Leave it empty to receive a secure link.",
   "Se connecter": "Sign in",
   "Connexion…": "Signing in…",
   "Courriel ou mot de passe invalide.": "Invalid email or password.",
   "Trop de tentatives. Réessayez plus tard.": "Too many attempts. Try again later.",
   "Votre session reste uniquement dans cet onglet. Si vous avez oublié votre mot de passe, laissez ce champ vide pour recevoir un lien de récupération.": "Your session stays only in this tab. If you forgot your password, leave this field empty to receive a recovery link.",
+  "Votre session reste uniquement dans cet onglet.": "Your session stays only in this tab.",
   "En local : admin@nota.local · nota-local-admin": "Local: admin@nota.local · nota-local-admin",
   "Recevoir le lien": "Send me the link",
   "Envoi…": "Sending…",
@@ -1340,6 +1347,19 @@
       (function (el) {
         var short = el.getAttribute('data-lang-toggle') === 'short';
         var target = current === 'en' ? 'fr' : 'en';
+        var choices = el.querySelectorAll('[data-set-lang]');
+        if (choices.length) {
+          el.setAttribute('aria-label', current === 'en' ? 'Language' : 'Langue');
+          for (var j = 0; j < choices.length; j++) {
+            (function (choice) {
+              var choiceLang = choice.getAttribute('data-set-lang') === 'en' ? 'en' : 'fr';
+              choice.setAttribute('aria-pressed', choiceLang === current ? 'true' : 'false');
+              choice.setAttribute('aria-label', choiceLang === 'en' ? 'English' : 'Français');
+              choice.addEventListener('click', function () { setLang(choiceLang); });
+            })(choices[j]);
+          }
+          return;
+        }
         el.textContent = short
           ? (target === 'en' ? 'EN' : 'FR')
           : (target === 'en' ? 'English' : 'Français');

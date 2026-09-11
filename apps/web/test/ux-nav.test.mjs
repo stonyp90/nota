@@ -685,34 +685,31 @@ test('P2-7: the service worker ignores other origins and never answers a failed 
 });
 
 
-test('notary landing keeps beta out of the acquisition path', async () => {
+test('notary landing exposes a quiet beta disclosure beside the acquisition path', async () => {
   const { doc } = await boot();
   doc.querySelector('.nav-tab[data-tab="notaires"]').click();
   await wait(10);
 
   const note = doc.getElementById('notary-ai-beta-note');
   assert.ok(note, 'the beta markup remains available to its dedicated tab flow');
-  assert.equal(note.hidden, true, 'the beta teaser is hidden on the notary landing');
+  assert.equal(note.hidden, false, 'the beta teaser is available on the notary landing');
   assert.equal(note.parentElement.classList.contains('notary-landing-left'), true,
-    'the hidden beta teaser stays with the landing content it describes');
+    'the beta teaser stays with the landing content it describes');
   assert.match(CSS_SRC, /\.notary-landing-left\s*\{/,
     'the landing has a dedicated left content rail');
   assert.match(CSS_SRC, /\.notary-landing-right\s*\{/,
     'the landing has a dedicated right content rail');
-  assert.match(CSS_SRC, /#pane-notaires[^{}]*\.notary-ai-beta-note\s*\{\s*display:\s*none/s,
-    'the landing keeps the beta teaser out of the visible acquisition path');
+  assert.match(CSS_SRC, /#pane-notaires[^{}]*\.notary-ai-beta-note\s*\{\s*display:\s*block/s,
+    'the landing keeps the beta teaser available without expanding its footprint');
 
   const toggle = doc.getElementById('notary-ai-beta-toggle');
   const details = doc.getElementById('notary-ai-beta-details');
   assert.equal(toggle.getAttribute('aria-haspopup'), 'dialog');
   assert.equal(details.getAttribute('role'), 'dialog');
-  note.dispatchEvent(new doc.defaultView.Event('pointerenter'));
-  assert.equal(details.getAttribute('aria-hidden'), 'false');
-  note.dispatchEvent(new doc.defaultView.Event('pointerleave'));
   assert.equal(details.getAttribute('aria-hidden'), 'true');
   toggle.click();
   assert.equal(details.getAttribute('aria-hidden'), 'false');
-  assert.ok(!note.classList.contains('is-open'), 'clicking the info control never expands the announcement');
+  assert.equal(details.hidden, false, 'clicking the info control opens the explanation');
   assert.match(CSS_SRC, /\.beta-teaser-details\s*\{[^}]*position:\s*absolute/, 'the explanation floats over the page');
   assert.match(CSS_SRC, /\.beta-teaser:hover \.beta-teaser-details,\s*\.beta-teaser:focus-within \.beta-teaser-details/, 'hover and keyboard focus reveal the same surface');
 });

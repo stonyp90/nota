@@ -179,6 +179,9 @@ test.describe('la salle de signature (ADR 0047)', () => {
     // les MÊMES variables, et ce test est ce qui les y oblige.
     expect(CLOUDFRONT).toMatch(/ice_urls\s*=\s*compact\(concat\(var\.stun_urls,\s*var\.turn_urls\)\)/);
     expect(CLOUDFRONT).toContain('${local.csp_ice_sources}');
+    expect(CLOUDFRONT).toContain('distinct(concat(local.ice_urls, local.signing_ice_urls))');
+    expect(CLOUDFRONT).toContain('"turn:${var.signing_turn_hostname}:3478"');
+    expect(CLOUDFRONT).toContain('"turns:${var.signing_turn_hostname}:443"');
     expect(LAMBDA).toMatch(/NOTA_STUN_URLS\s*=\s*join\(",",\s*var\.stun_urls\)/);
     expect(LAMBDA).toMatch(/NOTA_TURN_URL\s*=\s*join\(",",\s*var\.turn_urls\)/);
 

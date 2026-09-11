@@ -174,12 +174,12 @@
      One register for the whole app. No heading rule sets its own size, face
      or weight — it reads a step of this scale (typographie.test.mjs enforces
      it), so the three doors, the dialogs and the beta print one voice. */
-  --type-h1: clamp(42px, 4.25vw, 68px); --type-h1-lh: 1.02; --type-h1-ls: -.055em;
-  --type-h1-compact: clamp(42px, 9vw, 58px); /* the stacked (narrow) hero */
-  --type-h2: clamp(24px, 2.35vw, 34px); --type-h2-lh: 1.15; --type-h2-ls: -.045em;
-  --type-h3: 17px; --type-h3-lh: 1.3; --type-h3-ls: -.02em;
-  --type-lead: 17px; --type-lead-lh: 1.7;
-  --type-eyebrow: 12px; --type-eyebrow-ls: .1em;
+  --type-h1: clamp(32px, 3.6vw, 56px); --type-h1-lh: 1.06; --type-h1-ls: -.045em;
+  --type-h1-compact: clamp(32px, 8vw, 48px); /* the stacked (narrow) hero */
+  --type-h2: clamp(22px, 2.1vw, 30px); --type-h2-lh: 1.2; --type-h2-ls: -.035em;
+  --type-h3: 16px; --type-h3-lh: 1.35; --type-h3-ls: -.015em;
+  --type-lead: 16px; --type-lead-lh: 1.6;
+  --type-eyebrow: 11px; --type-eyebrow-ls: .11em;
 
   --maxw: 1600px; /* maximized width — fills wide screens, side padding via .wrap */
   --gap: 20px;
@@ -463,6 +463,7 @@ a:hover { text-decoration: underline; }
 .nav-history-btn:disabled { opacity: .45; cursor: default; }
 .nav-history-btn:disabled:hover { background: transparent; }
 .nav-history-btn:active:not(:disabled) { transform: scale(.92); }
+.mobile-history { display: none; }
 
 /* flex:none — the tab strip never shrinks below its labels: a squeezed header
    must slim its paddings (compact band below), never wrap a label to two lines.
@@ -927,6 +928,23 @@ html.nav-open, html.nav-open body { overflow: hidden; }
 .onb-back:hover { color: var(--brand); }
 .onb-skip { align-self: center; appearance: none; border: 0; background: transparent; color: var(--ink-muted); cursor: pointer; padding: 6px; margin-top: 12px; font: inherit; font-size: 12.5px; text-decoration: underline; }
 .onb-skip:hover { color: var(--ink); }
+
+@keyframes onb-dialog-in {
+  from { opacity: 0; transform: translateY(10px) scale(.985); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes onb-view-in {
+  from { opacity: 0; transform: translateY(7px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes onb-step-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+.onb-modal[open] { animation: onb-dialog-in .28s cubic-bezier(.2,.8,.2,1) both; }
+#onb-view-role.is-entering, #onb-view-steps.is-entering { animation: onb-view-in .32s cubic-bezier(.2,.8,.2,1) both; }
+#onb-view-steps.is-entering .onb-step { animation: onb-step-in .32s cubic-bezier(.2,.8,.2,1) both; animation-delay: calc(var(--onb-step-index, 0) * 60ms); }
+.onb-choice:focus-visible, .onb-alt:focus-visible, .onb-back:focus-visible, .onb-skip:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; }
 
 @media (max-width: 420px) {
   .onb-choices { grid-template-columns: 1fr; }
@@ -2643,6 +2661,28 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
   .footer-id { grid-column: 1 / -1; }
 }
 
+/* Final phone guardrails: keep the toolbar's flexible availability track and
+   let priced questionnaire choices become one readable, full-width column. */
+@media (max-width: 480px) {
+  .cal-toolbar-meta {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-width: 0;
+  }
+  .cal-toolbar-meta .result-count { display: none; }
+  .o-criteria .crit-row:has(.seg-btn .crit-add) .seg {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .o-criteria .crit-row:has(.seg-btn .crit-add) .seg-btn {
+    width: 100%;
+    min-width: 0;
+  }
+  .o-criteria .crit-row:has(.seg-btn .crit-add) .crit-add {
+    margin-left: auto;
+  }
+}
+
 /* --- Toast --------------------------------------------------------------- */
 .toast {
   position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%) translateY(20px);
@@ -2650,6 +2690,27 @@ input.file-native { position: absolute; width: 1px; height: 1px; opacity: 0; mar
   box-shadow: var(--shadow-lg); opacity: 0; pointer-events: none; transition: opacity .18s, transform .18s;
   z-index: 60; font-size: 14px; font-weight: 600; max-width: 90vw;
 }
+
+/* The SDLC story: a compact, self-contained visual that communicates the
+   discipline without pretending that models or compliance are magic. */
+.build-loop { margin-top: clamp(52px, 8vw, 104px); padding: clamp(24px, 4vw, 56px); border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(135deg, var(--surface), var(--surface-inset)); display: grid; grid-template-columns: minmax(260px, .8fr) minmax(420px, 1.2fr); gap: clamp(30px, 6vw, 90px); align-items: center; overflow: hidden; }
+.build-loop h2 { margin-top: 12px; max-width: 15ch; }
+.build-loop-copy > p { margin-top: 18px; color: var(--ink-muted); max-width: 43ch; }
+.build-loop-toggle { margin-top: 24px; }
+.build-loop-graphic { min-height: 470px; position: relative; display: grid; place-items: center; }
+.build-loop-ring { position: absolute; width: min(440px, 85%); aspect-ratio: 1; border: 1px dashed var(--border-strong); border-radius: 50%; animation: build-loop-spin 26s linear infinite; }
+.build-loop-ring::after { content: '→'; position: absolute; top: -13px; left: 50%; color: var(--brand); font-size: 22px; background: var(--surface); padding: 0 8px; }
+.build-loop-nodes { position: absolute; inset: 0; margin: 0; padding: 0; list-style: none; }
+.build-loop-nodes li { position: absolute; width: 132px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: 0 8px 24px #00000012; font-size: 11px; animation: build-loop-pulse 4.5s ease-in-out infinite; }
+.build-loop-nodes li:nth-child(1){top:3%;left:calc(50% - 66px)} .build-loop-nodes li:nth-child(2){top:14%;right:2%} .build-loop-nodes li:nth-child(3){top:39%;right:0} .build-loop-nodes li:nth-child(4){bottom:11%;right:10%} .build-loop-nodes li:nth-child(5){bottom:0;left:calc(50% - 66px)} .build-loop-nodes li:nth-child(6){bottom:11%;left:10%} .build-loop-nodes li:nth-child(7){top:39%;left:0} .build-loop-nodes li:nth-child(8){top:14%;left:2%} .build-loop-nodes li:nth-child(9){top:48%;left:calc(50% - 66px)}
+.build-loop-nodes li:nth-child(2){animation-delay:.5s}.build-loop-nodes li:nth-child(3){animation-delay:1s}.build-loop-nodes li:nth-child(4){animation-delay:1.5s}.build-loop-nodes li:nth-child(5){animation-delay:2s}.build-loop-nodes li:nth-child(6){animation-delay:2.5s}.build-loop-nodes li:nth-child(7){animation-delay:3s}.build-loop-nodes li:nth-child(8){animation-delay:3.5s}.build-loop-nodes li:nth-child(9){animation-delay:4s}
+.build-loop-nodes span { display:block; color:var(--brand); font-variant-numeric:tabular-nums; } .build-loop-nodes strong { display:block; margin-top:2px; font-size:13px; } .build-loop-nodes small { display:block; color:var(--ink-muted); line-height:1.35; margin-top:3px; }
+.build-loop-core { position: relative; z-index: 1; width: 158px; aspect-ratio: 1; border-radius: 50%; display:grid; place-content:center; text-align:center; background:var(--brand); color:var(--brand-ink); box-shadow:0 0 0 12px color-mix(in srgb, var(--brand) 12%, transparent); } .build-loop-core span { font:800 25px var(--font-display); } .build-loop-core small { margin-top:8px; line-height:1.35; }
+.build-loop-note { grid-column: 1/-1; color:var(--ink-muted); font-size:12px; border-top:1px solid var(--border); padding-top:18px; }
+@keyframes build-loop-spin { to { transform:rotate(360deg); } } @keyframes build-loop-pulse { 50% { transform:translateY(-4px); border-color:var(--brand); } }
+.build-loop:has(.build-loop-toggle[aria-pressed="true"]) .build-loop-ring, .build-loop:has(.build-loop-toggle[aria-pressed="true"]) .build-loop-nodes li { animation-play-state:paused; }
+@media (max-width:760px){.build-loop{grid-template-columns:1fr;padding:25px 20px}.build-loop-graphic{min-height:450px;transform:scale(.9);margin:-20px -24px}.build-loop-note{grid-column:auto}}
+@media (prefers-reduced-motion:reduce){.build-loop-ring,.build-loop-nodes li,.onb-modal[open],#onb-view-role.is-entering,#onb-view-steps.is-entering,#onb-view-steps.is-entering .onb-step{animation:none!important}#onb-view-steps.is-entering .onb-step{opacity:1;transform:none}}
 .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
 /* --- Dialog -------------------------------------------------------------- */
@@ -4825,6 +4886,9 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   #lang-toggle { display: none; }
   /* Both controls moved to the drawer: an empty strip is not a control. */
   .header-tools { display: none; }
+  .mobile-history { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+  .mobile-history .mnav-history-btn { width: 44px; min-width: 44px; height: 44px; color: var(--ink-muted); }
+  .mobile-history .mnav-history-btn:disabled { opacity: .42; }
 }
 
 /* ==========================================================================
@@ -7158,6 +7222,52 @@ body.salle-ouverte { overflow: hidden; }
   }
 }
 
+/* Final landing geometry: keep the public proof and the access door in one
+   reading order at every breakpoint. The responsive contract uses the hero as
+   the desktop alignment line, and the inventory as the mobile hand-off. */
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-landing-right #notary-console {
+  margin-top: 0;
+}
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-ai-beta-note {
+  display: block;
+}
+@media (max-width: 899.98px) {
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-ai-beta-note { order: 2; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-landing-right #notary-console { order: 5; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet { order: 6; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #nc-conformite { order: 7; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nota-guarantee { order: 8; }
+}
+
+/* Tablets keep the desktop header but use the same honest one-column landing
+   as phones: the inventory must finish before the access gate begins. */
+@media (min-width: 900px) and (max-width: 1200px) {
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-landing-left,
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-landing-right { display: contents; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .intro--hero { order: 1; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-ai-beta-note { order: 2; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-live-head { order: 3; width: 100%; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nc-live { order: 4; width: 100%; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-landing-right #notary-console { order: 5; margin-top: 0; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet { order: 6; width: 100%; margin-top: var(--space-10); }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #nc-conformite { order: 7; width: 100%; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .nota-guarantee { order: 8; width: 100%; }
+}
+
+/* Empty inventory keeps the same footprint as the six quiet slots behind it,
+   so the empty message does not collapse or create a layout jump. */
+.nc-live-grid--empty { position: relative; }
+.nc-live-grid--empty .nc-live-empty {
+  position: absolute; inset: 0; z-index: 1; display: grid; place-items: center;
+  min-height: 100%; padding: var(--space-8); box-sizing: border-box;
+  color: var(--ink-muted); text-align: center; pointer-events: none;
+}
+
 /* --- Account menu refinement ---------------------------------------------
    Keep the account hub calm and flat: the shadow separates it from the page,
    while the identity row remains part of the menu instead of becoming a card
@@ -7486,4 +7596,32 @@ html[data-theme='dark'] #pane-beta {
   border: 0;
   background: transparent;
   color: var(--brand);
+}
+
+/* The beta note is a signed-out discovery cue; an authenticated notary gets
+   the account-scoped preparation card instead. */
+#pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-ai-beta-note { display: block; }
+
+/* Wide landing: the rail is a single CSS grid. The access card sits on the
+   hero row, while the agenda deliberately spans the full width below both
+   columns; this prevents sparse inventory from leaving a false empty gutter. */
+@media (min-width: 1200.01px) {
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(300px, .75fr);
+    grid-template-areas:
+      "left console"
+      "carnet carnet"
+      "conformite conformite"
+      "guarantee guarantee";
+    column-gap: clamp(24px, 3vw, 48px);
+    row-gap: 0;
+    align-items: start;
+  }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-landing-right { display: contents; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) #notary-console { grid-area: console; }
+  #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) .notary-carnet {
+    grid-area: carnet;
+    margin-top: var(--space-10);
+  }
 }

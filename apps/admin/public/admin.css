@@ -78,6 +78,10 @@ a:hover { text-decoration: underline; }
   border: 1px solid var(--border); border-radius: var(--radius-sm);
 }
 .admin-spacer { flex: 1; }
+.lang-btn { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); }
+.lang-choice { appearance: none; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); padding: 5px 7px; font: 700 10px/1 var(--font-sans); letter-spacing: .06em; cursor: pointer; }
+.lang-choice[aria-pressed="true"] { background: var(--brand); color: var(--brand-ink); }
+.lang-choice:focus-visible { outline: 2px solid var(--brand-bright); outline-offset: 2px; }
 
 .admin-userbar { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .admin-user { display: flex; align-items: center; gap: 8px; min-width: 0; }

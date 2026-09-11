@@ -56,7 +56,10 @@
 
       <!-- Language toggle: shows the OTHER language. Wired and labelled by
            i18n.js; data-i18n-skip keeps the translator's walker away. -->
-      <button type="button" class="icon-btn lang-btn" id="admin-lang-toggle" data-lang-toggle="short" data-i18n-skip></button>
+      <div class="lang-btn" id="admin-lang-toggle" data-lang-toggle="short" data-i18n-skip role="group" aria-label="Langue">
+        <button type="button" class="lang-choice" data-set-lang="fr" lang="fr-CA" aria-pressed="false">FR</button>
+        <button type="button" class="lang-choice" data-set-lang="en" lang="en-CA" aria-pressed="false">EN</button>
+      </div>
       <button type="button" class="icon-btn" id="admin-theme-toggle" title="Thème clair / sombre" aria-label="Changer de thème">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
       </button>

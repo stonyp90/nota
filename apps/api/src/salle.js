@@ -48,7 +48,7 @@ function isoDe(ms) { return new Date(ms).toISOString(); }
 // son HMAC. Un identifiant volé meurt donc tout seul (exigence A6).
 function iceServers(env = process.env, { nowMs = Date.now, vieS = 3600 } = {}, sujet = 'nota') {
   const serveurs = [];
-  const stun = String(env.NOTA_STUN_URLS || 'stun:stun.l.google.com:19302').trim();
+  const stun = String(env.NOTA_STUN_URLS ?? 'stun:stun.l.google.com:19302').trim();
   if (stun) serveurs.push({ urls: stun.split(/[,\s]+/).filter(Boolean) });
 
   const turn = String(env.NOTA_TURN_URL || '').trim();
@@ -103,9 +103,10 @@ function vueSalle(salle, { nowMs }) {
   };
 }
 
-function createSalleService({ repo, now = () => new Date().toISOString().slice(0, 10), nowMs = () => Date.now(), env = process.env, appendAudit = async () => {}, signature } = {}) {
+function createSalleService({ repo, now = () => new Date().toISOString().slice(0, 10), nowMs = () => Date.now(), env = process.env, appendAudit = async () => {}, signature, readTurnSecret } = {}) {
   const port = signature || createSignaturePort(env);
   const fournisseur = fournisseurConfigure(env);
+  const turnSecret = require('./turn-secret').createTurnSecretReader({ env, nowMs, readTurnSecret });
 
   // --- Écriture concurrente ---------------------------------------------------
   // Deux pairs poussent des candidats ICE sur le même item pendant
@@ -229,7 +230,18 @@ function createSalleService({ repo, now = () => new Date().toISOString().slice(0
 
   return {
     fournisseur,
-    iceServers: (sujet) => iceServers(env, { nowMs }, sujet),
+    iceServers: async (sujet) => {
+      // Production already provisions a Canadian relay for /signature.html.
+      // Reuse its SSM reference and bounded credentials for the second room.
+      if (env.NOTA_SIGNING_TURN_URLS) {
+        const raw = env.NOTA_SIGNING_TURN_URLS;
+        const urls = raw.startsWith('[') ? JSON.parse(raw) : raw.split(',');
+        const secret = await turnSecret();
+        if (!Array.isArray(urls) || !urls.length || !secret) throw new Error('TURN unavailable');
+        return iceServers({ ...env, NOTA_STUN_URLS: '', NOTA_TURN_URL: urls.join(','), NOTA_TURN_SECRET: secret }, { nowMs, vieS: 1800 }, sujet);
+      }
+      return iceServers(env, { nowMs }, sujet);
+    },
     vueSalle: (salle) => vueSalle(salle, { nowMs: nowMs() }),
 
     /**

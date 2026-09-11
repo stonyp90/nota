@@ -17,6 +17,11 @@ output "pitch_domain" {
   value       = var.pitch_domain_name
 }
 
+output "brand_domain" {
+  description = "Shareable Nota brand-kit hostname when configured, otherwise the empty value."
+  value       = var.brand_domain_name
+}
+
 output "web_bucket_name" {
   description = "Name of the private S3 bucket holding the web assets."
   value       = aws_s3_bucket.web.bucket

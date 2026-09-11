@@ -338,6 +338,10 @@
           </span>
           <span class="brand-sub">Québec</span>
         </a>
+        <div class="mobile-history" role="group" aria-label="Historique">
+          <button type="button" class="icon-btn mnav-history-btn" data-history="back" aria-label="Précédent" title="Précédent">←</button>
+          <button type="button" class="icon-btn mnav-history-btn" data-history="forward" aria-label="Suivant" title="Suivant">→</button>
+        </div>
         <span class="header-spacer"></span>
         <!-- Marketplace doors plus the owner-requested Beta section. No chevron submenus — every inner destination is
              reached from inside its pane, never from a nested menu. The
@@ -636,6 +640,31 @@
 
           </div>
 
+          <section class="build-loop" id="how-we-build" aria-labelledby="build-loop-title">
+            <div class="build-loop-copy">
+              <span class="eyebrow">Notre façon de construire</span>
+              <h2 id="build-loop-title">Une idée. Une boucle complète. Un produit qui apprend.</h2>
+              <p>Chaque fonctionnalité suit le même cycle : planifier, choisir, tester, livrer, écouter et améliorer. Rien ne passe à l’étape suivante sans notre définition de fini.</p>
+              <button type="button" class="btn btn-ghost build-loop-toggle" aria-pressed="false" aria-controls="build-loop-graphic">Mettre l’animation en pause</button>
+            </div>
+            <div class="build-loop-graphic" id="build-loop-graphic" role="img" aria-label="Boucle de développement : concept, plan, technologie, tests, sécurité, CI/CD, production, feedback et amélioration des modèles">
+              <div class="build-loop-ring" aria-hidden="true"></div>
+              <ol class="build-loop-nodes">
+                <li><span>01</span><strong>Concept</strong><small>L’idée devient intention.</small></li>
+                <li><span>02</span><strong>Plan</strong><small>Une mise en œuvre claire.</small></li>
+                <li><span>03</span><strong>Technologie</strong><small>Les bons outils, au bon endroit.</small></li>
+                <li><span>04</span><strong>Tests</strong><small>Unitaires, contrat et comportement.</small></li>
+                <li><span>05</span><strong>Sécurité</strong><small>Conformité intégrée au cycle.</small></li>
+                <li><span>06</span><strong>CI/CD</strong><small>Chaque changement est vérifié.</small></li>
+                <li><span>07</span><strong>Production</strong><small>Livrer, puis vérifier.</small></li>
+                <li><span>08</span><strong>Feedback</strong><small>Écouter les personnes qui l’utilisent.</small></li>
+                <li><span>09</span><strong>Modèles</strong><small>Chaque fournisseur itère dans sa boucle.</small></li>
+              </ol>
+              <div class="build-loop-core"><span>Nota</span><small>Relier la date,<br>la confiance<br>et la capacité.</small></div>
+            </div>
+            <p class="build-loop-note">La petite boucle des modèles est testée localement, puis en bêta, avant de rejoindre la grande boucle.</p>
+          </section>
+
 
         </div>
 
@@ -699,9 +728,9 @@
                 <span class="sub-card-title">Préparation assistée pour les notaires</span>
               </span>
               <span class="beta-teaser-hint">Bientôt</span>
-              <button class="beta-teaser-info" id="notary-ai-beta-toggle" type="button" aria-haspopup="dialog" aria-controls="notary-ai-beta-details" aria-describedby="notary-ai-beta-details" aria-label="En savoir plus sur la bêta" title="En savoir plus sur la bêta">i</button>
+              <button class="beta-teaser-info" id="notary-ai-beta-toggle" type="button" aria-expanded="false" aria-haspopup="dialog" aria-controls="notary-ai-beta-details" aria-describedby="notary-ai-beta-details" aria-label="En savoir plus sur la bêta" title="En savoir plus sur la bêta">i</button>
             </div>
-            <div class="beta-teaser-details" id="notary-ai-beta-details" role="dialog" aria-label="À propos de la bêta" aria-hidden="true">
+            <div class="beta-teaser-details" id="notary-ai-beta-details" role="dialog" aria-label="À propos de la bêta" aria-hidden="true" hidden>
               <p class="sub-card-sub">La préparation assistée est gratuite pendant la bêta. Nota améliore actuellement un système spécialisé — modèle, instructions et algorithmes propriétaires — à partir de données contrôlées et de révisions professionnelles.</p>
               <p class="help">La bêta pourra évoluer vers un abonnement pour notaires; aucun prix ni échéance n’est fixé. Les documents transmis pour votre dossier ne servent pas à entraîner les modèles.</p>
               <p class="beta-teaser-ask">Souhaitez-vous recevoir une invitation à la bêta ?</p>
@@ -1622,6 +1651,10 @@
               <ol class="beta-preview-steps"><li>Préparation</li><li>Lecture ensemble</li><li>Signature de test</li></ol>
             </div>
           </div>
+          <aside class="beta-security" aria-label="Sécurité de la bêta">
+            <strong>Une infrastructure canadienne</strong>
+            <p>La bêta s’appuie sur une infrastructure canadienne et un document fictif. Aucun acte réel n’est produit.</p>
+          </aside>
           <aside class="beta-boundary" aria-label="Portée de la bêta">
             <strong>Un essai, aucun acte réel.</strong>
             <p>La bêta utilise un document fictif. Elle ne signe aucun acte notarié et ne déclenche aucun paiement. La signature officielle reste à venir, après validation et intégration du fournisseur autorisé.</p>
@@ -2065,7 +2098,7 @@
           <div class="auth-mark" aria-hidden="true"><span class="brand-badge"><img src="favicon.svg" width="26" height="26" alt="" /></span></div>
           <h2 id="onb-title" class="onb-title">Bienvenue sur Nota</h2>
           <p class="onb-sub">Comment souhaitez-vous utiliser Nota&nbsp;?</p>
-          <p class="onb-progress" id="onb-progress">Étape 1 sur 2</p>
+          <p class="onb-progress" id="onb-progress" aria-live="polite">Étape 1 sur 2</p>
           <!-- Slot for the « démonstration » mark: the two live-proof lines on
                the role cards below count the month's demands. -->
           <p class="onb-live-host"></p>
@@ -2092,7 +2125,7 @@
           <button type="button" class="onb-back" id="onb-back"><span aria-hidden="true">← </span>Changer de profil</button>
           <h2 class="onb-title onb-steps-title" id="onb-steps-title"></h2>
           <p class="onb-sub" id="onb-steps-sub"></p>
-          <p class="onb-progress" id="onb-steps-progress">Étape 2 sur 2</p>
+          <p class="onb-progress" id="onb-steps-progress" aria-live="polite">Étape 2 sur 2</p>
           <ol class="onb-steps" id="onb-steps"></ol>
           <button type="button" class="btn btn-primary btn-lg onb-cta" id="onb-cta"></button>
           <button type="button" class="onb-alt" id="onb-alt"></button>

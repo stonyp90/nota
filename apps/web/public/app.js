@@ -2298,6 +2298,7 @@
     clear(list);
     flow.steps.forEach(function (st, i) {
       var li = el('li', 'onb-step');
+      li.style.setProperty('--onb-step-index', String(i));
       li.appendChild(el('span', 'onb-step-n', String(i + 1)));
       var body = el('div', 'onb-step-body');
       body.appendChild(el('div', 'onb-step-t', st.t));
@@ -2363,6 +2364,22 @@
     return !!(dlg && dlg.open);
   }
 
+  // Keep the guide's two views feeling like one guided flow: the content
+  // enters once per transition, while reduced-motion users get the same
+  // information with no decorative movement.
+  function onbAnimateView(view) {
+    if (!view || view.hidden) return;
+    var reduced = false;
+    try { reduced = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
+    view.classList.remove('is-entering');
+    if (reduced) return;
+    // Force a reflow so returning to the previous view reliably retriggers the
+    // short entrance, including after a keyboard back action.
+    void view.offsetWidth;
+    view.classList.add('is-entering');
+    window.setTimeout(function () { view.classList.remove('is-entering'); }, 520);
+  }
+
   // VIEW 1 (role choice). Both views live in the DOM; we just show/hide.
   function onbShowRoleView() {
     // Drop the parked role and point the accessible name back at THIS view's
@@ -2379,6 +2396,7 @@
       var first = r && r.querySelector('.onb-choice');
       if (first) { try { first.focus(); } catch (e) {} }
     }
+    onbAnimateView(r);
     renderOnbWeekAnim(); // (re)start the live board when this view is on screen
   }
 
@@ -2398,6 +2416,7 @@
     var r = $('onb-view-role'), s = $('onb-view-steps');
     if (r) r.hidden = true;
     if (s) s.hidden = false;
+    onbAnimateView(s);
     renderOnbWeekAnim(); // reflavour the live board for the chosen role
     // Focus follows the view, or a keyboard/SR user is left on a hidden control.
     if (cta) { try { cta.focus(); } catch (e) {} }
@@ -2755,6 +2774,11 @@
     var visible = applyFilters(state.monthBids);
     var byDay = {};
     visible.forEach(function (b) { (byDay[b.dateISO] = byDay[b.dateISO] || []).push(b); });
+    var empty = $('cal-empty');
+    if (empty) {
+      empty.textContent = visible.length ? '' : '0 offre dans ce calendrier.';
+      empty.hidden = visible.length > 0;
+    }
     // The client's OWN offers, to badge their status on the calendar. Status is
     // read from the live public bid (unfiltered): retained -> approved; still
     // open on a past date -> expired; otherwise pending.
@@ -3472,7 +3496,7 @@
     // here — and the all-acts segment only appears when it says something the
     // act segment does not. Nothing to count = no count line at all.
     var counts = [];
-    if (svc && matching.length) {
+    if (svc) {
       counts.push(matching.length + ' offre' + (matching.length > 1 ? 's' : '') + ' en ' + T(svc.nom).toLowerCase());
     }
     if ((!svc || dayAll.length !== matching.length) && dayAll.length > 0) {
@@ -8386,8 +8410,16 @@
       .filter(function (b) { return b.status !== D.STATUS.RETENUE; })
       .slice()
       .sort(function (a, b) { return a.dateISO < b.dateISO ? -1 : a.dateISO > b.dateISO ? 1 : 0; });
-    if (!open.length || !gate || gate.hidden) { box.hidden = true; return; }
+    if (!gate || gate.hidden) { box.hidden = true; return; }
     var grid = $('notary-live-grid'); clear(grid);
+    grid.classList.remove('nc-live-grid--empty');
+    if (!open.length) {
+      grid.classList.add('nc-live-grid--empty');
+      var empty = el('div', 'nc-live-empty');
+      empty.setAttribute('role', 'status');
+      empty.appendChild(el('strong', null, 'Pas d’offres'));
+      grid.appendChild(empty);
+    }
     var shown = open.length > NC_LIVE_MAX ? NC_LIVE_MAX - 1 : open.length;
     open.slice(0, shown).forEach(function (b) { grid.appendChild(ncLiveCard(b)); });
     var extra = open.length - shown;
@@ -8398,6 +8430,13 @@
       more.appendChild(el('span', 'nc-live-meta', 'Inscrivez-vous pour tout voir'));
       more.addEventListener('click', ncFocusGate);
       grid.appendChild(more);
+    }
+    var slots = Math.max(0, 6 - Math.min(open.length, NC_LIVE_MAX));
+    for (var i = 0; i < slots; i++) {
+      var slot = el('div', 'nc-live-slot', 'Pas d’offre');
+      slot.setAttribute('aria-hidden', 'true');
+      slot.tabIndex = -1;
+      grid.appendChild(slot);
     }
     box.hidden = false;
   }
@@ -8900,11 +8939,11 @@
     var form = $('notary-auth-form'); var view = $('notary-authed');
     if (form) form.hidden = authed;
     if (view) view.hidden = !authed;
-    // Keep the beta announcement out of the notary acquisition landing. The
-    // dedicated Signature/Bêta tab is the intentional discovery surface; an
-    // authenticated notary instead receives the account-scoped product card.
+    // Keep the beta announcement visible on the signed-out notary landing so
+    // the disclosure remains discoverable; an authenticated notary instead
+    // receives the account-scoped product card.
     var beta = $('notary-ai-beta-note');
-    if (beta) beta.hidden = true;
+    if (beta) beta.hidden = authed;
     if (!authed) ncShowGateStep('email'); // never resurface a stale signup branch
     renderNotaryLive(); // the inventory remains the signed-out landing's proof
     if (authed) {
@@ -9625,10 +9664,10 @@
     if (head) {
       clear(head);
       head.appendChild(el('span', null, 'Demandes ouvertes'));
+      head.appendChild(document.createTextNode(' · '));
+      head.appendChild(el('span', 'nc-h-n', String(all.length)));
       if (all.length) {
         var inPlay = all.reduce(function (s, b) { return s + (Math.round(Number(b.montant)) || 0); }, 0);
-        head.appendChild(document.createTextNode(' · '));
-        head.appendChild(el('span', 'nc-h-n', String(all.length)));
         head.appendChild(document.createTextNode(' · '));
         head.appendChild(el('span', 'nc-h-sum'));
         head.lastChild.appendChild(el('span', 'nc-h-amt', D.money(inPlay)));
@@ -11118,9 +11157,9 @@
     clear(head);
     head.appendChild(el('span', null, 'Dossiers retenus'));
     var items = nc.email ? ncRetainedFor(nc.email) : [];
-    if (!items.length) return;
     head.appendChild(document.createTextNode(' · '));
     head.appendChild(el('span', 'nc-h-n', String(items.length)));
+    if (!items.length) return;
     var unread = items.reduce(function (s, e) { return s + ncUnreadCount(e); }, 0);
     if (unread) { head.appendChild(document.createTextNode(' ')); head.appendChild(ncUnreadBadge(unread)); }
   }
@@ -11287,7 +11326,7 @@
     if (e.pending) {
       box.appendChild(el('p', 'help', e.pending + ' dossier' + (e.pending > 1 ? 's' : '') + ' à compléter · valeur estimée ' + D.money(e.pendingVal) + '. Vos honoraires vous sont virés à la signature, en entier.'));
     } else if (!e.done) {
-      box.appendChild(el('p', 'help', 'Vos honoraires s’afficheront ici dès votre premier acte complété.'));
+      box.appendChild(el('p', 'help', T('0 acte complété. Vos honoraires s’afficheront ici dès votre premier acte complété.')));
     }
   }
 
@@ -12025,6 +12064,12 @@
   }
 
   function wire() {
+    var loopToggle = $('how-we-build') && $('how-we-build').querySelector('.build-loop-toggle');
+    if (loopToggle) loopToggle.addEventListener('click', function () {
+      var paused = loopToggle.getAttribute('aria-pressed') === 'true';
+      loopToggle.setAttribute('aria-pressed', paused ? 'false' : 'true');
+      loopToggle.textContent = paused ? 'Mettre l’animation en pause' : 'Reprendre l’animation';
+    });
     // Les sections écrites en dur reçoivent leur glyphe une fois pour toutes.
     paintStaticSectionIcons();
     document.querySelectorAll('[data-history="back"]').forEach(function (button) {
@@ -12130,21 +12175,13 @@
     if (betaNote && betaToggle && betaDetails) {
       var syncBetaTip = function (visible) {
         betaDetails.setAttribute('aria-hidden', visible ? 'false' : 'true');
+        betaDetails.hidden = !visible;
+        betaToggle.setAttribute('aria-expanded', visible ? 'true' : 'false');
       };
-      betaNote.addEventListener('pointerenter', function () { syncBetaTip(true); });
-      betaNote.addEventListener('pointerleave', function () {
-        if (!betaNote.contains(document.activeElement)) syncBetaTip(false);
-      });
-      betaNote.addEventListener('focusin', function () { syncBetaTip(true); });
-      betaNote.addEventListener('focusout', function () {
-        window.setTimeout(function () {
-          if (!betaNote.matches(':hover') && !betaNote.contains(document.activeElement)) syncBetaTip(false);
-        }, 0);
-      });
       // Programmatic clicks and touch browsers do not all move focus first.
       // Reveal the floating surface, but deliberately do not toggle a class
       // or change the note's dimensions.
-      betaToggle.addEventListener('click', function () { syncBetaTip(true); });
+      betaToggle.addEventListener('click', function () { syncBetaTip(betaToggle.getAttribute('aria-expanded') !== 'true'); });
     }
     var betaSubscribe = $('notary-ai-beta-subscribe');
     if (betaSubscribe) betaSubscribe.addEventListener('click', function () {
@@ -12204,7 +12241,16 @@
       $('mnav-close').addEventListener('click', function () { setMobileNav(false); });
       mnavScrim.addEventListener('click', function () { setMobileNav(false); });
       document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && mnav.classList.contains('is-open')) setMobileNav(false);
+        if (!mnav.classList.contains('is-open')) return;
+        if (e.key === 'Escape') { setMobileNav(false); return; }
+        if (e.key !== 'Tab') return;
+        var focusable = Array.prototype.slice.call(mnav.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+          .filter(function (el) { return !el.hidden && getComputedStyle(el).visibility !== 'hidden' && el.getClientRects().length; });
+        if (!focusable.length) return;
+        var first = focusable[0];
+        var last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
       });
       mnav.querySelectorAll('.mnav-link[data-tab]').forEach(function (b) {
         b.addEventListener('click', function () { setTab(this.dataset.tab); });

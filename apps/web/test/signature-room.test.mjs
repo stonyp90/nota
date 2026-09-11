@@ -6,6 +6,7 @@ import { JSDOM } from 'jsdom';
 
 const source = name => readFileSync(new URL(name, import.meta.url), 'utf8');
 const html = source('../public/signature.html');
+const favicon = source('../public/favicon.svg');
 const script = source('../public/signature.js');
 const domain = source('../../../packages/domain/signing.js');
 const wait = () => new Promise(resolve => setTimeout(resolve, 30));
@@ -62,6 +63,17 @@ test('public beta is explicit, makes no authenticated requests and does not star
   assert.match(doc.querySelector('.principles').textContent, /ne représente pas une approbation/);
   assert.equal(doc.querySelectorAll('script:not([src])').length, 0, 'CSP needs no inline executable scripts');
   assert.equal(doc.querySelectorAll('script[src^="http"]').length, 0, 'No third-party scripts');
+});
+
+test('every signing entry point uses the shared Nota favicon mark', () => {
+  assert.match(html, /class="brand-mark" src="favicon\.svg"/, 'header uses the shared mark');
+  assert.match(html, /class="video-brand"><img src="favicon\.svg"/, 'video surface uses the shared mark');
+  assert.match(html, /class="paper-brand"><img src="favicon\.svg"/, 'document preview uses the shared mark');
+  assert.match(html, /class="footer-brand"><img src="favicon\.svg"/, 'footer uses the shared mark');
+  assert.match(favicon, /#264961/i, 'favicon carries the Nota deep-teal square');
+  assert.match(favicon, /#407598/i, 'favicon carries the Nota cyan signal dot');
+  assert.match(favicon, /#101b26/i, 'favicon carries the Nota dark-ink outline');
+  assert.doesNotMatch(favicon, /#315b43|#599a71|#2c5f34|#50b848/i, 'favicon has no legacy green mark');
 });
 
 test('all canonical static interface strings have English translations', async t => {

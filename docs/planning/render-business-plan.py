@@ -231,6 +231,7 @@ def language_switch():
   <a class="deck-link" href="/pitch-deck.html">Pitch deck</a>
   <span>Language / Langue</span>
   <button type="button" data-plan-focus aria-pressed="true">Show full detail</button>
+  <button type="button" data-plan-motion aria-pressed="false">Pause animation</button>
   <button type="button" data-plan-lang="en" aria-pressed="true">English</button>
   <button type="button" data-plan-lang="fr" aria-pressed="false">Français</button>
 </div>
@@ -263,8 +264,22 @@ def experience_script():
   document.documentElement.classList.add('js-motion');
   const languageButtons = [...document.querySelectorAll('[data-plan-lang]')];
   const focusButtons = [...document.querySelectorAll('[data-plan-focus]')];
+  const motionButtons = [...document.querySelectorAll('[data-plan-motion]')];
+  const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
   const englishPlan = document.querySelector('#plan-en');
   const frenchPlan = document.querySelector('#plan-fr');
+  const updateMotionButtons = () => {
+    const forced = motionQuery.matches;
+    const paused = document.body.classList.contains('motion-paused') || forced;
+    const french = document.documentElement.lang === 'fr-CA';
+    motionButtons.forEach((button) => {
+      button.setAttribute('aria-pressed', paused ? 'true' : 'false');
+      button.textContent = forced
+        ? (french ? 'Animation désactivée' : 'Animation disabled')
+        : (paused ? (french ? 'Reprendre l’animation' : 'Resume animation') : (french ? 'Mettre l’animation en pause' : 'Pause animation'));
+      button.disabled = forced;
+    });
+  };
   const setLanguage = (language) => {
     const lang = language === 'fr' ? 'fr' : 'en';
     document.documentElement.lang = lang === 'fr' ? 'fr-CA' : 'en-CA';
@@ -272,6 +287,7 @@ def experience_script():
     if (frenchPlan) frenchPlan.hidden = lang !== 'fr';
     languageButtons.forEach((button) => button.setAttribute('aria-pressed', button.dataset.planLang === lang ? 'true' : 'false'));
     focusButtons.forEach((button) => { button.textContent = lang === 'fr' ? 'Voir le détail complet' : 'Show full detail'; });
+    updateMotionButtons();
     try { localStorage.setItem('nota.plan.lang', lang); } catch (error) { /* storage can be unavailable in privacy mode */ }
   };
   languageButtons.forEach((button) => button.addEventListener('click', () => setLanguage(button.dataset.planLang)));
@@ -295,6 +311,22 @@ def experience_script():
   try { savedFocus = localStorage.getItem('nota.plan.focus') || '1'; } catch (error) { /* keep the essential view */ }
   setFocus(savedFocus !== '0', false);
 
+  const setMotion = (paused, persist = true) => {
+    const effective = paused || motionQuery.matches;
+    document.body.classList.toggle('motion-paused', effective);
+    updateMotionButtons();
+    if (persist && !motionQuery.matches) {
+      try { localStorage.setItem('nota.plan.motion', paused ? '1' : '0'); } catch (error) { /* storage can be unavailable */ }
+    }
+  };
+  motionButtons.forEach((button) => button.addEventListener('click', () => setMotion(!document.body.classList.contains('motion-paused'))));
+  let savedMotion = '0';
+  try { savedMotion = localStorage.getItem('nota.plan.motion') || '0'; } catch (error) { /* keep motion on when storage is unavailable */ }
+  setMotion(savedMotion === '1', false);
+  const syncMotionPreference = () => setMotion(savedMotion === '1', false);
+  if (motionQuery.addEventListener) motionQuery.addEventListener('change', syncMotionPreference);
+  else if (motionQuery.addListener) motionQuery.addListener(syncMotionPreference);
+
   const buttons = [...document.querySelectorAll('[data-lens]')];
   const panels = [...document.querySelectorAll('[data-lens-panel]')];
   const setLens = (lens) => {
@@ -311,7 +343,7 @@ def experience_script():
   const previousButton = document.querySelector('[data-plan-prev]');
   const nextButton = document.querySelector('[data-plan-next]');
   const progress = document.querySelector('[data-plan-progress]');
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const reducedMotion = motionQuery.matches;
   let currentChapter = 1;
   const updateChapterControls = (number) => {
     currentChapter = Math.max(1, Math.min(chapters.length || 1, number));
@@ -455,6 +487,11 @@ main>h1,main>p{position:relative}
 /* ── Chapter motion system: every chapter gets its own visual metaphor ── */
 .plan-section{display:grid;grid-template-columns:3.2rem minmax(0,1fr);gap:1.2rem;margin:0 0 4.6rem;scroll-margin-top:1.2rem;opacity:1;transform:none}.js-motion .plan-section{opacity:0;transform:translateY(18px);transition:opacity .65s ease,transform .65s cubic-bezier(.2,.8,.2,1)}.js-motion .plan-section.is-visible{opacity:1;transform:none}.section-rail{padding-top:2.65rem;display:flex;flex-direction:column;align-items:center;gap:1rem}.section-count{font:600 .72rem var(--mono);color:var(--faint);letter-spacing:.06em}.section-content>h2{border-top:0;padding-top:0;margin-top:0}.section-signal{width:2.25rem;height:2.25rem;position:relative;color:var(--accent-warm)}.section-signal i{position:absolute;display:block;border:1px solid currentColor}.signal--thesis i:nth-child(1){inset:2px;border-radius:50%;animation:pulse 2.8s ease-in-out infinite}.signal--thesis i:nth-child(2){inset:8px;transform:rotate(45deg);animation:pulse 2.8s .35s ease-in-out infinite}.signal--thesis i:nth-child(3){inset:14px;background:currentColor;border:0;border-radius:50%}.signal--market i:nth-child(1){inset:2px;border-radius:50%;border-style:dashed;animation:spin 8s linear infinite}.signal--market i:nth-child(2){inset:8px;border-radius:50%}.signal--market i:nth-child(3){width:5px;height:5px;left:16px;top:16px;background:currentColor;border:0;border-radius:50%}.signal--catalogue i{height:4px;left:3px;right:3px;background:currentColor;border:0;animation:barRise 1.8s ease-in-out infinite}.signal--catalogue i:nth-child(1){top:5px;width:55%}.signal--catalogue i:nth-child(2){top:12px;width:78%;animation-delay:.2s}.signal--catalogue i:nth-child(3){top:19px;width:38%;animation-delay:.4s}.signal--evidence i:nth-child(1){inset:2px;border-radius:4px}.signal--evidence i:nth-child(2){left:5px;right:5px;top:11px;height:1px;background:currentColor;border:0;animation:scan 2.2s ease-in-out infinite}.signal--evidence i:nth-child(3){left:8px;right:8px;bottom:6px;height:1px;background:currentColor;border:0}.signal--competition i:nth-child(1){left:2px;top:4px;width:12px;height:18px;transform:skewY(-22deg)}.signal--competition i:nth-child(2){right:2px;top:4px;width:12px;height:18px;transform:skewY(22deg)}.signal--competition i:nth-child(3){left:10px;right:10px;bottom:3px;height:1px;background:currentColor;border:0}.signal--growth i:nth-child(1){left:3px;bottom:4px;width:17px;height:12px;border-width:0 0 1px 1px}.signal--growth i:nth-child(2){left:8px;top:8px;width:13px;height:13px;border-width:1px 1px 0 0;transform:rotate(-45deg);animation:arrow 1.8s ease-in-out infinite}.signal--growth i:nth-child(3){left:5px;right:5px;top:17px;border-width:0 0 1px 0}.signal--economics i:nth-child(1),.signal--economics i:nth-child(2),.signal--economics i:nth-child(3){bottom:3px;width:5px;background:currentColor;border:0;transform-origin:bottom;animation:barGrow 2s ease-in-out infinite}.signal--economics i:nth-child(1){left:3px;height:10px}.signal--economics i:nth-child(2){left:10px;height:18px;animation-delay:.2s}.signal--economics i:nth-child(3){left:17px;height:14px;animation-delay:.4s}.signal--operations i:nth-child(1){inset:3px;border-radius:50%;border-style:dashed;animation:spin 12s linear infinite}.signal--operations i:nth-child(2){inset:9px;border-radius:50%}.signal--operations i:nth-child(3){inset:14px;border-radius:50%;background:currentColor;border:0}.signal--roadmap i:nth-child(1){left:2px;right:2px;top:15px;border-width:1px 0 0;border-style:dashed;transform:rotate(-22deg)}.signal--roadmap i:nth-child(2){left:4px;top:8px;width:5px;height:5px;border-radius:50%;background:currentColor;border:0}.signal--roadmap i:nth-child(3){right:4px;bottom:6px;width:5px;height:5px;border-radius:50%;background:currentColor;border:0}.signal--governance i:nth-child(1){inset:3px;border-radius:50%;animation:pulse 3s ease-in-out infinite}.signal--governance i:nth-child(2){left:4px;top:4px;width:5px;height:5px;border-radius:50%;background:currentColor;border:0;box-shadow:14px 0 0 currentColor,7px 14px 0 currentColor}.signal--governance i:nth-child(3){left:7px;right:7px;top:10px;height:1px;background:currentColor;border:0;transform:rotate(30deg)}.signal--milestones i:nth-child(1){left:2px;right:2px;top:15px;height:1px;background:currentColor;border:0}.signal--milestones i:nth-child(2),.signal--milestones i:nth-child(3){width:6px;height:6px;border-radius:50%;background:var(--surface);border:2px solid currentColor;top:12px}.signal--milestones i:nth-child(2){left:3px}.signal--milestones i:nth-child(3){right:3px}.signal--cash i:nth-child(1){inset:3px;border-radius:4px}.signal--cash i:nth-child(2){left:7px;right:7px;top:12px;height:1px;background:currentColor;border:0}.signal--cash i:nth-child(3){left:11px;top:8px;width:5px;height:5px;border-radius:50%;background:currentColor;border:0;animation:pulse 2s ease-in-out infinite}.signal--capital i:nth-child(1){inset:3px;border-radius:50%;border-style:dashed;animation:spin 10s linear infinite}.signal--capital i:nth-child(2){left:7px;right:7px;top:11px;height:1px;background:currentColor;border:0;transform:rotate(45deg)}.signal--capital i:nth-child(3){left:7px;right:7px;top:11px;height:1px;background:currentColor;border:0;transform:rotate(-45deg)}.signal--risk i:nth-child(1){left:5px;top:3px;width:14px;height:18px;border-radius:9px 9px 4px 4px;transform:rotate(45deg)}.signal--risk i:nth-child(2){left:11px;top:9px;width:2px;height:8px;background:currentColor;border:0}.signal--risk i:nth-child(3){left:11px;top:19px;width:2px;height:2px;background:currentColor;border:0;border-radius:50%}.signal--sources i:nth-child(1){inset:3px;border-radius:3px}.signal--sources i:nth-child(2){left:7px;right:7px;top:10px;height:1px;background:currentColor;border:0;box-shadow:0 5px 0 currentColor}.signal--sources i:nth-child(3){left:7px;top:8px;width:4px;height:4px;border-radius:50%;background:currentColor;border:0}
 .focus-summary{display:flex;align-items:baseline;gap:.8rem;margin:0 0 1.2rem;padding:.78rem 1rem;border-left:3px solid var(--brass);border-radius:0 7px 7px 0;background:var(--brass-wash);color:var(--ink-2)}.focus-summary span{font:650 .67rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--brass);white-space:nowrap}.focus-summary strong{font-size:.97rem;font-weight:650;color:var(--ink)}
+.plan-brand-mark{width:clamp(2.7rem,6vw,3.8rem);height:clamp(2.7rem,6vw,3.8rem)}.plan-brand-word{font-size:clamp(2.5rem,6vw,3.8rem);line-height:.95;letter-spacing:-.06em}.plan-brand-region{font-size:clamp(.58rem,1vw,.75rem)}
+.mast .name{font-size:clamp(2.5rem,6vw,4.5rem);line-height:.98}.french-summary h1{font-size:clamp(1.9rem,3.5vw,2.8rem)}main>h1{font-size:clamp(2rem,4vw,3.4rem);line-height:1.08}
+.js-motion .plan-section:not(.is-visible){transform:translateY(12px)!important;filter:none!important}
+.motion-paused .experience-console::after,.motion-paused .section-signal *,.motion-paused .learning-loop-track>i,.motion-paused .learning-loop::before,.motion-paused .lens-panel{animation-play-state:paused!important}
+.language-bar button:disabled{cursor:not-allowed;opacity:.62}
 .js-motion .plan-section{transition:opacity .65s ease,transform .65s cubic-bezier(.2,.8,.2,1),filter .65s ease}.js-motion .plan-section:not(.is-visible).motion-thesis{transform:scale(.94);filter:saturate(.6)}.js-motion .plan-section:not(.is-visible).motion-market{transform:translateX(-24px)}.js-motion .plan-section:not(.is-visible).motion-catalogue{transform:translateY(20px) scale(.96)}.js-motion .plan-section:not(.is-visible).motion-evidence{transform:rotate(-.8deg) scale(.98);filter:blur(2px)}.js-motion .plan-section:not(.is-visible).motion-competition{transform:translateX(24px)}.js-motion .plan-section:not(.is-visible).motion-growth{transform:translateY(26px) rotate(.6deg)}.js-motion .plan-section:not(.is-visible).motion-economics{transform:scaleY(.9);transform-origin:50% 100%}.js-motion .plan-section:not(.is-visible).motion-operations{transform:scale(.95) rotate(1.2deg)}.js-motion .plan-section:not(.is-visible).motion-roadmap{transform:translate(-16px,14px)}.js-motion .plan-section:not(.is-visible).motion-governance{transform:scale(.97);filter:blur(3px)}.js-motion .plan-section:not(.is-visible).motion-milestones{transform:translateY(18px) scale(.97)}.js-motion .plan-section:not(.is-visible).motion-cash{transform:translate(18px,10px)}.js-motion .plan-section:not(.is-visible).motion-capital{transform:scale(.92) rotate(-1deg)}.js-motion .plan-section:not(.is-visible).motion-risk{transform:translateY(-18px)}.js-motion .plan-section:not(.is-visible).motion-sources{transform:scale(.98);filter:saturate(.65)}.js-motion .plan-section.is-visible{filter:none}
 .focus-view #plan-en .plan-section .section-content> :not(h2):not(.focus-summary){display:none}.focus-view #plan-en .plan-section{margin-bottom:2.2rem}.focus-view #plan-en .section-content>h2{margin-bottom:.65rem}
 @keyframes signalOrbit{to{transform:rotate(360deg)}}@keyframes lensIn{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:none}}@keyframes pulse{0%,100%{transform:scale(.85);opacity:.55}50%{transform:scale(1.05);opacity:1}}@keyframes spin{to{transform:rotate(360deg)}}@keyframes scan{0%,100%{transform:translateY(-6px);opacity:.35}50%{transform:translateY(7px);opacity:1}}@keyframes barRise{0%,100%{transform:scaleX(.55);transform-origin:left;opacity:.5}50%{transform:scaleX(1);opacity:1}}@keyframes barGrow{0%,100%{transform:scaleY(.55);opacity:.55}50%{transform:scaleY(1);opacity:1}}@keyframes arrow{0%,100%{transform:translate(0,4px) rotate(-45deg);opacity:.5}50%{transform:translate(4px,0) rotate(-45deg);opacity:1}}@keyframes arrowPulse{0%,100%{opacity:.4;transform:translateX(-2px)}50%{opacity:1;transform:translateX(2px)}}@keyframes loopTravel{to{background-position:36px 0}}

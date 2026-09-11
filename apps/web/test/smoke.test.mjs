@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 import { JSDOM } from 'jsdom';
 
 const DOMAIN_SRC = readFileSync(fileURLToPath(new URL('../../../packages/domain/index.js', import.meta.url)), 'utf8');
+const I18N_SRC = readFileSync(fileURLToPath(new URL('../public/i18n.js', import.meta.url)), 'utf8');
 const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
 const HTML_SRC = readFileSync(fileURLToPath(new URL('../public/index.html', import.meta.url)), 'utf8');
 
@@ -78,12 +79,20 @@ async function boot(opts = {}) {
   // The intro gate owns a truly fresh first paint; every test that is not
   // about the gate itself boots past it (opts.intro = true keeps it live).
   if (!opts.intro) win.localStorage.setItem('nota.introSeen', '1');
+  // Keep the harness's default deterministic and French like the product's
+  // canonical source; the explicit ?lang=en case below still exercises the
+  // real browser-language override.
+  if (!/[?&]lang=(en|fr)(?:&|$)/.test(new URL(win.location.href).search)) {
+    win.localStorage.setItem('nota.lang', 'fr');
+  }
 
-  // 1) domain -> window.NotaDomain
+  // 1) i18n -> domain -> app, matching the browser's script order.
+  win.eval(I18N_SRC);
+  // 2) domain -> window.NotaDomain
   win.eval(DOMAIN_SRC);
   const D = win.NotaDomain;
 
-  // 2) deterministic, unexpired seed published today
+  // 3) deterministic, unexpired seed published today
   const today = todayISO();
   const anchor = firstOfMonth(today);
   const month = monthKey(anchor);
@@ -615,8 +624,7 @@ test('notaires landing teases open demands and funnels each card to sign-in', as
     .sort((a, b) => (a.dateISO < b.dateISO ? -1 : a.dateISO > b.dateISO ? 1 : 0));
   const cards = all(doc, '#notary-live-grid .nc-live-card:not(.nc-live-more)');
   assert.ok(cards.length > 0, 'teaser should render demand cards');
-  // On overflow the "+N autres" card takes the LAST slot of the 8-tile block
-  // (7 demands + 1 lead-in card) — never an orphan row of its own.
+  // On overflow the "+N autres" card takes the last of the twelve slots.
   const shown = open.length > 12 ? 11 : open.length; // 12-tile block (2026-08-26)
   assert.equal(cards.length, shown);
 
@@ -646,6 +654,40 @@ test('notaires landing teases open demands and funnels each card to sign-in', as
   assert.equal(doc.activeElement, $(doc, 'nc-email'), 'clicking a card should focus the sign-in field');
 });
 
+test('notaires landing preserves empty slots across live inventory refreshes', async () => {
+  const { doc, win, D, Nota, seed } = await boot();
+  Nota.setTab('notaires');
+  const offer = seed.find((b) => b.status !== D.STATUS.RETENUE);
+  for (const count of [12, 1, 0, 5, 13, 0, 1]) {
+    const bids = Array.from({ length: count }, (_, i) => ({ ...offer, id: 'slot-' + i }));
+    // A successful, empty API response must remain empty, never demo inventory.
+    win.fetch = async (url) => ({ ok: true, json: async () => ({
+      bids: bids.filter((b) => b.dateISO.startsWith(new URL(url, 'https://nota.example').searchParams.get('month'))),
+    }) });
+    await Nota.reload();
+    assert.equal(Nota.state.demo, false, 'inventory came from the API response');
+    const grid = $(doc, 'notary-live-grid');
+    assert.equal($(doc, 'notary-live').hidden, false, `visible with ${count} offers`);
+    assert.equal(grid.querySelectorAll('.nc-live-card').length, Math.min(count, 12));
+    // Sparse inventory uses a compact six-slot footprint. Once six real cards
+    // exist, the grid grows only for actual demand instead of a hidden reserve.
+    assert.equal(grid.querySelectorAll('.nc-live-slot').length, Math.max(0, 6 - Math.min(count, 12)));
+    assert.equal(grid.querySelectorAll('.nc-live-more').length, count > 12 ? 1 : 0);
+    for (const slot of grid.querySelectorAll('.nc-live-slot')) {
+      assert.equal(slot.textContent, 'Pas d’offre');
+      assert.equal(slot.getAttribute('aria-hidden'), 'true');
+      assert.equal(slot.tabIndex, -1, 'empty slots are not actions');
+      assert.equal(slot.querySelector('button, a, .nc-live-amt, .nc-live-meta'), null);
+    }
+    assert.equal(grid.classList.contains('nc-live-grid--empty'), count === 0);
+    assert.equal(grid.querySelectorAll('.nc-live-empty').length, count === 0 ? 1 : 0);
+    if (count === 0) {
+      assert.equal(grid.querySelector('[role="status"] strong').textContent, 'Pas d’offres');
+      assert.equal(grid.querySelectorAll('button').length, 0, 'no fake offers at zero');
+    }
+  }
+});
+
 // 13b-bis. The landing sells each fact once: the lede stops at the pitch (the
 //          h1 already says "Payé à la signature"), and the fee facts live in
 //          THREE non-overlapping value props.
@@ -658,6 +700,46 @@ test('notaires landing: each selling point is made once', async () => {
   // Owner's call (2026-08-25): no value grid — the inventory is the pitch,
   // the fee facts live in the sign-up branch and the guarantee line.
   assert.equal(all(doc, '#pane-notaires .nc-why-item').length, 0, 'the value grid is retired');
+});
+
+test('notary landing presents the assisted preparation as a truthful free beta', async () => {
+  const { doc } = await boot();
+  doc.querySelector('.nav-tab[data-tab="notaires"]').click();
+  const note = doc.getElementById('notary-ai-beta-note');
+  assert.ok(note, 'the notary landing names the beta');
+  assert.match(note.textContent, /bêta gratuite/);
+  assert.match(note.textContent, /système spécialisé/);
+  assert.match(note.textContent, /algorithmes propriétaires/);
+  assert.match(note.textContent, /pourra évoluer vers un abonnement/);
+  assert.match(note.textContent, /aucun prix ni échéance n’est fixé/);
+  assert.match(note.textContent, /ne servent pas à entraîner les modèles/);
+});
+
+test('notary beta teaser opens from the information button, not the copy', async () => {
+  const { doc } = await boot();
+  doc.querySelector('.nav-tab[data-tab="notaires"]').click();
+  const note = doc.getElementById('notary-ai-beta-note');
+  const toggle = doc.getElementById('notary-ai-beta-toggle');
+  const details = doc.getElementById('notary-ai-beta-details');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(details.hidden, true, 'collapsed beta details stay out of the accessibility tree');
+  note.querySelector('.beta-teaser-copy').click();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false', 'copy stays informational');
+  toggle.click();
+  assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+  assert.equal(details.getAttribute('aria-hidden'), 'false');
+  assert.equal(details.hidden, false, 'expanded beta details are available to assistive technology');
+});
+
+test('notary beta notice translates in English and stays off the customer surface', async () => {
+  const { doc } = await boot({ url: 'https://nota.example/?lang=en' });
+  const note = doc.getElementById('notary-ai-beta-note');
+  assert.match(note.textContent, /free beta/);
+  assert.match(note.textContent, /proprietary algorithms/);
+  assert.match(note.textContent, /may evolve into a subscription/);
+  assert.match(note.textContent, /not used to train the models/);
+  assert.equal(doc.querySelector('#pane-carnet #notary-ai-beta-note'), null,
+    'the beta notice belongs only to the notary landing');
 });
 
 // 13b-ter. The prospecting band works signed OUT — the carnet feed is public by
@@ -1359,10 +1441,10 @@ test('DAY: an empty day says it once — the lead time up top, the invitation in
   // The one "be the first" sentence lives in #day-hint, at the decision point.
   assert.match($(ctx.doc, 'day-hint').textContent,
     /Aucune offre en .+ pour cette date\. Soyez le premier/);
-  // Zero offers for the act AND zero for the day: a totals strip would carry
-  // no information at all, so it is not rendered.
-  assert.equal(ctx.doc.querySelector('#day-bids .day-bids-count'), null,
-    'no totals strip on a day with nothing to count');
+  // Zero offers for the act AND zero for the day: the totals strip keeps the
+  // explicit zero so the result is distinguishable from a missing component.
+  assert.match(ctx.doc.querySelector('#day-bids .day-bids-count').textContent, /0 offre/,
+    'zero offer count remains visible on an empty day');
   // The whole dialog states the empty day exactly once.
   const dlgTxt = $(ctx.doc, 'day-dialog').textContent;
   assert.equal((dlgTxt.match(/Aucune offre/g) || []).length, 1,
@@ -2182,9 +2264,12 @@ test('no data: the calendar still renders a full month and claims nothing', asyn
       'day ' + d + ' of the month has a cell even with zero offers');
   }
   assert.equal(cells.length % 7, 0, 'the grid still renders whole weeks, got ' + cells.length);
-  // Nothing may claim an offer, a price, or a "N offres" count.
+  // Nothing may claim an offer or a price; the explicit zero result is allowed
+  // and makes the empty calendar state visible.
   assert.equal(all(ctx.doc, '#cal-grid .svc-bid').length, 0, 'no service rows on an empty month');
   assert.equal(all(ctx.doc, '#cal-grid .cal-avg').length, 0, 'no cleared-day figure on an empty month');
+  assert.equal(ctx.doc.getElementById('cal-empty').hidden, false, 'the full calendar exposes its zero result');
+  assert.match(ctx.doc.getElementById('cal-empty').textContent, /0 offre/, 'the zero result is stated numerically');
   // The legend is what decodes the colours, so it must survive the empty state.
   assert.ok(all(ctx.doc, '.legend .legend-item').length > 0, 'legend still renders with no data');
   // French pluralisation: "0 offre", never "0 offres".
@@ -2317,14 +2402,14 @@ test('ambient gradients live on the background; every component is flat and opaq
   }
 });
 
-test('the today pill keeps a gap between its weekday and its day number', () => {
+test('the today number keeps a gap between its weekday and its day number', () => {
   // Phones print the weekday INSIDE the cell (.cal-daynum::before, "JEU 27");
-  // today's date-circle turns the daynum into a flex box, and flex layout
-  // drops the ::before's trailing space from the flow — "JEU27". The pill
-  // must carry its own gap so the two never fuse.
+  // today's day number turns the daynum into a flex box, and flex layout
+  // drops the ::before's trailing space from the flow — "JEU27". The number's
+  // spacing must carry its own gap so the two never fuse.
   const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
   assert.match(css, /\.cal-cell\.is-today \.cal-daynum\s*\{[^}]*gap:/,
-    'the today pill declares a flex gap of its own');
+    'the today number declares a flex gap of its own');
 });
 
 test('no @media rule may outrank a calendar @container rule on the same property', () => {
@@ -2612,6 +2697,26 @@ test('calendar CSS: the urgency price badge flows, it is never absolutely positi
   for (const r of rules) {
     assert.ok(!/position:\s*absolute/.test(r), 'no absolute positioning on .cal-urgency: ' + r);
   }
+});
+
+test('calendar CSS: compact widths give the next-availability cue the full metadata track', () => {
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  const compact = css.slice(css.indexOf('@media (max-width: 480px)'));
+  assert.ok(compact.length < css.length, 'the compact toolbar breakpoint exists');
+  assert.match(compact, /\.cal-toolbar-meta\s*\{[^}]*grid-template-columns:\s*auto\s+minmax\(0,\s*1fr\)/,
+    'availability keeps the flexible middle track');
+  assert.match(compact, /\.cal-toolbar-meta \.result-count\s*\{[^}]*display:\s*none/,
+    'the secondary total yields before the availability label is ellipsized');
+});
+
+test('questionnaire CSS: priced choices stack on narrow sheets so labels and modifiers fit', () => {
+  const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+  assert.match(css, /\.o-criteria \.crit-row:has\(\.seg-btn \.crit-add\) \.seg\s*\{[^}]*flex-direction:\s*column/,
+    'priced choices use one full-width track on phones');
+  assert.match(css, /\.o-criteria \.crit-row:has\(\.seg-btn \.crit-add\) \.seg-btn\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0/,
+    'priced buttons can shrink to the available width without overflowing');
+  assert.match(css, /\.o-criteria \.crit-row:has\(\.seg-btn \.crit-add\) \.crit-add\s*\{[^}]*margin-left:\s*auto/,
+    'price modifiers stay aligned inside their button');
 });
 
 test('menu CSS: panel viewport cap and coarse-pointer touch floors hold', () => {

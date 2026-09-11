@@ -40,6 +40,20 @@
     .learning-overlay{position:absolute;inset:4.5% 5.2%;z-index:2;display:grid;grid-template-rows:auto 1fr auto;gap:.7rem;padding:1.15rem 1.35rem;border:1px solid #78a9bf99;border-radius:14px;background:linear-gradient(135deg,#102d48f2,#071728f0 72%);box-shadow:0 18px 52px #0009,0 0 0 1px #26496155;opacity:0;pointer-events:none;transform:translateY(10px) scale(.985);transition:opacity .34s ease,transform .34s ease;overflow:hidden}.stage.learning-visible .learning-overlay{opacity:1;transform:none}.learning-overlay::before{content:"";position:absolute;inset:-40% 28% auto;width:45%;height:180%;background:linear-gradient(110deg,transparent,#78a9bf14,transparent);transform:rotate(18deg) translateX(-160%);animation:learningSweep 8s ease-in-out infinite;pointer-events:none}.learning-overlay-head,.learning-overlay-map,.learning-overlay-choices{position:relative;z-index:1}.learning-overlay-head{display:flex;align-items:baseline;justify-content:space-between;gap:1rem}.learning-overlay-head span{font-size:.59rem;letter-spacing:.2em;color:var(--orange);font-weight:800}.learning-overlay-head strong{font-size:1.15rem;letter-spacing:-.02em;color:#f4f6f8}.learning-overlay-map{min-height:12.4rem;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;gap:.62rem;max-width:760px;width:100%;margin:0 auto}.learning-point{position:relative;display:grid;align-content:center;gap:.18rem;padding:.68rem .78rem;border:1px solid #78a9bf77;border-radius:9px;background:#122744d9;box-shadow:0 10px 24px #0004}.learning-point::after{content:"";position:absolute;right:.7rem;top:.7rem;width:5px;height:5px;border-radius:50%;background:#9cc7d8;box-shadow:0 0 0 0 #78a9bf66;animation:learningPulseDeck 2.6s ease-in-out infinite}.learning-point strong{font-size:.78rem;color:#f4f6f8}.learning-point span{font-size:.61rem;line-height:1.3;color:#afbdca}.learning-point--notary{border-color:#f0a45d88}.learning-point--notary::after{background:var(--orange);box-shadow:0 0 0 0 #f0a45d66}.learning-point--outcome{border-color:#386888}.learning-core{position:absolute;left:50%;top:50%;z-index:3;display:grid;place-items:center;width:8.7rem;height:4.6rem;padding:.45rem;border:1px solid #9cc7d8;border-radius:50%;background:#1b3d64f2;box-shadow:0 0 0 7px #38688824,0 12px 28px #0008;transform:translate(-50%,-50%);text-align:center}.learning-core strong{font-size:.6rem;letter-spacing:.1em;text-transform:uppercase;color:#9cc7d8}.learning-core span{font-size:.61rem;color:#d9e4ec}.learning-orbit{position:absolute;left:50%;top:50%;width:69%;height:86%;border:1px dashed #78a9bf99;border-radius:50%;transform:translate(-50%,-50%);animation:learningOrbitDeck 12s linear infinite}.learning-orbit::after{content:"";position:absolute;left:50%;top:-4px;width:7px;height:7px;border-radius:50%;background:var(--orange);box-shadow:0 0 0 5px #f0a45d22}.learning-overlay-choices{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}.learning-choice{padding:.55rem .72rem;border-top:2px solid var(--orange);border-radius:7px;background:#0c1d32d9}.learning-choice--subscription{border-color:#78a9bf}.learning-choice strong{display:block;font-size:.7rem;color:#f4f6f8}.learning-choice span{display:block;margin-top:.15rem;font-size:.59rem;line-height:1.3;color:#afbdca}.stage.learning-visible .prev,.stage.learning-visible .next{z-index:4}.stage.learning-visible .stage-tools{z-index:4}@keyframes learningOrbitDeck{to{transform:translate(-50%,-50%) rotate(360deg)}}@keyframes learningPulseDeck{0%,100%{box-shadow:0 0 0 0 #78a9bf00;opacity:.7}50%{box-shadow:0 0 0 6px #78a9bf22;opacity:1}}@keyframes learningSweep{0%,55%,100%{transform:rotate(18deg) translateX(-160%);opacity:0}68%{opacity:1}82%{transform:rotate(18deg) translateX(160%);opacity:0}}
     @media(max-width:760px){.learning-overlay{inset:3%;padding:.7rem;gap:.45rem}.learning-overlay-head{display:block}.learning-overlay-head strong{display:block;margin-top:.2rem;font-size:.82rem}.learning-overlay-map{min-height:11rem;gap:.35rem}.learning-point{padding:.45rem}.learning-point strong{font-size:.62rem}.learning-point span{font-size:.5rem}.learning-core{width:6.3rem;height:3.5rem}.learning-core strong,.learning-core span{font-size:.48rem}.learning-overlay-choices{gap:.35rem}.learning-choice{padding:.42rem}.learning-choice strong{font-size:.55rem}.learning-choice span{font-size:.48rem}}
     @media(prefers-reduced-motion:reduce){.learning-overlay,.learning-orbit,.learning-point::after,.learning-overlay::before{animation:none!important;transition:none}}
+
+    /* Nota signal map: a living, data-shaped visual language for the Québec launch.
+       It is deliberately drawn in SVG so it stays crisp at presentation scale and
+       the moving packets can follow meaningful routes instead of a generic loop. */
+    .nota-map-visual{--map-light:#9cc7d8;--map-orange:#f0a45d;position:absolute;z-index:2;display:flex;flex-direction:column;gap:.42rem;padding:.78rem .88rem .65rem;border:1px solid #78a9bf66;border-radius:14px;background:linear-gradient(135deg,#0a2037,#122744 72%);box-shadow:0 18px 44px #0008,0 0 0 1px #26496155;overflow:hidden;opacity:0;visibility:hidden;pointer-events:none;transform:translateY(10px) scale(.985);transition:opacity .42s ease,transform .42s cubic-bezier(.2,.8,.2,1),visibility 0s linear .42s}.stage.nota-map-visible .nota-map-visual{opacity:1;visibility:visible;transform:none;transition-delay:0s}.nota-map-visual[data-mode="capacity"]{top:12.5%;right:6.5%;width:min(42%,42rem);height:36%;min-height:11rem}.nota-map-visual[data-mode="expansion"]{left:6%;bottom:18%;width:min(42%,42rem);height:39%;min-height:11rem}.nota-map-visual::before{content:"";position:absolute;inset:-50% 25% auto;width:38%;height:220%;background:linear-gradient(110deg,transparent,#9cc7d814,transparent);transform:rotate(18deg) translateX(-170%);animation:notaMapSweep 9s ease-in-out infinite;pointer-events:none}.nota-map__topline,.nota-map__title,.nota-map__scene,.nota-map__legend{position:relative;z-index:1}.nota-map__topline{display:flex;align-items:center;justify-content:space-between;gap:.7rem;color:var(--map-orange);font:800 .52rem/1 var(--display);letter-spacing:.16em;text-transform:uppercase}.nota-map__eyebrow{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nota-map__status{display:inline-flex;align-items:center;gap:.28rem;color:var(--map-light);font-size:.46rem;letter-spacing:.12em;white-space:nowrap}.nota-map__status i{width:5px;height:5px;border-radius:50%;background:var(--map-orange);box-shadow:0 0 0 0 #f0a45d66;animation:notaMapStatus 2.4s ease-in-out infinite}.nota-map__title{color:#f4f6f8;font-size:clamp(.72rem,1.25vw,1.08rem);font-weight:750;letter-spacing:-.035em;line-height:1}.nota-map__scene{min-height:0;flex:1;display:grid;place-items:center}.nota-map__svg{display:block;width:100%;height:100%;min-height:0;overflow:visible}.nota-map__province{fill:url(#notaMapProvince);stroke:#9cc7d8aa;stroke-width:2;stroke-linejoin:round}.nota-map__glow{opacity:.42}.nota-map__inside{opacity:.9}.nota-map__contour{fill:none;stroke:#b8d9e633;stroke-width:1.25;stroke-linecap:round;stroke-dasharray:1 10;animation:notaMapContour 8s linear infinite}.nota-map__contour:nth-child(2){animation-delay:-2.4s}.nota-map__contour:nth-child(3){animation-delay:-5.1s}.nota-map__water{fill:none;stroke:#b8d9e655;stroke-width:3;stroke-linecap:round}.nota-map__water--fine{stroke:#b8d9e61c;stroke-width:1}.nota-map__route{fill:none;stroke:url(#notaMapRoute);stroke-width:3;stroke-linecap:round;stroke-dasharray:1 12;animation:notaMapRouteFlow 3.2s linear infinite;filter:url(#notaMapPacketGlow)}.nota-map__route:nth-child(2){animation-delay:-1.1s}.nota-map__route:nth-child(3){animation-delay:-2.2s}.nota-map__border{fill:none;stroke:#dcebf288;stroke-width:1.25;stroke-linejoin:round;opacity:.85}.nota-map__beacon-glow{fill:var(--map-orange);opacity:0;animation:notaMapBeacon 3.4s ease-out infinite}.nota-map__beacon-glow:nth-child(2){animation-delay:-1.2s}.nota-map__beacon-glow:nth-child(3){animation-delay:-2.45s}.nota-map__beacon{stroke:#071728;stroke-width:2;animation:notaMapNode 2.9s ease-in-out infinite}.nota-map__beacon--demand{fill:var(--map-light);animation-delay:-.7s}.nota-map__beacon--notary{fill:var(--map-orange)}.nota-map__packet{fill:var(--map-orange);filter:url(#notaMapPacketGlow)}.nota-map__packet--blue{fill:var(--map-light)}.nota-map__labels{fill:#dcebf2;font:800 11px var(--display);letter-spacing:2px}.nota-map__labels text{paint-order:stroke;stroke:#122744;stroke-width:5px;stroke-linejoin:round}.nota-map__readout{position:absolute;right:.28rem;bottom:.24rem;display:grid;gap:.16rem;max-width:48%;padding:.42rem .52rem;border:1px solid #78a9bf44;border-radius:8px;background:#071728cc;box-shadow:0 8px 20px #0005;backdrop-filter:blur(8px)}.nota-map__readout-kicker{color:var(--map-orange);font:800 .46rem/1 var(--display);letter-spacing:.16em}.nota-map__readout strong{color:#f4f6f8;font-size:clamp(.48rem,.85vw,.72rem);letter-spacing:-.02em;white-space:nowrap}.nota-map__readout span:last-child{color:#afbdca;font-size:clamp(.44rem,.67vw,.58rem);line-height:1.2}.nota-map__legend{display:flex;align-items:center;gap:.68rem;color:#afbdca;font:700 .45rem/1 var(--display);letter-spacing:.1em;text-transform:uppercase}.nota-map__legend>span{display:inline-flex;align-items:center;gap:.26rem;white-space:nowrap}.nota-map__legend-dot{width:5px;height:5px;border-radius:50%;background:var(--map-light)}.nota-map__legend-dot--notary{background:var(--map-orange)}.nota-map__legend-dot--notary{background:var(--map-orange)}.nota-map__legend-note{margin-left:auto;color:#78a9bf;letter-spacing:.04em;text-transform:none;font-weight:500;white-space:nowrap}.nota-map-visual[data-mode="expansion"] .nota-map__title{font-size:clamp(.62rem,1vw,.84rem)}.nota-map-visual[data-mode="expansion"] .nota-map__readout{display:none}
+    @keyframes notaMapRouteFlow{to{stroke-dashoffset:-78}}@keyframes notaMapContour{to{stroke-dashoffset:-80}}@keyframes notaMapBeacon{0%{opacity:0;transform:scale(.35);transform-origin:center}22%{opacity:.35}72%,100%{opacity:0;transform:scale(1.9);transform-origin:center}}@keyframes notaMapNode{0%,100%{filter:brightness(.95)}50%{filter:brightness(1.35)}}@keyframes notaMapStatus{0%,100%{box-shadow:0 0 0 0 #f0a45d66}50%{box-shadow:0 0 0 5px #f0a45d18}}@keyframes notaMapSweep{0%,52%,100%{transform:rotate(18deg) translateX(-170%);opacity:0}67%{opacity:1}82%{transform:rotate(18deg) translateX(170%);opacity:0}}
+    @media(max-width:760px){.nota-map-visual{padding:.56rem .62rem .5rem;gap:.3rem;border-radius:10px}.nota-map-visual[data-mode="capacity"]{top:7%;right:4%;width:56%;height:35%;min-height:8.25rem}.nota-map-visual[data-mode="expansion"]{left:4%;bottom:19%;width:54%;height:31%;min-height:8.25rem}.nota-map__topline{font-size:.42rem}.nota-map__status{font-size:.38rem}.nota-map__title{font-size:.66rem}.nota-map__labels{font-size:8px;letter-spacing:1.4px}.nota-map__readout{right:.15rem;bottom:.12rem;padding:.28rem .34rem;max-width:51%}.nota-map__legend{gap:.32rem;font-size:.37rem}.nota-map__legend-note{display:none}}
+    @media(prefers-reduced-motion:reduce){.nota-map-visual,.nota-map-visual::before,.nota-map__contour,.nota-map__route,.nota-map__beacon-glow,.nota-map__beacon,.nota-map__status{animation:none!important;transition:none!important}.nota-map__beacon-glow{opacity:.16}}
+    /* Let the Québec silhouette carry the visual: no card, frame, or backdrop around it. */
+    .nota-map-visual{padding:0;border:0;border-radius:0;background:transparent;box-shadow:none;overflow:visible}
+    .nota-map-visual::before{display:none}
+    .nota-map-visual[data-mode="expansion"]::before{content:"";display:block;position:absolute;z-index:0;inset:-24% -18%;width:auto;height:auto;background:radial-gradient(ellipse at 48% 55%,#122744f2 0,#122744d9 40%,#12274470 60%,transparent 78%);transform:none;animation:none;pointer-events:none}
+    .nota-map__readout{z-index:1}
+    .nota-map__readout{padding:0;border-color:transparent;background:transparent;box-shadow:none;backdrop-filter:none}
   </style>
 </head>
 <body>
@@ -72,6 +86,82 @@
           <div class="learning-option"><strong data-learning-copy="contributeLabel">CONTRIBUTE</strong><span data-learning-copy="contribute">Structured feedback may qualify for potential equity</span></div>
           <div class="learning-option"><strong data-learning-copy="subscribeLabel">SUBSCRIBE</strong><span data-learning-copy="subscribe">Monthly model access without direct feedback contribution</span></div>
         </div>
+      </div>
+      <div class="nota-map-visual" id="notaMap" aria-hidden="true" data-mode="capacity">
+        <div class="nota-map__topline">
+          <span class="nota-map__eyebrow" id="mapEyebrow">NOTA SIGNAL / QUÉBEC</span>
+          <span class="nota-map__status"><i aria-hidden="true"></i><span id="mapStatus">LIVE NETWORK</span></span>
+        </div>
+        <div class="nota-map__title" id="mapVisualTitle">Capacity, made visible.</div>
+        <div class="nota-map__scene">
+          <svg class="nota-map__svg" viewBox="0 0 640 380" role="img" aria-labelledby="mapSvgTitle mapSvgDescription">
+            <title id="mapSvgTitle">Nota network across Québec</title>
+            <desc id="mapSvgDescription">A living map connects demand dates to available notary capacity across Québec.</desc>
+            <defs>
+              <linearGradient id="notaMapProvince" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#6f9fb3" stop-opacity=".5" />
+                <stop offset=".46" stop-color="#386888" stop-opacity=".92" />
+                <stop offset="1" stop-color="#1b3d64" stop-opacity=".98" />
+              </linearGradient>
+              <linearGradient id="notaMapRoute" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0" stop-color="#9cc7d8" stop-opacity=".1" />
+                <stop offset=".5" stop-color="#f0a45d" />
+                <stop offset="1" stop-color="#9cc7d8" stop-opacity=".1" />
+              </linearGradient>
+              <radialGradient id="notaMapGlow">
+                <stop offset="0" stop-color="#f0a45d" stop-opacity=".34" />
+                <stop offset="1" stop-color="#f0a45d" stop-opacity="0" />
+              </radialGradient>
+              <filter id="notaMapSoftGlow" x="-100%" y="-100%" width="300%" height="300%">
+                <feGaussianBlur stdDeviation="7" />
+              </filter>
+              <filter id="notaMapPacketGlow" x="-300%" y="-300%" width="600%" height="600%">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+              <clipPath id="notaMapProvinceClip">
+                <path d="M78 93 C116 72 164 59 213 65 L264 42 L315 53 L358 42 L406 56 L462 59 L520 75 L550 94 L534 112 L544 129 L523 143 L531 161 L512 176 L522 193 L505 208 L513 228 L493 243 L470 251 L454 264 L446 281 L414 287 L389 303 L360 316 L330 307 L299 321 L272 317 L246 330 L220 316 L193 321 L175 305 L151 310 L135 290 L112 284 L99 266 L84 256 L90 236 L77 222 L85 202 L75 186 L86 169 L76 150 L88 132 L78 114 L94 98 Z" />
+              </clipPath>
+            </defs>
+            <g class="nota-map__terrain">
+              <path class="nota-map__glow" d="M78 93 C116 72 164 59 213 65 L264 42 L315 53 L358 42 L406 56 L462 59 L520 75 L550 94 L534 112 L544 129 L523 143 L531 161 L512 176 L522 193 L505 208 L513 228 L493 243 L470 251 L454 264 L446 281 L414 287 L389 303 L360 316 L330 307 L299 321 L272 317 L246 330 L220 316 L193 321 L175 305 L151 310 L135 290 L112 284 L99 266 L84 256 L90 236 L77 222 L85 202 L75 186 L86 169 L76 150 L88 132 L78 114 L94 98 Z" fill="url(#notaMapGlow)" filter="url(#notaMapSoftGlow)" />
+              <path class="nota-map__province" d="M78 93 C116 72 164 59 213 65 L264 42 L315 53 L358 42 L406 56 L462 59 L520 75 L550 94 L534 112 L544 129 L523 143 L531 161 L512 176 L522 193 L505 208 L513 228 L493 243 L470 251 L454 264 L446 281 L414 287 L389 303 L360 316 L330 307 L299 321 L272 317 L246 330 L220 316 L193 321 L175 305 L151 310 L135 290 L112 284 L99 266 L84 256 L90 236 L77 222 L85 202 L75 186 L86 169 L76 150 L88 132 L78 114 L94 98 Z" />
+              <g class="nota-map__inside" clip-path="url(#notaMapProvinceClip)">
+                <path class="nota-map__contour" d="M34 180 C160 112 250 166 351 117 C437 75 517 110 595 75" />
+                <path class="nota-map__contour" d="M31 238 C144 182 238 239 331 189 C423 140 508 183 603 130" />
+                <path class="nota-map__contour" d="M43 300 C145 250 226 310 316 254 C415 192 493 252 592 199" />
+                <path class="nota-map__water" d="M63 224 C134 213 178 224 224 247 C270 270 322 268 373 240 C418 215 457 184 527 178" />
+                <path class="nota-map__water nota-map__water--fine" d="M84 252 C144 242 185 253 234 277 C282 300 322 291 375 263 C427 235 475 203 523 199" />
+                <g class="nota-map__route-lines" aria-hidden="true">
+                  <path id="notaRouteWest" class="nota-map__route" d="M133 251 C177 233 213 247 252 231 C290 214 320 211 354 226 C382 238 400 229 417 207" />
+                  <path id="notaRouteCentre" class="nota-map__route" d="M202 298 C245 277 278 264 305 242 C334 217 359 192 384 169 C407 147 431 137 465 128" />
+                  <path id="notaRouteEast" class="nota-map__route" d="M388 287 C421 260 448 240 465 214 C485 186 497 153 490 114" />
+                </g>
+              </g>
+              <path class="nota-map__border" d="M78 93 C116 72 164 59 213 65 L264 42 L315 53 L358 42 L406 56 L462 59 L520 75 L550 94 L534 112 L544 129 L523 143 L531 161 L512 176 L522 193 L505 208 L513 228 L493 243 L470 251 L454 264 L446 281 L414 287 L389 303 L360 316 L330 307 L299 321 L272 317 L246 330 L220 316 L193 321 L175 305 L151 310 L135 290 L112 284 L99 266 L84 256 L90 236 L77 222 L85 202 L75 186 L86 169 L76 150 L88 132 L78 114 L94 98 Z" />
+              <g class="nota-map__beacons" aria-hidden="true">
+                <circle class="nota-map__beacon-glow" cx="148" cy="250" r="25" />
+                <circle class="nota-map__beacon-glow" cx="385" cy="211" r="25" />
+                <circle class="nota-map__beacon-glow" cx="465" cy="128" r="25" />
+                <circle class="nota-map__beacon nota-map__beacon--demand" cx="148" cy="250" r="5" />
+                <circle class="nota-map__beacon nota-map__beacon--notary" cx="385" cy="211" r="5" />
+                <circle class="nota-map__beacon nota-map__beacon--notary" cx="465" cy="128" r="5" />
+              </g>
+              <g class="nota-map__packets" aria-hidden="true">
+                <circle class="nota-map__packet" data-route="notaRouteWest" r="4" />
+                <circle class="nota-map__packet nota-map__packet--blue" data-route="notaRouteCentre" r="3.5" />
+                <circle class="nota-map__packet" data-route="notaRouteEast" r="3" />
+              </g>
+              <g class="nota-map__labels">
+                <text x="121" y="274">MONTRÉAL</text>
+                <text x="358" y="232">QUÉBEC</text>
+                <text x="437" y="113">SAGUENAY</text>
+              </g>
+            </g>
+          </svg>
+          <div class="nota-map__readout" aria-hidden="true"><span class="nota-map__readout-kicker" id="mapReadoutKicker">SIGNAL / 01</span><strong id="mapReadoutValue">DATE → CAPACITÉ</strong><span id="mapReadoutDetail">The next available window becomes visible.</span></div>
+        </div>
+        <div class="nota-map__legend"><span><i class="nota-map__legend-dot nota-map__legend-dot--demand" aria-hidden="true"></i><span id="mapLegendDemand">DEMAND</span></span><span><i class="nota-map__legend-dot nota-map__legend-dot--notary" aria-hidden="true"></i><span id="mapLegendNotary">NOTARY CAPACITY</span></span><span class="nota-map__legend-note" id="mapLegendNote">A living signal layer, built for Québec.</span></div>
       </div>
       <button class="next" id="next" type="button" aria-label="Next slide">›</button>
       <div class="stage-tools"><button class="stage-tool" id="fullscreen" type="button" aria-label="Open full screen">⛶ <span id="fullscreenLabel">Full screen</span></button></div>
@@ -117,6 +207,16 @@
         en: { kicker:'PHASE 2', title:'Models improve with users and notaries', subtitle:'For simple notarial acts… user behavior reveals friction… notary feedback qualifies the next model version.', noteLead:'CONTROLLED LOOP', note:'Usage improves the experience. Notary review qualifies each model update.', userLabel:'USER', userTitle:'Observed behavior', userDetail:'questions… friction… outcome', modelLabel:'NOTA MODEL', modelTitle:'Version tested', modelDetail:'intake… checks… dossier', notaryLabel:'NOTARY', notaryTitle:'Structured feedback', notaryDetail:'accept… correct… reject', releaseLabel:'QUALIFIED RELEASE', releaseTitle:'Canary… rollback', releaseDetail:'approved before production', contributeLabel:'CONTRIBUTE', contribute:'Structured feedback may qualify for potential equity', subscribeLabel:'SUBSCRIBE', subscribe:'Monthly model access without direct feedback contribution' },
         fr: { kicker:'PHASE 2', title:'Les modèles s’améliorent avec l’usage et les notaires', subtitle:'Pour les actes notariaux simples… le comportement révèle les irritants… le feedback notarial qualifie la prochaine version.', noteLead:'BOUCLE CONTRÔLÉE', note:'L’usage améliore l’expérience. La revue notariale qualifie chaque mise à jour.', userLabel:'UTILISATEUR', userTitle:'Comportement observé', userDetail:'questions… irritants… résultat', modelLabel:'MODÈLE NOTA', modelTitle:'Version testée', modelDetail:'accueil… contrôles… dossier', notaryLabel:'NOTAIRE', notaryTitle:'Commentaires structurés', notaryDetail:'accepter… corriger… refuser', releaseLabel:'VERSION QUALIFIÉE', releaseTitle:'Canari… retour arrière', releaseDetail:'approuvée avant production', contributeLabel:'CONTRIBUER', contribute:'Commentaires structurés… equity potentielle selon entente écrite et revue applicable', subscribeLabel:'S’ABONNER', subscribe:'Accès mensuel aux modèles sans contribution directe' },
       };
+      const mapCopy = {
+        en: {
+          capacity: { eyebrow:'NOTA SIGNAL / QUÉBEC', status:'LIVE NETWORK', title:'Capacity, made visible.', kicker:'SIGNAL / 01', value:'DATE → CAPACITY', detail:'The next available window becomes visible.', demand:'DEMAND', notary:'NOTARY CAPACITY', note:'A living signal layer, built for Québec.', svgTitle:'Nota network across Québec', svgDescription:'A living map connects demand dates to available notary capacity across Québec.' },
+          expansion: { eyebrow:'PHASE 3 / EXPANSION', status:'PROOF → SCALE', title:'Start local. Draw the network.', kicker:'SIGNAL / 03', value:'QUÉBEC → CANADA', detail:'A qualified local signal can travel.', demand:'ORIGIN', notary:'QUALIFIED NODE', note:'Local proof before provincial reach.', svgTitle:'Nota expansion pattern from Québec', svgDescription:'A living map shows the qualified Québec signal that becomes the starting point for expansion.' },
+        },
+        fr: {
+          capacity: { eyebrow:'SIGNAL NOTA / QUÉBEC', status:'RÉSEAU EN DIRECT', title:'La capacité devient visible.', kicker:'SIGNAL / 01', value:'DATE → CAPACITÉ', detail:'Le prochain créneau disponible apparaît.', demand:'DEMANDE', notary:'CAPACITÉ NOTARIALE', note:'Une couche de signal vivante, conçue pour le Québec.', svgTitle:'Réseau Nota au Québec', svgDescription:'Une carte vivante relie les dates demandées à la capacité notariale disponible au Québec.' },
+          expansion: { eyebrow:'PHASE 3 / EXPANSION', status:'PREUVE → ÉCHELLE', title:'Commencer local. Dessiner le réseau.', kicker:'SIGNAL / 03', value:'QUÉBEC → CANADA', detail:'Un signal local qualifié peut voyager.', demand:'ORIGINE', notary:'NŒUD QUALIFIÉ', note:'La preuve locale avant la portée provinciale.', svgTitle:'Schéma d’expansion de Nota', svgDescription:'Une carte vivante montre le signal québécois qualifié qui devient le point de départ de l’expansion.' },
+        },
+      };
       const motions = ['rise','drift','focus','sweep','glow','fold','pulse','tilt','zoom','orbit','wipe','drop','blur','flip','slide','shimmer'];
       const themes = ['intro','problem','actors','mechanism','raise','timing','market','model','phase','learning','competition','financial','funds','truth','ask','legal'];
       const stage = document.querySelector('#stage');
@@ -140,6 +240,7 @@
       const fullscreenProgress = document.querySelector('#fullscreenProgress');
       const fullscreenProgressBar = document.querySelector('#fullscreenProgressBar');
       const fullscreenButtons = [...document.querySelectorAll('[data-fs-action]')];
+      const reducedMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
       const deckKicker = document.querySelector('#deckKicker');
       const deckTitle = document.querySelector('#deckTitle');
       const deckSubtitle = document.querySelector('#deckSubtitle');
@@ -150,6 +251,25 @@
       const legalNote = document.querySelector('#legalNote');
       const hint = document.querySelector('#hint');
       const learningLoop = document.querySelector('#learningLoop');
+      const notaMap = document.querySelector('#notaMap');
+      const mapEyebrow = document.querySelector('#mapEyebrow');
+      const mapStatus = document.querySelector('#mapStatus');
+      const mapVisualTitle = document.querySelector('#mapVisualTitle');
+      const mapReadoutKicker = document.querySelector('#mapReadoutKicker');
+      const mapReadoutValue = document.querySelector('#mapReadoutValue');
+      const mapReadoutDetail = document.querySelector('#mapReadoutDetail');
+      const mapLegendDemand = document.querySelector('#mapLegendDemand');
+      const mapLegendNotary = document.querySelector('#mapLegendNotary');
+      const mapLegendNote = document.querySelector('#mapLegendNote');
+      const mapSvgTitle = document.querySelector('#mapSvgTitle');
+      const mapSvgDescription = document.querySelector('#mapSvgDescription');
+      const mapPackets = [...notaMap.querySelectorAll('[data-route]')].map((packet, index) => {
+        const route = document.getElementById(packet.dataset.route);
+        return { packet, route, length: route && typeof route.getTotalLength === 'function' ? route.getTotalLength() : 1, speed: [0.000052, 0.000041, 0.000032][index] || 0.00004, phase: [0.07, 0.54, 0.82][index] || 0 };
+      });
+      let mapActive = false;
+      let mapAnimationFrame = 0;
+      let mapAnimationEpoch = 0;
       const languageButtons = [...document.querySelectorAll('[data-lang]')];
       let language = 'en';
       let current = 1;
@@ -162,9 +282,50 @@
         const selected = learningCopy[language];
         learningLoop.querySelectorAll('[data-learning-copy]').forEach((element) => { element.textContent = selected[element.dataset.learningCopy]; });
       };
+      const updateNotaMapCopy = (mode) => {
+        const selected = mapCopy[language][mode];
+        mapEyebrow.textContent = selected.eyebrow;
+        mapStatus.textContent = selected.status;
+        mapVisualTitle.textContent = selected.title;
+        mapReadoutKicker.textContent = selected.kicker;
+        mapReadoutValue.textContent = selected.value;
+        mapReadoutDetail.textContent = selected.detail;
+        mapLegendDemand.textContent = selected.demand;
+        mapLegendNotary.textContent = selected.notary;
+        mapLegendNote.textContent = selected.note;
+        mapSvgTitle.textContent = selected.svgTitle;
+        mapSvgDescription.textContent = selected.svgDescription;
+      };
+      const stopNotaMapAnimation = () => {
+        if (mapAnimationFrame) window.cancelAnimationFrame(mapAnimationFrame);
+        mapAnimationFrame = 0;
+      };
+      const renderNotaMapFrame = (time) => {
+        if (!mapActive || reducedMotionQuery.matches || document.hidden) { mapAnimationFrame = 0; return; }
+        const elapsed = time - mapAnimationEpoch;
+        mapPackets.forEach(({ packet, route, length, speed, phase }) => {
+          if (!route || typeof route.getPointAtLength !== 'function') return;
+          const point = route.getPointAtLength((phase * length + elapsed * length * speed) % length);
+          packet.setAttribute('transform', `translate(${point.x.toFixed(2)} ${point.y.toFixed(2)})`);
+        });
+        mapAnimationFrame = window.requestAnimationFrame(renderNotaMapFrame);
+      };
+      const syncNotaMapAnimation = () => {
+        stopNotaMapAnimation();
+        if (mapActive && !reducedMotionQuery.matches && !document.hidden) {
+          mapAnimationEpoch = performance.now();
+          mapAnimationFrame = window.requestAnimationFrame(renderNotaMapFrame);
+        }
+      };
       const setSlide = (value, push = true, direction = 0) => {
         current = safeNumber(value);
         const learningActive = current === 10;
+        mapActive = current === 3 || current === 7;
+        const mapMode = current === 7 ? 'expansion' : 'capacity';
+        updateNotaMapCopy(mapMode);
+        notaMap.dataset.mode = mapMode;
+        notaMap.classList.toggle('is-active', mapActive);
+        notaMap.setAttribute('aria-hidden', mapActive ? 'false' : 'true');
         slide.src = slideAsset(current);
         slide.classList.toggle('is-hidden', learningActive);
         learningLoop.classList.toggle('is-active', learningActive);
@@ -173,7 +334,7 @@
         counter.textContent = `${copy[language].slide} ${current} ${copy[language].of} ${titlesEn.length}`;
         prev.disabled = prevControl.disabled = current === 1;
         next.disabled = nextControl.disabled = current === titlesEn.length;
-        stage.className = `stage motion-${motions[current - 1]} ${direction < 0 ? 'motion-back' : 'motion-forward'} is-changing`;
+        stage.className = `stage motion-${motions[current - 1]} ${direction < 0 ? 'motion-back' : 'motion-forward'} ${mapActive ? 'nota-map-visible' : ''} is-changing`;
         stage.dataset.slide = String(current);
         stage.dataset.theme = themes[current - 1];
         slideLabel.textContent = labels()[current - 1];
@@ -187,6 +348,7 @@
         fullscreenButtons.find((button) => button.dataset.fsAction === 'next').disabled = current === titlesEn.length;
         window.setTimeout(() => stage.classList.remove('is-changing'), 560);
         thumbs.querySelectorAll('button').forEach((button, index) => button.setAttribute('aria-current', index + 1 === current ? 'true' : 'false'));
+        syncNotaMapAnimation();
         if (push) history.replaceState(null, '', `#slide-${current}`);
       };
       titlesEn.forEach((title, index) => {
@@ -213,6 +375,7 @@
         const fsPlay = fullscreenButtons.find((button) => button.dataset.fsAction === 'play');
         fsPlay.setAttribute('aria-label', playing ? selected.pause : selected.play);
         fsPlay.setAttribute('aria-pressed', playing ? 'true' : 'false');
+        play.disabled = fsPlay.disabled = reducedMotionQuery.matches;
         fsPlay.querySelector('.fs-play-icon').style.display = playing ? 'none' : 'block';
         fsPlay.querySelector('.fs-pause-icon').style.display = playing ? 'block' : 'none';
         fullscreenLabel.textContent = document.fullscreenElement ? selected.exit : selected.full;
@@ -225,7 +388,7 @@
       };
       languageButtons.forEach((button) => button.addEventListener('click', () => setLanguage(button.dataset.lang)));
       const setPlaying = (nextPlaying) => {
-        playing = nextPlaying;
+        playing = reducedMotionQuery.matches ? false : nextPlaying;
         window.clearInterval(playTimer);
         play.setAttribute('aria-pressed', playing ? 'true' : 'false');
         play.setAttribute('aria-label', playing ? copy[language].pause : copy[language].play);
@@ -234,6 +397,7 @@
         const fsPlay = fullscreenButtons.find((button) => button.dataset.fsAction === 'play');
         fsPlay.setAttribute('aria-label', playing ? copy[language].pause : copy[language].play);
         fsPlay.setAttribute('aria-pressed', playing ? 'true' : 'false');
+        play.disabled = fsPlay.disabled = reducedMotionQuery.matches;
         fsPlay.querySelector('.fs-play-icon').style.display = playing ? 'none' : 'block';
         fsPlay.querySelector('.fs-pause-icon').style.display = playing ? 'block' : 'none';
         if (playing) playTimer = window.setInterval(() => setSlide(current === titlesEn.length ? 1 : current + 1, true, 1), 5200);
@@ -244,6 +408,10 @@
         if (button.dataset.fsAction === 'next') nextControl.click();
         if (button.dataset.fsAction === 'play') play.click();
       }));
+      const syncMotionPreference = () => setPlaying(playing);
+      if (reducedMotionQuery.addEventListener) reducedMotionQuery.addEventListener('change', syncMotionPreference);
+      else if (reducedMotionQuery.addListener) reducedMotionQuery.addListener(syncMotionPreference);
+      document.addEventListener('visibilitychange', () => { if (document.hidden && playing) setPlaying(false); syncNotaMapAnimation(); });
       const jumpFromPointer = (event) => { const box = progress.getBoundingClientRect(); const ratio = Math.max(0, Math.min(1, (event.clientX - box.left) / box.width)); const target = Math.round(ratio * (titlesEn.length - 1)) + 1; setSlide(target, true, target - current); };
       progress.addEventListener('click', jumpFromPointer);
       progress.addEventListener('keydown', (event) => { if (event.key === 'ArrowLeft') { event.preventDefault(); setSlide(current - 1, true, -1); } if (event.key === 'ArrowRight') { event.preventDefault(); setSlide(current + 1, true, 1); } if (event.key === 'Home') { event.preventDefault(); setSlide(1, true, -1); } if (event.key === 'End') { event.preventDefault(); setSlide(titlesEn.length, true, 1); } });

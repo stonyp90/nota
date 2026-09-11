@@ -36,23 +36,7 @@ function createSigningRoutes({ repo, env = process.env, nowMs, newId, json, auth
     try { values = raw.startsWith('[') ? JSON.parse(raw) : raw.split(','); } catch { return []; }
     return Array.isArray(values) ? values.filter(s => typeof s === 'string').map(s => s.trim()).filter(s => /^turns?:[a-z\d.-]+:\d+(\?transport=(udp|tcp))?$/i.test(s)) : [];
   };
-  let turnSecretCache = null, turnSecretUntil = 0, ssm;
-  async function turnSecret() {
-    if (env.NOTA_SIGNING_TURN_SECRET) return env.NOTA_SIGNING_TURN_SECRET;
-    if (turnSecretCache && nowMs() < turnSecretUntil) return turnSecretCache;
-    const name = env.NOTA_SIGNING_TURN_SECRET_SSM_PARAMETER;
-    if (!name) return null;
-    let value;
-    if (readTurnSecret) value = await readTurnSecret(name);
-    else {
-      const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
-      ssm ||= new SSMClient({ region: env.AWS_REGION || 'ca-central-1' });
-      value = (await ssm.send(new GetParameterCommand({ Name: name, WithDecryption: true }))).Parameter?.Value;
-    }
-    if (typeof value !== 'string' || value.length < 32) throw new Error('TURN secret unavailable');
-    turnSecretCache = value; turnSecretUntil = nowMs() + 5 * 60 * 1000;
-    return value;
-  }
+  const turnSecret = require('./turn-secret').createTurnSecretReader({ env, nowMs, readTurnSecret });
   const capabilities = () => ({ enabled: enabled(), mode: 'rehearsal', legalSignatureAvailable: false,
     identityProofingAvailable: false, authentication: 'recent_email_verification', recordingAvailable: false,
     mediaEncryption: 'webrtc_dtls_srtp', protectsAgainstMaliciousWebPublisher: false,

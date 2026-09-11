@@ -96,7 +96,9 @@ test('English boot renders the auth gate in English', async () => {
   assert.ok(lead, 'auth gate did not render');
   assert.equal(lead.textContent.trim(), I18N.tEn(FR_LEAD));
   assert.notEqual(lead.textContent.trim(), FR_LEAD, 'lead must actually change');
-  assert.equal(doc.getElementById('admin-lang-toggle').textContent, 'FR');
+  const englishSegment = doc.getElementById('admin-lang-toggle');
+  assert.equal(englishSegment.querySelector('[data-set-lang="en"]').getAttribute('aria-pressed'), 'true');
+  assert.equal(englishSegment.querySelector('[data-set-lang="fr"]').getAttribute('aria-pressed'), 'false');
 });
 
 test('French boot stays French', async () => {
@@ -104,7 +106,9 @@ test('French boot stays French', async () => {
   const doc = win.document;
   assert.equal(doc.documentElement.getAttribute('lang'), 'fr-CA');
   assert.equal(doc.querySelector('.auth-lead').textContent.trim(), FR_LEAD);
-  assert.equal(doc.getElementById('admin-lang-toggle').textContent, 'EN');
+  const frenchSegment = doc.getElementById('admin-lang-toggle');
+  assert.equal(frenchSegment.querySelector('[data-set-lang="fr"]').getAttribute('aria-pressed'), 'true');
+  assert.equal(frenchSegment.querySelector('[data-set-lang="en"]').getAttribute('aria-pressed'), 'false');
 });
 
 // ---------------------------------------------------------------------------

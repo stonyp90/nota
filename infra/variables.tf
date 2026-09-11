@@ -59,6 +59,18 @@ variable "pitch_hosted_zone_id" {
   default     = null
 }
 
+variable "brand_domain_name" {
+  description = "Optional hostname for the public Nota brand kit (for example brand.nota.ca). It is served by the public CloudFront distribution and opens brand.html."
+  type        = string
+  default     = ""
+}
+
+variable "brand_hosted_zone_id" {
+  description = "Optional Route 53 zone ID for brand_domain_name when it is not in the public domain zone. Required for brand.nota.ca when the public zone is not nota.ca."
+  type        = string
+  default     = null
+}
+
 # --- Stripe (flat monthly subscription billing) ----------------------------
 # Values are NEVER hardcoded: supply them at apply time via TF_VAR_stripe_*
 # environment variables or a gitignored terraform.tfvars. Use Stripe TEST-MODE

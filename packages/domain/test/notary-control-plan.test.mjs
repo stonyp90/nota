@@ -93,6 +93,26 @@ test('parameter coverage links each service intake to AI fields and human contro
   assert.equal(D.notaryParameterCoverage('unknown'), null);
 });
 
+test('offer template freezes every connector blueprint without customer data', () => {
+  for (const serviceId of ['financement', 'refinancement', 'testament', 'procuration']) {
+    const template = D.notaryOfferTemplate({
+      id: 'offer-1', dateISO: '2026-09-18', createdAt: '2026-09-09T14:00:00.000Z', serviceId,
+      pricing: serviceId === 'financement' ? { contexte: 'achat' } : {},
+      dossier: { nom: 'Client confidentiel', adresse: 'Adresse confidentielle' },
+    });
+    assert.equal(template.version, D.NOTARY_OFFER_TEMPLATE_VERSION);
+    assert.equal(template.serviceId, serviceId);
+    assert.equal(template.generatedAt, '2026-09-09T14:00:00.000Z');
+    assert.deepEqual(template.access, { audience: 'retaining_notary', after: 'nota_paid', customerVisible: false });
+    assert.ok(template.connectors.length > 0, serviceId);
+    assert.ok(template.connectors.every(connector => connector.status === 'candidate' && connector.automation === 'prepare_only'));
+    assert.equal(JSON.stringify(template).includes('Client confidentiel'), false);
+    assert.equal(JSON.stringify(template).includes('Adresse confidentielle'), false);
+  }
+  assert.equal(D.notaryOfferTemplate(null), null);
+  assert.equal(D.notaryOfferTemplate({ serviceId: 'unknown' }), null);
+});
+
 test('workflow summary gives the notary one next action and keeps AI review explicit', () => {
   const controls = D.notaryControlPlan('refinancement');
   const analysis = { preparation: { fields: [{ fieldId: 'lender_name', value: 'Banque Exemple' }] } };

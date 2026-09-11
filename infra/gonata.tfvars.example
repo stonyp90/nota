@@ -5,6 +5,10 @@ project_name           = "nota"
 domain_name            = "gonota.ca"
 plan_domain_name       = "plan.gonata.ca"
 pitch_domain_name      = "pitch.gonota.ca"
+# Public brand kit. For brand.nota.ca, provide the Route 53 zone ID for nota.ca
+# below when it is different from the public gonota.ca zone.
+# brand_domain_name      = "brand.nota.ca"
+# brand_hosted_zone_id  = "Z0123456789NOTACA"
 create_hosted_zone     = true
 enable_www             = true
 base_url               = "https://gonota.ca"

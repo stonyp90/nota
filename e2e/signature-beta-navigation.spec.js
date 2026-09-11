@@ -8,6 +8,9 @@ for (const [language, width] of [['fr', 1440], ['en', 1440], ['fr', 390], ['en',
     await expect(pane).toBeVisible();
     await expect(pane.locator('h1')).toHaveText(language === 'fr'
       ? 'La signature électronique, avec votre notaire.' : 'Electronic signing, with your notary.');
+    await expect(pane.locator('.beta-security')).toContainText(language === 'fr'
+      ? 'infrastructure canadienne' : 'Canadian infrastructure');
+    if (width >= 900) await expect(page.locator('#nav-back')).toHaveCount(0);
     const layout = await page.evaluate(() => ({ width: innerWidth, scroll: document.documentElement.scrollWidth }));
     expect(layout.scroll).toBeLessThanOrEqual(layout.width);
     await page.screenshot({ path: testInfo.outputPath('beta.png'), fullPage: true });

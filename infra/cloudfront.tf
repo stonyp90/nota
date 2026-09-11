@@ -33,8 +33,10 @@ locals {
   # Lambda is protected by the SCP-allowed lambda:InvokeFunction path).
   api_origin_domain = "${aws_apigatewayv2_api.api.id}.execute-api.${var.region}.amazonaws.com"
 
-  # Attach a custom domain only when var.domain_name is set.
-  has_custom_domain = var.domain_name != ""
+  # Attach a custom domain when the public app or one of its shareable surfaces
+  # has been configured.
+  has_custom_domain     = var.domain_name != ""
+  has_any_custom_domain = local.has_custom_domain || var.plan_domain_name != "" || var.pitch_domain_name != "" || var.brand_domain_name != ""
 }
 
 # ---------------------------------------------------------------------------
@@ -104,8 +106,15 @@ resource "aws_cloudfront_response_headers_policy" "security" {
 # list must leave the policy EXACTLY as it was rather than trailing a space that
 # would read as a source expression.
 locals {
-  ice_urls        = compact(concat(var.stun_urls, var.turn_urls))
-  csp_ice_sources = length(local.ice_urls) > 0 ? " ${join(" ", local.ice_urls)}" : ""
+  ice_urls = compact(concat(var.stun_urls, var.turn_urls))
+  # Both rehearsal rooms reuse the provisioned Canadian relay. CSP sources
+  # carry the origin/port, not the ICE URL's transport query string.
+  signing_ice_urls = var.signing_turn_enabled ? [
+    "turn:${var.signing_turn_hostname}:3478",
+    "turns:${var.signing_turn_hostname}:443",
+  ] : []
+  all_ice_urls    = distinct(concat(local.ice_urls, local.signing_ice_urls))
+  csp_ice_sources = length(local.all_ice_urls) > 0 ? " ${join(" ", local.all_ice_urls)}" : ""
 }
 
 # ---------------------------------------------------------------------------
@@ -141,6 +150,11 @@ resource "aws_cloudfront_function" "spa_router" {
         // The pitch host opens on the interactive deck. Linked assets and
         // explicit paths keep their original locations.
         if (uri === '/' || uri === '') request.uri = '/pitch-deck.html';
+        return request;
+      }
+      if (${jsonencode(var.brand_domain_name)} !== '' && host === ${jsonencode(lower(var.brand_domain_name))}) {
+        // The brand host opens the public, copyable brand kit.
+        if (uri === '/' || uri === '') request.uri = '/brand.html';
         return request;
       }
       if (${jsonencode(var.enable_www)} && host === ${jsonencode(lower("www.${var.domain_name}"))}) {
@@ -261,21 +275,22 @@ resource "aws_cloudfront_distribution" "web" {
   # responses pass through unchanged. default_root_object stays index.html.
 
   # Custom domain aliases, only when a domain is configured.
-  aliases = local.has_custom_domain || var.plan_domain_name != "" || var.pitch_domain_name != "" ? compact(concat(
+  aliases = local.has_any_custom_domain ? compact(concat(
     var.domain_name != "" ? [var.domain_name] : [],
     var.enable_www && var.domain_name != "" ? ["www.${var.domain_name}"] : [],
     var.plan_domain_name != "" ? [var.plan_domain_name] : [],
     var.pitch_domain_name != "" ? [var.pitch_domain_name] : [],
+    var.brand_domain_name != "" ? [var.brand_domain_name] : [],
   )) : []
 
   # Use the ACM cert (us-east-1) when a domain is set; otherwise fall back to
   # the default *.cloudfront.net certificate.
   viewer_certificate {
-    cloudfront_default_certificate = local.has_custom_domain || var.plan_domain_name != "" || var.pitch_domain_name != "" ? null : true
+    cloudfront_default_certificate = local.has_any_custom_domain ? null : true
     # Reference the validation resource so CloudFront waits until the cert is issued.
-    acm_certificate_arn      = local.has_custom_domain || var.plan_domain_name != "" || var.pitch_domain_name != "" ? aws_acm_certificate_validation.cert[0].certificate_arn : null
-    ssl_support_method       = local.has_custom_domain || var.plan_domain_name != "" || var.pitch_domain_name != "" ? "sni-only" : null
-    minimum_protocol_version = local.has_custom_domain || var.plan_domain_name != "" || var.pitch_domain_name != "" ? "TLSv1.2_2021" : "TLSv1"
+    acm_certificate_arn      = local.has_any_custom_domain ? aws_acm_certificate_validation.cert[0].certificate_arn : null
+    ssl_support_method       = local.has_any_custom_domain ? "sni-only" : null
+    minimum_protocol_version = local.has_any_custom_domain ? "TLSv1.2_2021" : "TLSv1"
   }
 
   restrictions {

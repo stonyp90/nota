@@ -18,6 +18,14 @@ function isLocal(url) {
   return /^https?:\/\/localhost[:/]/.test(url || '');
 }
 
+// Analytics beacons are best-effort keepalive requests. They remain in
+// Chromium's network queue longer than the UI work they trigger, so they must
+// not hold the application-settlement gate open. Their failures are still
+// recorded below and remain assertions.
+function isTelemetry(url) {
+  return /\/events(?:\?|$)/.test(url || '');
+}
+
 test('home and booking load with no severe console errors or failed requests', async ({ page }) => {
   const consoleErrors = [];
   const pageErrors = [];
@@ -29,7 +37,10 @@ test('home and booking load with no severe console errors or failed requests', a
     if (pendingLocal.delete(request)) lastLocalActivity = Date.now();
   };
   page.on('request', request => {
-    if (isLocal(request.url())) { pendingLocal.add(request); lastLocalActivity = Date.now(); }
+    if (isLocal(request.url()) && !isTelemetry(request.url())) {
+      pendingLocal.add(request);
+      lastLocalActivity = Date.now();
+    }
   });
   page.on('requestfinished', settleLocal);
   // Record the carnet feed status as it arrives (registering a listener up front

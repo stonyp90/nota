@@ -25,6 +25,7 @@
  */
 const { test, expect } = require('@playwright/test');
 const { gotoHome } = require('./helpers');
+const domain = require('@nota/domain');
 
 // The sizes the product meets: two phones (the 320px floor still shipping on
 // an iPhone SE 1st gen, and a modern 390px phone), a tablet in each
@@ -211,12 +212,14 @@ test.describe('responsive layout', () => {
     let rail = await boxOf(page, '#notary-console');
     expect(rail.top, 'stacked: the gate follows the demands').toBeGreaterThan(live.bottom - 1);
 
-    // A desktop: two columns — the gate opens level with the first row of tiles.
+    // A desktop: two columns — the gate opens level with the hero, so expanding
+    // the beta disclosure cannot create a blank right rail.
     await page.setViewportSize({ width: 1440, height: 900 });
     await settled(page);
+    const hero = await boxOf(page, '#pane-notaires .intro--hero');
     live = await boxOf(page, '#notary-live');
     rail = await boxOf(page, '#notary-console');
-    expect(Math.abs(rail.top - live.top), 'side by side: the gate seats on the tiles’ own top line').toBeLessThan(4);
+    expect(Math.abs(rail.top - hero.top), 'side by side: the gate seats on the hero top line').toBeLessThan(4);
     expect(rail.left, 'the gate is the right-hand rail').toBeGreaterThan(live.right - 1);
 
     // Read the grid's own used track list, not the tiles' measured tops: a
@@ -234,6 +237,92 @@ test.describe('responsive layout', () => {
       expect(columns, 'a two-column landing never files the tiles one under the other').toBeGreaterThan(1);
     }
   });
+
+  test('opening the beta disclosure keeps the access card beside the hero', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoHome(page, { suppressOnboarding: true });
+    await settled(page);
+    await openPane(page, 'notaires', '#pane-notaires');
+
+    await page.locator('#notary-ai-beta-toggle').click();
+    await expect(page.locator('#notary-ai-beta-details')).toBeVisible();
+    await settled(page);
+
+    const hero = await boxOf(page, '#pane-notaires .intro--hero');
+    const rail = await boxOf(page, '#notary-console');
+    const live = await boxOf(page, '#notary-live');
+    expect(Math.abs(rail.top - hero.top), 'expanded beta: the gate stays beside the hero').toBeLessThan(4);
+    expect(rail.top, 'expanded beta: the gate remains above the inventory').toBeLessThan(live.top - 100);
+  });
+});
+
+// Inventory count must keep the landing aligned without reserving a tall wall
+// of empty cells. Exercise actual successful API responses, including empty,
+// rather than offline demos.
+test.describe('notary inventory keeps its footprint', () => {
+  for (const vp of VIEWPORTS) {
+    for (const lang of ['fr', 'en']) {
+      test(`${vp.name}, ${lang}: zero, one and partial inventory keep the grid aligned`, async ({ page }) => {
+        await page.setViewportSize({ width: vp.width, height: vp.height });
+        await page.addInitScript(() => {
+          localStorage.setItem('nota.introSeen', '1');
+          localStorage.setItem('nota.onboarded.v1', '1');
+        });
+        const seed = domain.makeFixtures(domain.businessDay()).filter((b) => b.status !== domain.STATUS.RETENUE);
+        const targetMonth = domain.businessDay().slice(0, 7);
+        let count = 12;
+        await page.route('**/bids?*', async (route) => {
+          const month = new URL(route.request().url()).searchParams.get('month');
+          const bids = month === targetMonth ? Array.from({ length: count }, (_, i) => ({
+            ...seed[i % seed.length], id: 'layout-' + i,
+            // Keep every synthetic bid in the requested month so each count
+            // really exercises the twelve-slot grid, including February.
+            dateISO: `${month}-${String(i + 1).padStart(2, '0')}`,
+          })) : [];
+          await route.fulfill({ json: { bids: bids.filter((b) => b.dateISO.startsWith(month)) }, headers: { 'access-control-allow-origin': '*' } });
+        });
+        for (count of [12, 0, 1, 5, 13]) {
+          if (count === 12) await page.goto(`/?lang=${lang}#t=notaires`);
+          else await page.reload();
+          await expect(page.locator('#notary-live')).toBeVisible();
+          await expect(page.locator('#notary-live-grid .nc-live-card')).toHaveCount(Math.min(count, 12));
+          await expect(page.locator('#notary-live-grid .nc-live-slot')).toHaveCount(Math.max(0, 6 - Math.min(count, 12)));
+          await settled(page);
+          const geometry = { hero: await boxOf(page, '#pane-notaires .intro--hero') };
+          for (const id of ['notary-live-grid', 'notary-console', 'notary-carnet', 'nc-conformite']) {
+            geometry[id] = await boxOf(page, '#' + id);
+          }
+          const stacked = vp.width <= 1200;
+          if (stacked) {
+            expect(geometry['notary-console'].top, `${count} offers: gate follows inventory`).toBeGreaterThanOrEqual(geometry['notary-live-grid'].bottom - 1);
+          } else {
+            expect(Math.abs(geometry['notary-console'].top - geometry.hero.top), `${count} offers: gate aligns with the hero`).toBeLessThan(2);
+            expect(geometry['notary-console'].left, `${count} offers: gate stays in the right rail`).toBeGreaterThan(geometry['notary-live-grid'].right - 1);
+          }
+          expect(geometry['notary-carnet'].top, `${count} offers: agenda follows the inventory`).toBeGreaterThanOrEqual(Math.max(geometry['notary-live-grid'].bottom, geometry['notary-console'].bottom) - 1);
+          expect(geometry['nc-conformite'].top, `${count} offers: compliance follows the columns`).toBeGreaterThanOrEqual(Math.max(geometry['notary-carnet'].bottom, geometry['notary-console'].bottom) - 1);
+          if (!stacked) {
+            expect(Math.abs(geometry['notary-carnet'].left - geometry['notary-live-grid'].left), `${count} offers: agenda starts on the landing rail`).toBeLessThan(2);
+            expect(Math.abs(geometry['notary-carnet'].right - geometry['nc-conformite'].right), `${count} offers: agenda closes the full content rail`).toBeLessThan(2);
+          }
+          if (count === 0) {
+            const empty = page.locator('.nc-live-empty');
+            await expect(empty.locator('strong')).toHaveText(lang === 'fr' ? 'Pas d’offres' : 'No offers');
+            const rect = await boxOf(page, '.nc-live-empty');
+            expect(rect.height).toBe(geometry['notary-live-grid'].height);
+            expect(rect.width).toBe(geometry['notary-live-grid'].width);
+          } else {
+            await expect(page.locator('.nc-live-empty')).toHaveCount(0);
+            if (count < 12) {
+              await expect(page.locator('.nc-live-slot').first()).toHaveText(lang === 'fr' ? 'Pas d’offre' : 'No offer');
+            }
+          }
+          const sizes = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+          expect(sizes.scroll).toBeLessThanOrEqual(sizes.width + 1);
+        }
+      });
+    }
+  }
 });
 
 // The partners pane has a denser story than the other public doors: a reward

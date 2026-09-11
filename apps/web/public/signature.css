@@ -22,7 +22,7 @@ button,a.button{min-height:44px}.text-button,.language-toggle{min-width:44px}.do
    is a standalone entry point and cannot inherit the marketplace stylesheet. */
 :root {
   color-scheme: dark;
-  --bg: #101820;
+  --bg: #101b26;
   --surface: #0f2030;
   --surface-raised: #132b3f;
   --surface-soft: #19384d;
@@ -32,6 +32,7 @@ button,a.button{min-height:44px}.text-button,.language-toggle{min-width:44px}.do
   --border: #294353;
   --border-strong: #3f5f70;
   --brand: #78a9bf;
+  --signal: #407598;
   --brand-bright: #9cc7d8;
   --brand-solid: #407598;
   --brand-ink: #061c2a;
@@ -41,8 +42,8 @@ button,a.button{min-height:44px}.text-button,.language-toggle{min-width:44px}.do
   --danger-bg: #3b2329;
   --gold: var(--brand-bright);
   --signal: var(--brand-bright);
-  --video-bg: #101820;
-  --video-surface: #0a1622;
+  --video-bg: #101b26;
+  --video-surface: #122744;
   --video-surface-soft: #132b3f;
   --video-ink: #e5eef3;
   --video-muted: #afc2cf;
@@ -63,6 +64,7 @@ html[data-theme=light] {
   --border: #c5d8df;
   --border-strong: #a9c3ce;
   --brand: #386888;
+  --signal: #407598;
   --brand-solid: #386888;
   --brand-bright: #407598;
   --brand-ink: #ffffff;
@@ -85,9 +87,16 @@ html[data-theme=light] {
 .brand-mark {
   position: relative;
   background: var(--surface-raised);
-  border-color: var(--brand);
+  border: 0;
+  border-radius: 6px;
   color: var(--brand);
 }
+.video-brand,
+.paper-brand,
+.footer-brand { display: inline-flex; align-items: center; gap: 7px; }
+.video-brand img { width: 25px; height: 25px; }
+.paper-brand img { width: 25px; height: 25px; }
+.footer-brand img { width: 24px; height: 24px; }
 .brand-mark::after {
   content: '';
   position: absolute;
@@ -247,3 +256,16 @@ a.button,
     transform: none !important;
   }
 }
+
+/* Nota production type scale: the beta keeps the same hierarchy without
+   oversized display text on laptop and mobile screens. */
+:root {
+  --type-h1: clamp(32px, 3.6vw, 56px);
+  --type-h1-lh: 1.06;
+  --type-h1-ls: -.045em;
+  --type-h2: clamp(22px, 2.1vw, 30px);
+  --type-h2-lh: 1.2;
+  --type-h2-ls: -.035em;
+  --type-h3: 16px;
+}
+h2 { line-height: var(--type-h2-lh); }

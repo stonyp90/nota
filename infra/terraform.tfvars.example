@@ -11,6 +11,8 @@ project_name = "nota"
 # To attach a custom domain, set BOTH of these:
 # domain_name    = "app.example.com"
 # hosted_zone_id = "Z0123456789ABCDEFGHIJ"
+# brand_domain_name = "brand.nota.ca"
+# brand_hosted_zone_id = "Z0123456789NOTACA" # required when nota.ca is a separate zone
 
 # --- Admin surface (admin.nota.ca) — PHASE 1 ----------------------------
 # Feature-flagged OFF by default: with enable_admin = false, `terraform plan`

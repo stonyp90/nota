@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="fr-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Nota — explorations de marque</title>
+  <style>
+    :root { color-scheme: light; --ink:#122744; --muted:#607986; --canvas:#f4f6f8; --card:#fff; --line:#d7e2e8; --slate:#386888; --slate-deep:#122744; --gold:#f0a45d; --gold-deep:#8a4d16; --wash:#e5eef3; }
+    * { box-sizing: border-box; }
+    body { margin:0; background:var(--canvas); color:var(--ink); font:15px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif; }
+    main { width:min(1320px, calc(100% - 40px)); margin:0 auto; padding:48px 0 64px; }
+    .intro { display:flex; justify-content:space-between; gap:32px; align-items:end; margin-bottom:30px; }
+    .eyebrow { display:inline-flex; padding:6px 9px; border-radius:999px; background:#fce8d5; color:var(--gold-deep); font-size:11px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
+    h1 { margin:8px 0 8px; font-size:clamp(28px,3.4vw,42px); letter-spacing:-.045em; line-height:1.08; }
+    .lede { max-width:660px; color:var(--muted); margin:0; }
+    .note { color:var(--muted); font-size:12px; max-width:250px; text-align:right; }
+    .board { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
+    .tile { position:relative; isolation:isolate; min-height:265px; padding:22px; display:flex; flex-direction:column; justify-content:space-between; overflow:hidden; background:var(--tile-bg,var(--card)); border:1px solid rgb(25 40 46 / .12); border-radius:18px; box-shadow:0 14px 30px rgb(25 40 46 / .10); }
+    .tile::before { content:""; position:absolute; z-index:-1; width:138px; height:138px; right:-42px; top:-42px; border:1px solid var(--tile-accent); border-radius:50%; opacity:.34; box-shadow:0 0 0 14px rgb(255 255 255 / .12),0 0 0 28px rgb(255 255 255 / .08); }
+    .tile::after { content:""; position:absolute; z-index:-1; width:9px; height:9px; right:28px; top:28px; border-radius:50%; background:var(--tile-accent); box-shadow:0 0 0 6px rgb(255 255 255 / .22); }
+    .tile:hover { transform:translateY(-3px) rotate(-.2deg); box-shadow:0 18px 38px rgb(25 40 46 / .16); transition:transform .16s,box-shadow .16s; }
+    .tile-head { display:flex; justify-content:space-between; gap:14px; align-items:start; }
+    .number { color:var(--muted); font-size:12px; font-weight:800; letter-spacing:.08em; }
+    h2 { margin:0; font-size:18px; letter-spacing:-.025em; }
+    .direction { margin:4px 0 0; color:var(--muted); font-size:12px; }
+    .lockup { display:flex; align-items:center; gap:0; color:var(--slate-deep); font-size:clamp(28px,3.2vw,38px); font-weight:800; letter-spacing:-.07em; line-height:1; text-transform:uppercase; }
+    .lockup svg { width:44px; height:44px; flex:none; margin-right:-1px; }
+    .lockup small { align-self:end; margin:0 0 3px 9px; color:var(--muted); font-size:9px; font-weight:750; letter-spacing:.08em; text-transform:uppercase; }
+    .tone-teal { --tile-bg:#e5eef3; --tile-accent:#386888; }
+    .tone-ink { --tile-bg:#122744; --tile-accent:#f0a45d; color:#f4f6f8; border-color:#122744; }
+    .tone-ink .lockup { color:#f4f6f8; }
+    .tone-ink .direction,.tone-ink .number,.tone-ink .lockup small { color:#aebdca; }
+    .tone-sun { --tile-bg:#fff5e8; --tile-accent:#b45309; }
+    .tone-coral { --tile-bg:#edf4f7; --tile-accent:#407598; }
+    .tone-violet { --tile-bg:#f4f6f8; --tile-accent:#274a62; }
+    .tone-mint { --tile-bg:#e7f1f4; --tile-accent:#386888; }
+    .tone-sky { --tile-bg:#e5eef3; --tile-accent:#78a9bf; }
+    .tone-plum { --tile-bg:#eff3f6; --tile-accent:#386888; }
+    .tone-peach { --tile-bg:#fce8d5; --tile-accent:#f0a45d; }
+    .gold { color:var(--gold); }
+    .stroke { fill:none; stroke:currentColor; stroke-linecap:round; stroke-linejoin:round; }
+    @media (max-width:900px) { .board { grid-template-columns:repeat(2,minmax(0,1fr)); } .intro { display:block; } .note { margin-top:14px; text-align:left; } }
+    @media (max-width:580px) { main { width:min(100% - 24px, 420px); padding-top:32px; } .board { grid-template-columns:1fr; } .tile { min-height:220px; } }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="intro">
+      <div>
+        <div class="eyebrow">Explorations 01 · Nota</div>
+        <h1>Neuf façons de signer Nota.</h1>
+        <p class="lede">Chaque piste intègre le monogramme au mot « Nota » — le premier geste du nom devient notre signature — puis ajoute un signal de confiance propre aux actes notariés.</p>
+      </div>
+      <div class="note">Planche de direction interne · la piste 01 est la marque de production retenue; les autres restent des alternatives évaluées.</div>
+    </div>
+
+    <section class="board" aria-label="Neuf explorations de logo">
+      <article class="tile tone-teal">
+        <div class="tile-head"><div><div class="number">01</div><h2>Monogramme lié</h2><p class="direction">Le N ouvre directement le mot.</p></div></div>
+        <div class="lockup"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="5" y="5" width="54" height="54" rx="9" fill="#264961"/><path d="M19 45V19h6l14 19V19h6v26h-6L25 26v19z" fill="#fff"/><circle cx="48" cy="16" r="6" fill="#407598" stroke="#101b26" stroke-width="2"/></svg>ota<small>Signature simple</small></div>
+      </article>
+
+      <article class="tile tone-ink">
+        <div class="tile-head"><div><div class="number">02</div><h2>Sceau de confiance</h2><p class="direction">Une marque institutionnelle, sans être froide.</p></div></div>
+        <div class="lockup"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27" fill="none" stroke="#c9ab6d" stroke-width="3"/><path d="M22 44V20h5l10 14V20h5v24h-5L27 30v14z" fill="#eff3f1"/><path class="stroke gold" d="M13 13l4 4M51 13l-4 4" stroke-width="2"/></svg>ota<small>Sceau notarial</small></div>
+      </article>
+
+      <article class="tile tone-sun">
+        <div class="tile-head"><div><div class="number">03</div><h2>Feuillet d’acte</h2><p class="direction">Le document devient le signe.</p></div></div>
+        <div class="lockup"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M14 7h27l9 9v41H14z" fill="#e6ece9" stroke="#466c72" stroke-width="3"/><path d="M41 7v11h9M23 28h18M23 36h18M23 44h12" class="stroke" stroke="#466c72" stroke-width="3"/><path d="M20 16l7 10 7-10" class="stroke" stroke="#c9ab6d" stroke-width="3"/></svg>ota<small>Acte &amp; dossier</small></div>
+      </article>
+
+      <article class="tile tone-coral">
+        <div class="tile-head"><div><div class="number">04</div><h2>Paraphe continu</h2><p class="direction">Une ligne de signature traverse le nom.</p></div></div>
+        <div class="lockup"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M17 47V17h7l15 21V17h8v30h-8L25 26v21z" fill="#466c72"/><path d="M8 49c12-7 17 5 27-2 8-5 12-1 21-9" class="stroke" stroke="#c9ab6d" stroke-width="3"/></svg>ota<small>Paraphe humain</small></div>
+      </article>
+
+      <article class="tile tone-violet">
+        <div class="tile-head"><div><div class="number">05</div><h2>Registre</h2><p class="direction">Des lignes qui évoquent le carnet public.</p></div></div>
+        <div class="lockup"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="10" width="48" height="44" rx="5" fill="none" stroke="#91b2b0" stroke-width="3"/><path d="M20 10v44M27 20h20M27 30h20M27 40h13" class="stroke" stroke="#c9ab6d" stroke-width="3"/><path d="M14 17h5" class="stroke" stroke="#eff3f1" stroke-width="3"/></svg>ota<small>Carnet &amp; réseau</small></div>
+      </article>
+
+      <article class="tile tone-mint">
+        <div class="tile-head"><div><div class="number">06</div><h2>Pont notarial</h2><p class="direction">Le N relie client, notaire et date.</p></div></div>
+        <div class="lockup"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M11 46V18h7l14 18 14-18h7v28h-7V30L32 48 18 30v16z" fill="#466c72"/><path d="M18 52h28" class="stroke" stroke="#c9ab6d" stroke-width="4"/></svg>ota<small>Le lien au centre</small></div>
+      </article>
+
+      <article class="tile tone-sky">
+        <div class="tile-head"><div><div class="number">07</div><h2>Date réservée</h2><p class="direction">Le repère doré devient notre signature.</p></div></div>
+        <div class="lockup"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="10" y="14" width="44" height="39" rx="6" fill="#466c72"/><path d="M10 25h44M20 9v12M44 9v12" class="stroke" stroke="#466c72" stroke-width="4"/><path d="M22 35h20M22 43h12" class="stroke" stroke="#eff3f1" stroke-width="3"/><circle cx="46" cy="43" r="7" fill="#c9ab6d" stroke="#162a32" stroke-width="3"/></svg>ota<small>Date &amp; précision</small></div>
+      </article>
+
+      <article class="tile tone-plum">
+        <div class="tile-head"><div><div class="number">08</div><h2>Cadre de preuve</h2><p class="direction">Des coins qui rappellent l’acte encadré.</p></div></div>
+        <div class="lockup"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M22 9H9v13M42 9h13v13M9 42v13h13M55 42v13H42" class="stroke" stroke="#c9ab6d" stroke-width="4"/><path d="M22 46V18h6l10 15V18h6v28h-6L28 31v15z" fill="#eff3f1"/></svg>ota<small>Preuve &amp; clarté</small></div>
+      </article>
+
+      <article class="tile tone-peach">
+        <div class="tile-head"><div><div class="number">09</div><h2>Rosace de Québec</h2><p class="direction">Une géométrie patrimoniale, plus mémorable.</p></div></div>
+        <div class="lockup"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 5l8 19 19 8-19 8-8 19-8-19-19-8 19-8z" fill="#e6ece9" stroke="#466c72" stroke-width="3"/><path d="M24 46V18h6l10 15V18h5v28h-5L30 31v15z" fill="#466c72"/><circle cx="50" cy="14" r="5" fill="#c9ab6d"/></svg>ota<small>Patrimoine &amp; repère</small></div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
