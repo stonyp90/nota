@@ -61,6 +61,8 @@ function createMemoryRepo(seed = []) {
   // Notification ledgers: sent (idempotency) and unsubscribe (suppression).
   const notificationPreferences = new Map();
   const emailLanguages = new Map();
+  // ADR 0051 — le consentement au texto, par destinataire (clé = courriel).
+  const smsConsents = new Map(); // lowercased email -> { telephone, consent, at }
   const notified = new Map(); // `${refId}#${kind}` -> timestamp
   const unsubscribed = new Set(); // lowercased emails
 
@@ -611,6 +613,24 @@ const clientChallenges = new Map(); // challengeId -> record (lien magique clien
     },
     async putNotificationPreferences(email, preferences) {
       notificationPreferences.set(String(email).trim().toLowerCase(), { ...preferences });
+    },
+    // --- Le consentement au texto (ADR 0051) ---------------------------------
+    // Un fait par personne, écrasable : la DERNIÈRE décision compte, et le
+    // retrait (consent: false) s'écrit comme l'octroi — c'est un geste exprès,
+    // pas une absence. Le journal de consentement porte l'histoire.
+    async getSmsConsent(email) {
+      const c = smsConsents.get(String(email).trim().toLowerCase());
+      return c ? { ...c } : null;
+    },
+    async putSmsConsent(email, { telephone, consent, at } = {}) {
+      const key = String(email).trim().toLowerCase();
+      if (!key) throw new Error('putSmsConsent: email is required');
+      const item = { telephone: telephone == null ? null : String(telephone), consent: consent === true, at: at || null };
+      smsConsents.set(key, item);
+      return { ...item };
+    },
+    async deleteSmsConsent(email) {
+      smsConsents.delete(String(email).trim().toLowerCase());
     },
     async getEmailOverride(key) {
       const o = emailOverrides.get(String(key));

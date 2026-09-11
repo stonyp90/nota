@@ -1075,6 +1075,9 @@
                       <button type="button" class="seg-btn" data-pace="off" aria-pressed="false">Aucun courriel</button>
                     </div>
                     <label class="switch-row"><span class="nc-pref-lbl">Seulement les demandes urgentes (Prioritaire et +)</span><span class="switch"><input type="checkbox" id="pref-urgent" /><span class="track"></span></span></label>
+                    <!-- ADR 0051 — express consent to be texted, at the PROFILE's
+                         phone: no second number to type, off unless switched on. -->
+                    <label class="switch-row"><span class="nc-pref-lbl">Alertes par texto<span class="help">Envoyées au numéro de votre profil</span></span><span class="switch"><input type="checkbox" id="pref-ch-sms" /><span class="track"></span></span></label>
                   </div>
                   <div class="nc-pref-block nc-pref-block--wide">
                     <div class="nc-pref-title">Vos prêteurs habituels</div>
@@ -1920,6 +1923,15 @@
             <input type="tel" id="o-telephone" placeholder="(418) 000-0000" autocomplete="tel" inputmode="tel" aria-describedby="o-telephone-help" />
             <p class="help" id="o-telephone-help">Pour que le notaire qui vous retient puisse vous joindre. Jamais public.</p>
             <p class="prefix-preview" id="o-telephone-preview" aria-live="polite"></p>
+          </div>
+          <!-- ADR 0051 — the text channel is EXPRESS consent: never pre-checked,
+               inert until the phone above is dialable (the #o-account pattern),
+               and a cleared phone unchecks it. Travels as `smsConsent`. -->
+          <div class="form-row">
+            <label class="check-line" for="o-sms">
+              <input type="checkbox" id="o-sms" disabled />
+              <span>Me prévenir aussi par texto (SMS) aux moments clés — un notaire retient ma demande, un message, la veille de la signature.</span>
+            </label>
           </div>
         </div>
         <ul class="errors" id="offer-errors" role="alert" aria-atomic="true" tabindex="-1" data-screen="4" hidden></ul>

@@ -93,9 +93,15 @@ if (localOAuth) {
   }
 }
 const localMailer = createFileMailer({ dir: process.env.NOTA_LOCAL_MAIL_DIR });
+// ADR 0051 — les textos de la pile locale tombent à côté des courriels
+// (.local-mail/, ou NOTA_LOCAL_SMS_DIR), un .json par texto, et le texte est
+// imprimé dans les logs : tout le chemin SMS s'exerce sans carrier.
+const { createFileSms } = require('./src/sms-port');
+const localSms = createFileSms({ dir: process.env.NOTA_LOCAL_SMS_DIR || process.env.NOTA_LOCAL_MAIL_DIR });
 const localNotifier = createNotifier({
   repo,
   mailer: localMailer,
+  sms: localSms,
   adminUrl: process.env.NOTA_ADMIN_BASE_URL || null,
   baseUrl: SITE_URL,
   operatorEmail: process.env.NOTA_OPERATOR_EMAIL || 'admin@nota.local',

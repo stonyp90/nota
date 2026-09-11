@@ -3029,6 +3029,20 @@
     // le client n'apprenait jamais, dans l'application, ce qui avait été
     // retenu sur sa carte ou libéré.
     { id: 'annulation',  titre: 'Suite de votre annulation', titreEn: 'About your cancellation', audiences: ['client'] },
+    // 2026-09-11 — chaque événement d'affaires sonne dans l'application.
+    // L'inventaire trouvait sept trous : la cloche du client n'apprenait ni la
+    // publication, ni une demande de documents, ni les rappels J-7/3/1/0, ni
+    // l'annulation elle-même, ni l'acte réglé, ni une carte refusée ; celle
+    // du notaire n'apprenait ni la réponse à sa proposition, ni l'annulation,
+    // ni le paiement de l'acte. `annulation` reste l'ISSUE D'ARGENT d'une
+    // annulation (l'indemnité) ; `annulee` est le fait lui-même.
+    { id: 'publiee',             titre: 'Votre offre est publiée',           titreEn: 'Your offer is published',        audiences: ['client'] },
+    { id: 'documents_demandes',  titre: 'Le notaire demande des documents',  titreEn: 'The notary requests documents',  audiences: ['client'] },
+    { id: 'rappel',              titre: 'Votre date approche',               titreEn: 'Your date is approaching',       audiences: ['client'] },
+    { id: 'annulee',             titre: 'Offre annulée',                     titreEn: 'Offer cancelled',                audiences: ['client', 'notaire'] },
+    { id: 'acte',                titre: 'Acte signé',                        titreEn: 'Act signed',                     audiences: ['client', 'notaire'] },
+    { id: 'proposition_reponse', titre: 'Réponse à votre proposition',       titreEn: 'Answer to your proposal',        audiences: ['notaire'] },
+    { id: 'caution',             titre: 'Carte refusée',                     titreEn: 'Card declined',                  audiences: ['client', 'notaire'] },
   ]);
   function isNotifKind(id) {
     return typeof id === 'string' && NOTIF_KINDS.some((k) => k.id === id);

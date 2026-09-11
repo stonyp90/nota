@@ -5,27 +5,27 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const D = require('../index.js');
 
-// Les alertes du notaire (ADR 0033 §7) : « Recevez vos demandes à votre
+// Les alertes du notaire (ADR 0033 §7 ; `sms` depuis l'ADR 0051, faux par défaut) : « Recevez vos demandes à votre
 // rythme » devient une donnée serveur. Le rythme est l'un de quatre mots,
 // « urgences seulement » est un booléen strict, et un profil qui n'a rien dit
 // reçoit le digest quotidien — la promesse qui existait déjà.
 
 test('validateNotaryProfile: alertes absentes → le défaut est le digest quotidien, sans filtre', () => {
   assert.deepEqual(D.NOTARY_ALERT_PACES, ['instant', 'daily', 'weekly', 'off']);
-  assert.deepEqual(D.NOTARY_ALERTES_DEFAULT, { pace: 'daily', urgentOnly: false });
+  assert.deepEqual(D.NOTARY_ALERTES_DEFAULT, { pace: 'daily', urgentOnly: false, sms: false });
   const r = D.validateNotaryProfile({});
   assert.equal(r.ok, true);
-  assert.deepEqual(r.alertes, { pace: 'daily', urgentOnly: false });
+  assert.deepEqual(r.alertes, { pace: 'daily', urgentOnly: false, sms: false });
   const nul = D.validateNotaryProfile({ alertes: null });
   assert.equal(nul.ok, true);
-  assert.deepEqual(nul.alertes, { pace: 'daily', urgentOnly: false });
+  assert.deepEqual(nul.alertes, { pace: 'daily', urgentOnly: false, sms: false });
 });
 
 test('validateNotaryProfile: un rythme déclaré et le filtre urgences sont retenus, normalisés', () => {
   for (const pace of D.NOTARY_ALERT_PACES) {
     const r = D.validateNotaryProfile({ alertes: { pace: ' ' + pace.toUpperCase() + ' ', urgentOnly: true } });
     assert.equal(r.ok, true, pace + ': ' + JSON.stringify(r.errors));
-    assert.deepEqual(r.alertes, { pace, urgentOnly: true });
+    assert.deepEqual(r.alertes, { pace, urgentOnly: true, sms: false });
   }
   // Le filtre ne se déduit jamais d'une chaîne « truthy » : seul `true` compte.
   const r = D.validateNotaryProfile({ alertes: { pace: 'instant', urgentOnly: 'oui' } });
@@ -33,7 +33,7 @@ test('validateNotaryProfile: un rythme déclaré et le filtre urgences sont rete
   assert.ok(r.errors.some((e) => e.code === 'alertes_invalides'), JSON.stringify(r.errors));
   const partiel = D.validateNotaryProfile({ alertes: { pace: 'instant' } });
   assert.equal(partiel.ok, true);
-  assert.deepEqual(partiel.alertes, { pace: 'instant', urgentOnly: false });
+  assert.deepEqual(partiel.alertes, { pace: 'instant', urgentOnly: false, sms: false });
 });
 
 test('validateNotaryProfile: un rythme inconnu ou des alertes qui ne sont pas un objet sont refusés avec un code typé', () => {
@@ -49,11 +49,11 @@ test('validateNotaryProfile: un rythme inconnu ou des alertes qui ne sont pas un
 });
 
 test('notaryAlertes: lit les alertes d’un profil stocké, avec le même défaut qu’à la validation', () => {
-  assert.deepEqual(D.notaryAlertes(null), { pace: 'daily', urgentOnly: false });
-  assert.deepEqual(D.notaryAlertes({ email: 'n@etude.ca' }), { pace: 'daily', urgentOnly: false });
-  assert.deepEqual(D.notaryAlertes({ alertes: { pace: 'instant', urgentOnly: true } }), { pace: 'instant', urgentOnly: true });
+  assert.deepEqual(D.notaryAlertes(null), { pace: 'daily', urgentOnly: false, sms: false });
+  assert.deepEqual(D.notaryAlertes({ email: 'n@etude.ca' }), { pace: 'daily', urgentOnly: false, sms: false });
+  assert.deepEqual(D.notaryAlertes({ alertes: { pace: 'instant', urgentOnly: true } }), { pace: 'instant', urgentOnly: true, sms: false });
   // Une valeur corrompue en base retombe sur le défaut — jamais une exception,
   // jamais un rythme inventé.
-  assert.deepEqual(D.notaryAlertes({ alertes: { pace: 'hourly', urgentOnly: 'oui' } }), { pace: 'daily', urgentOnly: false });
-  assert.deepEqual(D.notaryAlertes({ alertes: 'instant' }), { pace: 'daily', urgentOnly: false });
+  assert.deepEqual(D.notaryAlertes({ alertes: { pace: 'hourly', urgentOnly: 'oui' } }), { pace: 'daily', urgentOnly: false, sms: false });
+  assert.deepEqual(D.notaryAlertes({ alertes: 'instant' }), { pace: 'daily', urgentOnly: false, sms: false });
 });

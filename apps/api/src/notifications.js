@@ -265,7 +265,12 @@ function createConsentRegistry({ repo, now, consentement } = {}) {
 // link to the client's own act — the CTA of every client act mail; the caller
 // holds the signing secret, so it is injected. `adminUrl` (NOTA_ADMIN_URL)
 // is where operator alerts land when an admin console exists.
-function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now, clientLink, adminUrl, consentement, supportEmailDomain, supportEmailSecret } = {}) {
+// `sms` (ADR 0051) is the OPTIONAL text-message port (apps/api/src/sms-port.js,
+// `send({ to, text }) → { id }`). Without it the notifier is exactly what it
+// was; with it, `sendOnce` adds a second leg AFTER the email for the templates
+// TEMPLATE_META flags `sms: true`, and only to a recipient whose express
+// consent is on record.
+function createNotifier({ repo, mailer, sms, baseUrl, apiBaseUrl, operatorEmail, now, clientLink, adminUrl, consentement, supportEmailDomain, supportEmailSecret } = {}) {
   if (!repo) throw new Error('createNotifier: repo is required');
   if (!mailer) throw new Error('createNotifier: mailer is required');
 
@@ -355,6 +360,56 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     } catch { return undefined; }
   }
 
+  // --- Le texto : la seconde jambe d'un envoi (ADR 0051) ---------------------
+  // Où le texto mène : le MÊME endroit que le bouton du courriel. Le client
+  // reçoit son lien signé vers SON acte (`ctx.clientUrl`, ADR 0033 §2.7), à
+  // défaut son espace ; le notaire, sa console ouverte sur l'acte. C'est la
+  // règle de emails.js (clientActeUrl / notaryActeUrl), reprise ici parce que
+  // le texto n'est pas un gabarit : il n'a que le sujet et un lien.
+  function smsDeepLink(meta, ctx) {
+    const b = String(base || '').replace(/\/+$/, '');
+    const c = ctx || {};
+    if (meta && meta.audience === 'notaire') {
+      return c.consoleUrl || (c.bidId ? b + '/#notaires&acte=' + encodeURIComponent(String(c.bidId)) : b + '/#notaires');
+    }
+    return c.clientUrl || b + '/#t=profil';
+  }
+
+  // La jambe texto, APRÈS un courriel parti et inscrit au registre. Quatre
+  // portes, dans l'ordre : le port existe ; le gabarit texte (`meta.sms`) ; le
+  // consentement EXPRÈS de CE destinataire est au registre, avec un numéro
+  // composable (LCAP : un texto est un message commercial, Nota n'y lit aucune
+  // exemption — sans consentement, aucun texto, jamais) ; et ce texto n'est
+  // pas déjà parti (`<kind>:sms` dans SENT#). Un texto qui échoue ne coûte
+  // JAMAIS le courriel : il est constaté (`sms-failed`) et reste dû.
+  async function sendSmsLeg({ refId, kind, to, templateKey, ctx, subject, lang }) {
+    if (!sms || typeof sms.send !== 'function') return null;
+    const meta = emails.TEMPLATE_META && emails.TEMPLATE_META[templateKey];
+    if (!meta || meta.sms !== true) return null;
+    if (typeof repo.getSmsConsent !== 'function') return null;
+    const smsKind = kind + ':sms';
+    try {
+      const c = await repo.getSmsConsent(to);
+      const e164 = c && c.consent === true ? domain.toE164(c.telephone) : null;
+      if (!e164) return { sent: false, reason: 'no-consent' };
+      if (await repo.wasNotificationSent(refId, smsKind)) return { sent: false, reason: 'duplicate' };
+      const text = domain.smsText({ lang, subject, url: smsDeepLink(meta, ctx) });
+      if (!text) return { sent: false, reason: 'empty' };
+      await sms.send({ to: e164, text });
+      await repo.markNotificationSent(refId, smsKind, clock());
+      if (typeof repo.appendSubjectEvent === 'function') {
+        try {
+          await repo.appendSubjectEvent({ sujet: to, kind: smsKind, templateKey: templateKey || null, refId, at: clock() });
+        } catch {
+          /* la trace cède, jamais l'envoi */
+        }
+      }
+      return { sent: true, to: e164 };
+    } catch {
+      return { sent: false, reason: 'sms-failed' };
+    }
+  }
+
   async function sendOnce({ refId, kind, to, buildTemplate, templateKey, ctx }) {
     if (!to) return { sent: false, reason: 'no-address', kind };
     // Le retrait (CASL) porte sur les envois COMMERCIAUX. Un avis
@@ -383,7 +438,8 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
     // `ctx` rides in the environment too: the override's {{jetons}} are
     // interpolated inside the template, and a couple of call sites hand the
     // template less than they declare here (onClientSignup and its {{email}}).
-    const msg = buildTemplate({ ...(ctx || {}), emailLanguage: await recipientLanguage(to), unsubscribeUrl: unsub, baseUrl: base, adminUrl: adminUrl || null, __override: override });
+    const lang = await recipientLanguage(to);
+    const msg = buildTemplate({ ...(ctx || {}), emailLanguage: lang, unsubscribeUrl: unsub, baseUrl: base, adminUrl: adminUrl || null, __override: override });
     // unsubscribeUrl rides along so the mailer can emit the RFC 8058
     // List-Unsubscribe / List-Unsubscribe-Post headers.
     await mailer.send({ to, subject: msg.subject, html: msg.html, text: msg.text, unsubscribeUrl: unsub, replyTo: ctx && ctx.replyTo, ...(ctx && ctx.supportAutomation ? { supportAutomation: true } : {}) });
@@ -408,7 +464,13 @@ function createNotifier({ repo, mailer, baseUrl, apiBaseUrl, operatorEmail, now,
         /* la trace cède, jamais l'envoi */
       }
     }
-    return { sent: true, kind, to };
+    // ADR 0051 — le texto, ICI et pas avant : après les gardes du courriel
+    // (retrait, préférence, doublon, gabarit éteint), qui taisent donc les
+    // DEUX canaux, et après le courriel parti — le texto est un signal de
+    // l'ouvrir, pas un substitut. Le sujet est celui qui vient d'être envoyé,
+    // surcharge admin comprise, dans la langue du destinataire.
+    const smsResult = await sendSmsLeg({ refId, kind, to, templateKey, ctx, subject: msg.subject, lang: lang === 'en' ? 'en' : 'fr' });
+    return smsResult ? { sent: true, kind, to, sms: smsResult } : { sent: true, kind, to };
   }
 
   /**

@@ -1035,7 +1035,7 @@
         markMyOfferReleased(o.id);
         markNotifRead('retained:' + o.id);
         addNotif({
-          key: 'released:' + o.id + ':' + (prev.fetchedAt || o.id), kind: 'released',
+          key: 'released:' + o.id + ':' + (prev.fetchedAt || o.id), kind: 'released', refId: o.id,
           title: 'Le notaire s’est désisté — votre demande est de retour au carnet',
           body: dayTitle(o.dateISO) + ' · ' + T(svcName(o.serviceId)), dateISO: o.dateISO,
         });
@@ -1044,7 +1044,7 @@
       // client to evaluate — until the evaluation exists, then retire the invite.
       if (st.acte && st.acte.complete && !st.evaluation) {
         addNotif({
-          key: 'acte:' + o.id, kind: 'acte',
+          key: 'acte:' + o.id, kind: 'acte', refId: o.id,
           title: 'Acte signé — évaluez votre notaire',
           body: dayTitle(o.dateISO) + ' · ' + T(svcName(o.serviceId)), dateISO: null,
         });
@@ -1053,7 +1053,7 @@
       st.propositions.forEach(function (p) {
         if (p.status !== 'en_attente') return;
         addNotif({
-          key: 'proposition:' + p.id, kind: 'proposition',
+          key: 'proposition:' + p.id, kind: 'proposition', refId: o.id, sub: p.id,
           title: 'Un notaire vous propose ' + D.money(p.montant) + ' pour votre ' + T(svcName(o.serviceId)).toLowerCase() + ' du ' + dayTitle(o.dateISO),
           body: 'Acceptez ou refusez dans Mes offres.', dateISO: null,
         });
@@ -1061,7 +1061,7 @@
       st.demandes.forEach(function (d) {
         if (d.fournie) return;
         addNotif({
-          key: 'documents:' + d.id, kind: 'documents',
+          key: 'documents:' + d.id, kind: 'documents', refId: o.id, sub: d.id,
           title: 'Le notaire demande des documents pour votre ' + T(svcName(o.serviceId)).toLowerCase() + ' du ' + dayTitle(o.dateISO),
           body: (d.documents || []).map(function (x) { return T(x.nom); }).join(', '), dateISO: null,
         });
@@ -1072,7 +1072,7 @@
         if (m.de !== 'notaire') return;
         // `offerId` makes the entry a door: it opens Mes offres on this band.
         addNotif({
-          key: 'message:' + m.id, kind: 'message',
+          key: 'message:' + m.id, kind: 'message', refId: o.id, sub: m.id,
           title: 'Votre notaire vous a écrit',
           body: m.texte, dateISO: null, offerId: o.id,
         });
@@ -1494,13 +1494,29 @@
         row.appendChild(document.createTextNode(' ' + ((window.NotaI18N && window.NotaI18N.lang() === 'en') ? item.labelEn : item.labelFr)));
         var line = el('div'); line.appendChild(row); form.appendChild(line);
       });
+      // ADR 0051 — the text channel, beside the email choices: the switch
+      // reflects the server's consent record and the MASKED number it holds
+      // (never the full one). With no number on record there is nothing to
+      // text to: the switch is inert, says why, and posts nothing.
+      var smsData = data.sms || { consent: false, telephone: null };
+      var smsRow = el('label', 'check-row');
+      var smsInput = el('input'); smsInput.type = 'checkbox'; smsInput.id = 'email-preferences-sms';
+      smsInput.checked = smsData.consent === true && !!smsData.telephone;
+      smsInput.disabled = !smsData.telephone;
+      smsRow.appendChild(smsInput);
+      smsRow.appendChild(document.createTextNode(' ' + T('Par texto (SMS)') + (smsData.telephone ? ' · ' + smsData.telephone : '')));
+      var smsLine = el('div'); smsLine.appendChild(smsRow);
+      if (!smsData.telephone) smsLine.appendChild(el('p', 'help', T('Aucun numéro de téléphone enregistré : le texto n’est pas offert.')));
+      form.appendChild(smsLine);
       var save = el('button', 'btn btn-primary', T('Enregistrer')); save.type = 'submit'; form.appendChild(save);
       var status = el('p'); status.setAttribute('role', 'status'); form.appendChild(status);
       form.addEventListener('submit', async function (event) {
         event.preventDefault(); save.disabled = true;
         var preferences = {}; Object.keys(inputs).forEach(function (key) { preferences[key] = inputs[key].checked; });
+        var body = { preferences: preferences, emailLanguage: window.NotaI18N ? window.NotaI18N.lang() : 'fr' };
+        if (!smsInput.disabled) body.smsConsent = smsInput.checked;
         try {
-          var saved = await fetch(endpoint, { method: 'POST', headers: headers, body: JSON.stringify({ preferences: preferences, emailLanguage: window.NotaI18N ? window.NotaI18N.lang() : 'fr' }) });
+          var saved = await fetch(endpoint, { method: 'POST', headers: headers, body: JSON.stringify(body) });
           if (!saved.ok) throw new Error();
           status.textContent = T('Préférences de courriel enregistrées.');
         } catch (error) { status.textContent = T('Impossible d’enregistrer les préférences. Réessayez.'); }
@@ -1528,6 +1544,8 @@
     { key: 'cancelled', label: 'Confirmation d’annulation d’une offre' },
     { key: 'acte', label: 'Acte signé — invitation à évaluer' },
     { key: 'released', label: 'Avis si le notaire se désiste' },
+    // 2026-09-11 — la caution refusée (le lot quotidien l'écrit pour le client).
+    { key: 'caution', label: 'Avis si votre carte est refusée' },
   ];
   var PROFILE_NOTIF_DEFAULTS = {};
   PROFILE_NOTIF_KINDS.forEach(function (k) { PROFILE_NOTIF_DEFAULTS[k.key] = true; });
@@ -1561,6 +1579,14 @@
     proposition: 'proposition',
     desistement: 'released',
     annulation: 'cancelled',
+    // 2026-09-11 — chaque événement d'affaires a sa ligne côté serveur.
+    publiee: 'published',
+    documents_demandes: 'documents',
+    rappel: 'reminders',
+    annulee: 'cancelled',
+    acte: 'acte',
+    proposition_reponse: 'proposition',
+    caution: 'caution',
   };
   function notifPrefKey(kind) {
     if (!kind) return null;
@@ -1568,25 +1594,57 @@
   }
   function notifAllowed(kind) { return profileGet().notifs[notifPrefKey(kind)] !== false; }
 
+  // Le même événement, vu deux fois (2026-09-11). La dérive locale de
+  // l'appareil (« Offre publiée » au POST, « J-7 » au chargement, l'acte signé
+  // au sondage…) et la ligne que le serveur écrit pour le même fait portent
+  // des clés différentes. Elles se reconnaissent par l'OFFRE (`refId`) et
+  // l'INTERRUPTEUR (le genre, dans l'un ou l'autre vocabulaire), plus un
+  // discriminant `sub` quand le genre se répète sur une même offre (J-7 puis
+  // J-3 ; une demande de documents parmi d'autres). Une ligne serveur ne se
+  // lie qu'à UNE entrée (`srvId`), une entrée locale qu'à UNE ligne.
+  function notifTwin(a, n) {
+    if (!n.refId || !n.kind) return null;
+    var pk = notifPrefKey(n.kind);
+    for (var i = 0; i < a.length; i++) {
+      var x = a[i];
+      if (x.key === n.key || !x.refId || x.refId !== n.refId || !x.kind || notifPrefKey(x.kind) !== pk) continue;
+      if (n.srvId) {
+        // Une ligne serveur : son entrée déjà liée, sinon une entrée encore libre
+        // dont le discriminant ne la contredit pas.
+        if (x.srvId) { if (x.srvId === n.srvId) return x; continue; }
+        if (n.sub == null || x.sub == null || x.sub === n.sub) return x;
+        continue;
+      }
+      // Une entrée locale : la ligne serveur (ou l'entrée) du même fait.
+      if (n.sub != null && x.sub != null) { if (x.sub === n.sub) return x; continue; }
+      return x;
+    }
+    return null;
+  }
   function addNotif(n) {
     // Respect the profile's notification preferences (a kind'd notif can be off).
     if (n.kind && !notifAllowed(n.kind)) return;
     var a = notifLoad();
-    var existing = a.find(function (x) { return x.key === n.key; });
+    var existing = a.find(function (x) { return x.key === n.key; }) || notifTwin(a, n);
     if (existing) {
       // A local fallback can arrive before the API journal. When the server
       // later confirms the same event, merge its read state and canonical copy
       // instead of painting a second acceptance notice (or resurrecting one
       // that was already read).
       var changed = false;
-      ['title', 'body', 'dateISO', 'offerId', 'lien'].forEach(function (key) {
+      ['title', 'body', 'dateISO', 'offerId', 'lien', 'refId', 'sub', 'srvId'].forEach(function (key) {
         if (n[key] != null && existing[key] !== n[key]) { existing[key] = n[key]; changed = true; }
       });
       if (n.read === true && !existing.read) { existing.read = true; changed = true; }
       if (changed) { notifSave(a); renderNotifs(); }
       return false;
     }
-    a.unshift({ key: n.key, title: n.title, body: n.body || '', dateISO: n.dateISO || null, offerId: n.offerId || null, lien: n.lien || null, read: n.read === true });
+    var entry = { key: n.key, title: n.title, body: n.body || '', dateISO: n.dateISO || null, offerId: n.offerId || null, lien: n.lien || null, read: n.read === true };
+    if (n.kind) entry.kind = n.kind;
+    if (n.refId) entry.refId = n.refId;
+    if (n.sub != null) entry.sub = n.sub;
+    if (n.srvId) entry.srvId = n.srvId;
+    a.unshift(entry);
     notifSave(a.slice(0, 40));
     renderNotifs();
     return true;
@@ -1594,7 +1652,7 @@
   function addRetainedNotif(o, bid) {
     if (!o || !o.id) return false;
     return addNotif({
-      key: 'retained:' + o.id, kind: 'retained',
+      key: 'retained:' + o.id, kind: 'retained', refId: o.id,
       title: 'Un notaire a retenu votre demande 🎉',
       body: dayTitle(o.dateISO) + (bid && bid.etude ? ' · ' + bid.etude : ''),
       dateISO: o.dateISO,
@@ -2642,12 +2700,20 @@
         // live status poll). Use its event key so the server journal enriches
         // that entry instead of duplicating the same acceptance in the bell.
         var key = a.kind === 'retenue' ? 'retained:' + (a.refId || o.id) : 'srv:' + a.id;
+        // Un rappel se répète sur une même offre (J-7, J-3, J-1, J-0) : le jour
+        // écrit sur la ligne et la date de l'acte donnent le même discriminant
+        // que la dérive locale (`approach:<id>:<jours>`).
+        var sub;
+        if (a.kind === 'rappel' && a.at && o.dateISO) sub = D.daysBetween(String(a.at).slice(0, 10), o.dateISO);
         addNotif({
           key: key,
           kind: a.kind,
           title: a.titre || '',
           body: a.corps || '',
           offerId: a.refId || o.id,
+          refId: a.refId || o.id,
+          srvId: a.id,
+          sub: sub,
           lien: a.lien || null,
           read: !!a.luLe,
         });
@@ -2663,7 +2729,7 @@
       if (days >= 0 && (days === 7 || days === 3 || days === 1 || days === 0)) {
         addNotif({
           key: 'approach:' + o.id + ':' + days,
-          kind: 'reminders',
+          kind: 'reminders', refId: o.id, sub: days,
           title: days === 0 ? 'Votre signature est aujourd’hui' : 'Votre date approche (J-' + days + ')',
           body: dayTitle(o.dateISO) + ' · ' + svcName(o.serviceId), dateISO: o.dateISO,
         });
@@ -5236,6 +5302,14 @@
       acct.disabled = !D.isEmail(courriel);
       if (acct.disabled) acct.checked = false;
     }
+    // ADR 0051 — the text opt-in follows its phone the same way: inert without
+    // a dialable number, and a cleared phone also clears the consent — a bid
+    // never consents to texts blindly.
+    var smsBox = $('o-sms');
+    if (smsBox) {
+      smsBox.disabled = !D.toE164(($('o-telephone') && $('o-telephone').value) || '');
+      if (smsBox.disabled) smsBox.checked = false;
+    }
     // Raw field value: validateOffer owns the normalization (domain rule).
     var v = D.validateOffer({ serviceId: o.serviceId, dateISO: o.dateISO, montant: o.montant, courriel: courriel, prefixe: $('o-prefix') && $('o-prefix').value, pricing: effectivePricing(), todayISO: todayISO() });
     // ADR 0033 — the mise en relation is complete: the retaining notary must
@@ -5689,6 +5763,10 @@
       // Private too (ADR 0010 §4): handed only to the notary who retains the
       // demand, for the mise en relation. Never on the public carnet.
       telephone: ($('o-telephone') && $('o-telephone').value || '').trim(),
+      // ADR 0051 — the express consent to be texted, ALWAYS sent as a strict
+      // boolean: publishing is the moment the person took a position, and the
+      // API records « false » as a withdrawal (never an absence).
+      smsConsent: !!($('o-sms') && $('o-sms').checked),
     };
     // Private referral attribution (ADR 0011): the visible « Code de
     // référence » field is the single source — pre-filled from a captured
@@ -5786,7 +5864,7 @@
     renderAccountMenu();
     addNotif({
       key: 'published:' + res.bid.id,
-      kind: 'published',
+      kind: 'published', refId: res.bid.id,
       title: 'Offre publiée',
       body: D.money(res.bid.montant) + ' · ' + dayTitle(res.bid.dateISO) + ' · ' + svcName(res.bid.serviceId),
       dateISO: res.bid.dateISO,
@@ -6492,7 +6570,7 @@
       offerStatusSet(o.id, st);
     }
     addNotif({
-      key: 'cancelled:' + o.id, kind: 'cancelled',
+      key: 'cancelled:' + o.id, kind: 'cancelled', refId: o.id,
       title: 'Votre offre du ' + dayTitle(o.dateISO) + ' est annulée',
       body: keptLine || 'Elle a été retirée du carnet.', dateISO: null,
     });
@@ -8118,7 +8196,7 @@
     var j = {}; try { j = await r.json(); } catch (e) { return; }
     (j.avis || []).slice().reverse().forEach(function (a) {
       if (!a || !a.id) return;
-      addNotif({ key: 'srv:' + a.id, kind: a.kind, title: a.titre || '', body: a.corps || '', lien: a.lien || null, read: !!a.luLe });
+      addNotif({ key: 'srv:' + a.id, kind: a.kind, title: a.titre || '', body: a.corps || '', lien: a.lien || null, refId: a.refId || null, srvId: a.id, read: !!a.luLe });
     });
   }
   // Tell the server what the bell just marked read — the notary's session,
@@ -8854,7 +8932,7 @@
   // The server's view, normalized: an unknown pace reads as the daily digest.
   function ncAlertes() {
     var a = (nc.profil && nc.profil.alertes) || {};
-    return { pace: NC_PACES.indexOf(a.pace) >= 0 ? a.pace : 'daily', urgentOnly: a.urgentOnly === true };
+    return { pace: NC_PACES.indexOf(a.pace) >= 0 ? a.pace : 'daily', urgentOnly: a.urgentOnly === true, sms: a.sms === true };
   }
   async function ncSaveAlertes(patch) {
     if (!nc.token) return;
@@ -8880,6 +8958,8 @@
     }
     var a = ncAlertes();
     var urg = $('pref-urgent'); if (urg) urg.checked = a.urgentOnly;
+    // ADR 0051 — the SMS switch is a server fact: on only when the profile says so.
+    var smsSw = $('pref-ch-sms'); if (smsSw) smsSw.checked = a.sms;
     document.querySelectorAll('#pref-pace .seg-btn').forEach(function (b) {
       var on = b.dataset.pace === a.pace; b.classList.toggle('is-on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
@@ -11671,7 +11751,7 @@
     var body = {
       nom: p.nom || '', etude: p.etude || '', telephone: p.telephone || '', adresse: p.adresse || '',
       lienCNQ: p.lienCNQ || '', rayonKm: p.rayonKm || 0, urgences: p.urgences === true, prefixe: p.prefixe || '',
-      alertes: { pace: a.pace, urgentOnly: a.urgentOnly },
+      alertes: { pace: a.pace, urgentOnly: a.urgentOnly, sms: a.sms },
     };
     return Object.assign(body, over || {});
   }
@@ -12657,6 +12737,10 @@
     // Alert preferences (ADR 0033 §7) — every control saves to the SERVER on
     // change, through the profile; the seg repaints optimistically.
     if ($('pref-urgent')) $('pref-urgent').addEventListener('change', function () { ncSaveAlertes({ urgentOnly: this.checked }); });
+    // ADR 0051 — the text consent saves through the same profile POST; the API
+    // refuses it (telephone_requis_sms) when the profile has no dialable phone,
+    // and ncSaveAlertes then repaints the switch from the server and toasts.
+    if ($('pref-ch-sms')) $('pref-ch-sms').addEventListener('change', function () { ncSaveAlertes({ sms: this.checked }); });
     var ncPace = $('pref-pace');
     if (ncPace) ncPace.addEventListener('click', function (e) {
       var b = e.target.closest('.seg-btn'); if (!b) return;

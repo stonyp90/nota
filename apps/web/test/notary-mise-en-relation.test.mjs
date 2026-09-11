@@ -565,16 +565,22 @@ test('a calendar request link survives sign-in and retains only after confirmati
   assert.equal(accepts()[0].body.id, bid.id);
 });
 
-// --- 9. Alert preferences are server data; no SMS promise --------------------
+// --- 9. Alert preferences are server data; the SMS switch is express consent (ADR 0051)
 
-test('the alert preferences render from profil.alertes and POST through /notary/profile; the SMS toggle and phone row are gone', async () => {
-  const profil = PROFIL_COMPLET(); profil.alertes = { pace: 'weekly', urgentOnly: true };
+test('the alert preferences render from profil.alertes and POST through /notary/profile; the SMS switch consents to the profile phone', async () => {
+  const profil = PROFIL_COMPLET(); profil.alertes = { pace: 'weekly', urgentOnly: true, sms: false };
   const { doc, calls } = await bootSignedIn({ profil, bids: [openBid()] });
-  assert.equal($(doc, 'pref-ch-sms'), null, 'no SMS toggle — nothing sends texts');
-  assert.equal($(doc, 'pref-phone'), null, 'no SMS phone row');
-  assert.equal($(doc, 'pref-ch-email'), null, 'no dead email toggle either');
+  // ADR 0051 reversed the 2026-09-03 « no SMS » decision: the switch exists,
+  // it is OFF unless the server says so, and it texts the PROFILE's phone —
+  // there is no second phone row to fill.
+  const sms = $(doc, 'pref-ch-sms');
+  assert.ok(sms, 'the SMS switch exists');
+  assert.equal(sms.checked, false, 'off until the notary switches it on — never inferred');
+  assert.equal($(doc, 'pref-phone'), null, 'no separate SMS phone row: the profile phone is the number');
+  assert.match($(doc, 'notary-prefs').textContent, /Alertes par texto/, 'the switch is named');
+  assert.match($(doc, 'notary-prefs').textContent, /numéro de votre profil/, 'and says which number it uses');
+  assert.equal($(doc, 'pref-ch-email'), null, 'no dead email toggle');
   assert.equal($(doc, 'pref-svc'), null, 'the per-service filter nothing read is gone');
-  assert.ok(!/texto|SMS/i.test($(doc, 'notary-prefs').textContent), 'the block promises no SMS');
   const on = doc.querySelector('#pref-pace .seg-btn.is-on');
   assert.equal(on.dataset.pace, 'weekly', 'the seg reflects the server pace');
   assert.equal($(doc, 'pref-urgent').checked, true, 'the urgent switch reflects the server');
@@ -584,14 +590,23 @@ test('the alert preferences render from profil.alertes and POST through /notary/
   await wait(10);
   let posts = calls.filter((c) => c.path.includes('/notary/profile'));
   assert.equal(posts.length, before + 1, 'a pace click POSTs the profile');
-  assert.deepEqual(posts[posts.length - 1].body.alertes, { pace: 'instant', urgentOnly: true });
+  assert.deepEqual(posts[posts.length - 1].body.alertes, { pace: 'instant', urgentOnly: true, sms: false });
   assert.equal(posts[posts.length - 1].body.nom, 'Me Anne Roy', 'the rest of the profile rides along, never blanked');
   $(doc, 'pref-urgent').checked = false;
   $(doc, 'pref-urgent').dispatchEvent(new doc.defaultView.Event('change', { bubbles: true }));
   await wait(10);
   posts = calls.filter((c) => c.path.includes('/notary/profile'));
-  assert.deepEqual(posts[posts.length - 1].body.alertes, { pace: 'instant', urgentOnly: false });
+  assert.deepEqual(posts[posts.length - 1].body.alertes, { pace: 'instant', urgentOnly: false, sms: false });
   assert.match($(doc, 'notary-prefs-saved').textContent, /Préférences enregistrées/, 'the saved note confirms');
+  // The SMS switch round-trips through the same profile POST — the consent
+  // is a server fact, written by the API against the profile's phone.
+  sms.checked = true;
+  sms.dispatchEvent(new doc.defaultView.Event('change', { bubbles: true }));
+  await wait(10);
+  posts = calls.filter((c) => c.path.includes('/notary/profile'));
+  assert.deepEqual(posts[posts.length - 1].body.alertes, { pace: 'instant', urgentOnly: false, sms: true });
+  assert.equal(posts[posts.length - 1].body.telephone, '418 555 0100', 'the profile phone rides along — the number the text goes to');
+  assert.equal($(doc, 'pref-ch-sms').checked, true, 'the switch reflects the server after the save');
   // The lender roster stays (it IS wired: it filters the feed).
   assert.ok($(doc, 'pref-lenders'), 'the lender roster stays');
 });

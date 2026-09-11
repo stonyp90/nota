@@ -9,6 +9,7 @@ const { createApp } = require('../../apps/api/src/handler.js');
 const { createMemoryRepo } = require('../../apps/api/src/repo-memory.js');
 const { createNotifier } = require('../../apps/api/src/notifications.js');
 const { createFakeMailer } = require('../../apps/api/src/notify-port.js');
+const { createFakeSms } = require('../../apps/api/src/sms-port.js');
 const { runReminders: runRemindersUseCase } = require('../../apps/api/src/reminders.js');
 const { createBilling } = require('../../apps/api/src/billing.js');
 
@@ -38,13 +39,18 @@ class NotaWorld extends World {
     // Fake mailer captures every outbound message on `.sent` so a scenario can
     // assert exactly who was mailed and with which template — no SES, no network.
     this.mailer = createFakeMailer();
+    // ADR 0051 — the fake SMS port captures every text on `.sent`, so a
+    // scenario can assert that a consented client is texted, and that a
+    // silent one never is. No SNS, no carrier.
+    this.sms = createFakeSms();
 
-    // The real notifier, wired to the fake mailer. This is the same use-case
-    // object the handler builds in production and the reminder scheduler drives;
-    // only the mailer (and the clock) are fakes.
+    // The real notifier, wired to the fake mailer and the fake SMS port. This
+    // is the same use-case object the handler builds in production and the
+    // reminder scheduler drives; only the ports (and the clock) are fakes.
     this.notifier = createNotifier({
       repo: this.repo,
       mailer: this.mailer,
+      sms: this.sms,
       baseUrl: BASE,
       operatorEmail: OPERATOR_EMAIL,
       now: () => TODAY,

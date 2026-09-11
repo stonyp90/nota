@@ -68,12 +68,12 @@ test('POST /notary/profile stores nom, étude, téléphone, adresse and alertes,
   assert.equal(profil.rayonKm, 25);
   assert.equal(profil.complet, true);
   assert.deepEqual(profil.manquants, []);
-  assert.deepEqual(profil.alertes, { pace: 'instant', urgentOnly: true });
+  assert.deepEqual(profil.alertes, { pace: 'instant', urgentOnly: true, sms: false });
 
   const stored = await a.repo.getNotary(NOTARY);
   assert.equal(stored.nom, 'Me Julie Tremblay');
   assert.equal(stored.telephone, '(418) 555-0199');
-  assert.deepEqual(stored.alertes, { pace: 'instant', urgentOnly: true });
+  assert.deepEqual(stored.alertes, { pace: 'instant', urgentOnly: true, sms: false });
   assert.equal(stored.status, 'active', 'the write spreads the existing record');
   assert.equal(stored.label, 'ancienne-etiquette', 'the legacy label survives untouched');
 
@@ -81,7 +81,7 @@ test('POST /notary/profile stores nom, étude, téléphone, adresse and alertes,
   const view = await feed(a, token);
   assert.equal(view.profil.nom, 'Me Julie Tremblay');
   assert.equal(view.profil.complet, true);
-  assert.deepEqual(view.profil.alertes, { pace: 'instant', urgentOnly: true });
+  assert.deepEqual(view.profil.alertes, { pace: 'instant', urgentOnly: true, sms: false });
 });
 
 test('POST /notary/profile: a field absent from the body keeps its stored value; present-but-empty clears it', async () => {
@@ -96,7 +96,7 @@ test('POST /notary/profile: a field absent from the body keeps its stored value;
   assert.equal(p.nom, NOTARY_CONTACT.nom);
   assert.equal(p.telephone, NOTARY_CONTACT.telephone);
   assert.equal(p.rayonKm, 50);
-  assert.deepEqual(p.alertes, { pace: 'off', urgentOnly: false });
+  assert.deepEqual(p.alertes, { pace: 'off', urgentOnly: false, sms: false });
 
   // An explicit empty string clears — the notary removes their phone.
   const cleared = await call(a, 'POST', '/notary/profile', { token, body: { telephone: '' } });
@@ -104,7 +104,7 @@ test('POST /notary/profile: a field absent from the body keeps its stored value;
   assert.equal(parse(cleared).profil.telephone, null);
   assert.equal(parse(cleared).profil.complet, false);
   assert.deepEqual(parse(cleared).profil.manquants.map((m) => m.id), ['telephone']);
-  assert.deepEqual(parse(cleared).profil.alertes, { pace: 'off', urgentOnly: false }, 'the alert preference posted earlier survives');
+  assert.deepEqual(parse(cleared).profil.alertes, { pace: 'off', urgentOnly: false, sms: false }, 'the alert preference posted earlier survives');
 });
 
 test('POST /notary/profile refuses a bad téléphone, an oversized nom and an unknown alert pace with typed codes', async () => {
@@ -181,7 +181,7 @@ test('GET /notary/bids carries profil (complet/manquants/courriel/alertes), cond
   assert.equal(view.profil.complet, false);
   assert.deepEqual(view.profil.manquants.map((m) => m.id), ['nom', 'telephone', 'adresse']);
   assert.equal(view.profil.nom, null);
-  assert.deepEqual(view.profil.alertes, { pace: 'daily', urgentOnly: false });
+  assert.deepEqual(view.profil.alertes, { pace: 'daily', urgentOnly: false, sms: false });
 
   assert.equal(view.conditions.paiement, 'signature');
   assert.deepEqual(view.conditions.tarifNota, view.tarif, 'the same object as `tarif`');

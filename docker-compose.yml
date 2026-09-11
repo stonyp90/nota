@@ -168,6 +168,9 @@ services:
       # était intestable ici. Les messages sont écrits dans ce dossier (monté
       # depuis le dépôt) et le lien est imprimé dans les logs du conteneur.
       NOTA_LOCAL_MAIL_DIR: /repo/.local-mail
+      # ADR 0051 — les textos de la pile locale : un .json par texto, à côté
+      # des courriels, et la ligne imprimée dans les logs. Aucun carrier.
+      NOTA_LOCAL_SMS_DIR: /repo/.local-mail
       # ADR 0045 — le fournisseur d'identité. L'émetteur est l'adresse PUBLIQUE
       # du royaume (celle que le navigateur atteint), parce que c'est elle qui
       # signe la claim `iss` du jeton et donc celle que la vérification exige.

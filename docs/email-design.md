@@ -240,6 +240,46 @@ Contact blocks (`detailRows`) carry real `tel:` / `mailto:` hrefs — the
 phone is dialable from the inbox, which is the whole point of the mise en
 relation.
 
+## Texto — the second leg of a send (ADR 0051)
+
+A text is **not a template**: it is one line the notifier derives from the
+email that just went out, sent only to a recipient whose **express consent**
+is on record (`repo.getSmsConsent`, keyed by email like every preference).
+LCAP treats a text as a commercial electronic message and Nota reads no
+transactional exemption into it — no consent, no text, ever.
+
+- **Which templates text**: `TEMPLATE_META[key].sms === true` — the 17
+  act-bound, time-critical ones (client: `offerRetained`, `dateApproaching`,
+  `dateMissedNoUptake`, `propositionRecue`, `messageDuNotaire`,
+  `documentsDemandes`, `offerCancelled`, `actReleased`, `cautionRefusee`;
+  notary: `demandeRetenueNotaire`, `propositionAcceptee`,
+  `propositionRefusee`, `messageDuClient`, `documentDuClient`,
+  `offerCancelledNotary`, `nouvelleDemande`, `cautionRefuseeNotaire`). Never a
+  magic link, never operator/admin/partner/campaign mail.
+  `sms-notifications.test.mjs` pins the exact list.
+- **What it says**: `domain.smsText({ lang, subject, url })` — « Nota : » /
+  « Nota: » in the recipient's language, the subject **as sent** (admin
+  override included), « — », the link the email's button carries (the client's
+  signed act link, or the notary console on the act). 320 chars max; the
+  subject is what gets cut, never the link.
+- **When it runs**: inside `sendOnce`, *after* the email's guards (unsubscribe,
+  per-template preference, SENT# duplicate, admin kill-switch) and after the
+  email is sent and ledgered — so anything that silences the email silences
+  the text. Its own ledger key is `<kind>:sms`; its own Law-25 journal line
+  too. A carrier failure never fails the email (`sms: { sent: false, reason:
+  'sms-failed' }` on the result; the text stays due).
+- **Where consent comes from**: the booking form checkbox (`smsConsent` on
+  POST /bids), the notary's « Alertes par texto » switch (`alertes.sms` on
+  POST /notary/profile, texting the profile phone), and
+  `/notification-preferences` (`sms.consent`, masked phone; `smsConsent` to
+  withdraw or restore).
+- **Ports**: `sms-port.js` — `createSnsSmsAdapter` (prod, behind
+  `NOTA_SMS_ENABLED=true` + `infra/sms.tf`), `createFakeSms` (tests, BDD),
+  `createFileSms` (local stack, a `.json` per text beside `.local-mail/`).
+
+Adding a texting template = adding `sms: true` to its `TEMPLATE_META` entry
+and the key to the pinned list in the test. Nothing else.
+
 ## Admin-parametrizable subjects (overrides)
 
 The notifier can consume a per-template override stored by the admin console.

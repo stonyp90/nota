@@ -127,6 +127,13 @@ const { STATUS, normalizeReferralCode, auditRetentionTtl } = require('@nota/doma
 // Rend `{}` — donc AUCUN attribut ttl — quand l'appelant a déjà décidé, ou
 // quand l'horodatage est illisible : mieux vaut une entrée qui survit qu'une
 // preuve qui expire à une date inventée.
+// ADR 0051 — la partition du consentement au texto. Empreinte de l'adresse
+// normalisée, jamais l'adresse elle-même (comme MAILPREF#).
+const SMS_CONSENT_SK = 'CONSENT';
+function smsConsentPK(email) {
+  return 'SMSCONSENT#' + require('node:crypto').createHash('sha256').update(String(email == null ? '' : email).trim().toLowerCase()).digest('hex');
+}
+
 function auditTtl(entry) {
   if (entry && entry.ttl != null) return {};
   const ttl = auditRetentionTtl(Date.parse((entry && entry.ts) || ''));
@@ -869,6 +876,28 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     async putNotificationPreferences(email, preferences) {
       const PK = 'MAILPREF#' + require('node:crypto').createHash('sha256').update(String(email).trim().toLowerCase()).digest('hex');
       await doc.send(new UpdateCommand({ TableName: tableName, Key: { PK, SK: 'PREFERENCES' }, UpdateExpression: 'SET preferences = :preferences, #type = :type', ExpressionAttributeNames: { '#type': 'type' }, ExpressionAttributeValues: { ':preferences': preferences, ':type': 'notification_preferences' } }));
+    },
+    // --- Le consentement au texto (ADR 0051) ---------------------------------
+    // Sa propre partition, `SMSCONSENT#<sha256(courriel)>` / `CONSENT`, à la
+    // manière de MAILPREF# : l'adresse ne figure jamais en clair dans la clé,
+    // et la partition est bornable par `dynamodb:LeadingKeys` le jour où une
+    // autre Lambda (l'effacement Loi 25, par exemple) doit y écrire. Un item,
+    // écrasable — la dernière décision compte ; le retrait s'écrit comme
+    // l'octroi.
+    async getSmsConsent(email) {
+      const out = await doc.send(new GetCommand({ TableName: tableName, Key: { PK: smsConsentPK(email), SK: SMS_CONSENT_SK }, ConsistentRead: true }));
+      if (!out.Item) return null;
+      return { telephone: out.Item.telephone == null ? null : out.Item.telephone, consent: out.Item.consent === true, at: out.Item.at || null };
+    },
+    async putSmsConsent(email, { telephone, consent, at } = {}) {
+      const clean = lowerEmail(email);
+      if (!clean) throw new Error('putSmsConsent: email is required');
+      const item = { telephone: telephone == null ? null : String(telephone), consent: consent === true, at: at || null };
+      await doc.send(new PutCommand({ TableName: tableName, Item: { PK: smsConsentPK(clean), SK: SMS_CONSENT_SK, type: 'sms_consent', ...item } }));
+      return item;
+    },
+    async deleteSmsConsent(email) {
+      await doc.send(new DeleteCommand({ TableName: tableName, Key: { PK: smsConsentPK(email), SK: SMS_CONSENT_SK } }));
     },
     async getEmailOverride(key) {
       const out = await doc.send(
