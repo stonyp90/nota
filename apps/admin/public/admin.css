@@ -632,8 +632,12 @@ a:hover { text-decoration: underline; }
   .bareme-palier { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .bareme-remove { grid-column: 1 / -1; justify-self: start; }
 }
-@media (max-width: 680px) and (pointer: coarse) {
-  .btn, .seg-btn, .admin-rail-link { min-height: 44px; }
+/* A finger is a finger at every width: a tablet in landscape is 1024px wide
+   and still touched. The 44px promise follows the pointer, not the viewport
+   (2026-09-11 audit: .btn-sm 31px, .seg-btn 33px, .password-toggle 21px on
+   an iPad). */
+@media (pointer: coarse) {
+  .btn, .seg-btn, .admin-rail-link, .password-toggle { min-height: 44px; }
   .icon-btn { width: 44px; height: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {

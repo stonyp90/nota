@@ -95,7 +95,7 @@ const app = createApp(repo, {
 });
 // Exercise the real local shared-store composition: admin replies must become
 // visible in the public widget without a test-only messaging implementation.
-const localAdmin = createLocalAdminApp({ repo });
+const localAdmin = createLocalAdminApp({ repo, adminRlMax: RL_MAX });
 
 const server = http.createServer(async (req, res) => {
   try {

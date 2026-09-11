@@ -56,7 +56,7 @@ function seedDevNotaries(repo, todayISO) {
  * Returns { app, repo, email, mode } — `app.handle(request)` is the same
  * transport-agnostic handler the HTTP loop below serves.
  */
-function createLocalAdminApp({ today, repo: sharedRepo, mailer, notifier } = {}) {
+function createLocalAdminApp({ today, repo: sharedRepo, mailer, notifier, adminRlMax } = {}) {
   // Québec business day, matching the admin handler's default clock.
   const todayISO = devToday(today);
   const useDynamo = !!process.env.TABLE_NAME;
@@ -102,6 +102,9 @@ function createLocalAdminApp({ today, repo: sharedRepo, mailer, notifier } = {})
       baseUrl,
       password: process.env.NOTA_ADMIN_PASSWORD || DEV_ADMIN_PASSWORD,
       devEcho: process.env.NODE_ENV !== 'production',
+      // The E2E harness alone raises the sign-in throttle: its whole run comes
+      // from one IP and signs the operator in once per surface it measures.
+      ...(adminRlMax ? { rlMax: adminRlMax } : {}),
     },
   });
   const app = createAdminApp(repo, { admin, adminBaseUrl: baseUrl, mailer, notifier });

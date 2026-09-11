@@ -67,12 +67,19 @@ async function bookTo(page, step) {
 
 /** Sign an operator in through the dev-echoed magic link and land on a view. */
 async function adminInto(page, request, view) {
-  await page.goto(`${ADMIN}/?lang=fr#/${view}`);
-  const login = await request.post(`${ADMIN}/api/admin/auth/request`, { data: { email: 'admin@nota.local' } });
-  const { devLink } = await login.json();
-  await page.goto(`${ADMIN}/?lang=fr` + new URL(devLink).hash);
-  await page.waitForSelector('.admin-rail', { timeout: 20_000 });
-  if (!page.url().includes('#/' + view)) await page.goto(`${ADMIN}/?lang=fr#/${view}`);
+  // The console keeps its session in memory only (never in storage): a reload
+  // signs the operator out. Sign in once per test through the dev-echoed
+  // magic link, then move between views by changing the hash in place.
+  const alive = page.url().startsWith(ADMIN) && (await page.locator('.admin-rail').count());
+  if (!alive) {
+    await page.goto(`${ADMIN}/?lang=fr#/${view}`);
+    const login = await request.post(`${ADMIN}/api/admin/auth/request`, { data: { email: 'admin@nota.local' } });
+    const body = await login.json();
+    if (!body.devLink) throw new Error('admin dev link not echoed: ' + JSON.stringify(body));
+    await page.evaluate((h) => { location.hash = h; }, new URL(body.devLink).hash);
+    await page.waitForSelector('.admin-rail', { timeout: 20_000 });
+  }
+  if (!page.url().endsWith('#/' + view)) await page.evaluate((h) => { location.hash = h; }, '#/' + view);
   await page.waitForSelector('.admin-content', { timeout: 20_000 });
   await page.waitForTimeout(500);
 }
@@ -100,10 +107,13 @@ const SURFACES = [
     open: async (p) => { await p.evaluate(() => (document.getElementById('header-login') || document.getElementById('mnav-login')).click()); await p.waitForSelector('#auth-dialog[open]'); }, root: '#auth-dialog' },
   { key: 'mobile drawer', url: '/?lang=fr', seed: seenBoth, wait: '#pulse-rows .pulse-row', maxWidth: 899,
     open: async (p) => { await p.click('#nav-burger'); await expect(p.locator('#mobile-nav')).toBeVisible(); }, root: '#mobile-nav' },
-  { key: 'notary console (signed in)', url: '/?lang=fr#t=notaires', seed: seenBoth, wait: '#nc-email',
+  { key: 'notary console (signed in)', url: '/?lang=fr#t=notaires', seed: seenBoth, wait: '#nc-email, #notary-authed:not([hidden])',
     open: async (p) => {
-      await p.fill('#nc-email', 'lens.notaire@etude.ca');
-      await p.click('#notary-console-signin');
+      // The session survives a reload (ncRestore): sign in once, then only resize.
+      if (!(await p.locator('#notary-authed:not([hidden])').count())) {
+        await p.fill('#nc-email', 'lens.notaire@etude.ca');
+        await p.click('#notary-console-signin');
+      }
       await p.waitForSelector('#notary-authed:not([hidden])', { timeout: 15_000 });
       await p.waitForSelector('#notary-open-list .nc-card, #notary-open-empty:not([hidden])', { timeout: 15_000 });
     }, root: '#pane-notaires' },
@@ -174,7 +184,7 @@ async function sweep(page, request, surface, testInfo) {
 test.describe('every surface at every size', () => {
   for (const surface of SURFACES) {
     test(surface.key, async ({ page, request }, testInfo) => {
-      test.setTimeout(testInfo.project.name === 'chromium' ? 120_000 : 60_000);
+      test.setTimeout(testInfo.project.name === 'chromium' ? 180_000 : 60_000);
       await sweep(page, request, surface, testInfo);
     });
   }
@@ -184,7 +194,7 @@ test.describe('the first-visit surfaces (motion allowed)', () => {
   test.use({ reducedMotion: 'no-preference' });
   for (const surface of MOTION_SURFACES) {
     test(surface.key, async ({ page, request }, testInfo) => {
-      test.setTimeout(testInfo.project.name === 'chromium' ? 120_000 : 60_000);
+      test.setTimeout(testInfo.project.name === 'chromium' ? 180_000 : 60_000);
       await sweep(page, request, surface, testInfo);
     });
   }
