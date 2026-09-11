@@ -292,6 +292,10 @@ resource "aws_lambda_function" "api" {
       # placeholder in emails.js, which a test refuses in production — a
       # commercial message must carry a REAL mailing address.
       NOTA_SENDER_ADDRESS = var.sender_address
+      # SMS (texto) — the third channel, off unless sms.tf grants sns:Publish.
+      # The notifier composes the SNS adapter only when this reads "true".
+      NOTA_SMS_ENABLED   = tostring(var.sms_enabled)
+      NOTA_SMS_SENDER_ID = var.sms_sender_id
       # ADR 0032 — le seau des documents de la messagerie. VIDE = les portes de
       # document répondent 503 et la messagerie reste texte : un déploiement
       # sans seau n'est pas cassé, il est simplement plus étroit.

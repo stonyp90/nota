@@ -3354,7 +3354,9 @@
   // string. Absent or null reads as the default; anything else is validated
   // loudly so a corrupted preference never silently mutes a notary.
   const NOTARY_ALERT_PACES = ['instant', 'daily', 'weekly', 'off'];
-  const NOTARY_ALERTES_DEFAULT = Object.freeze({ pace: 'daily', urgentOnly: false });
+  // ADR 0051 — `sms` : le texto est un canal de consentement EXPRÈS. Faux par
+  // défaut, jamais déduit ; un profil antérieur à l'ADR lit « faux ».
+  const NOTARY_ALERTES_DEFAULT = Object.freeze({ pace: 'daily', urgentOnly: false, sms: false });
   function validateNotaryAlertes(raw) {
     if (raw === undefined || raw === null) return { ok: true, value: { ...NOTARY_ALERTES_DEFAULT }, errors: [] };
     if (typeof raw !== 'object' || Array.isArray(raw)) {
@@ -3378,8 +3380,16 @@
         urgentOnly = raw.urgentOnly;
       }
     }
+    let sms = NOTARY_ALERTES_DEFAULT.sms;
+    if (raw.sms !== undefined && raw.sms !== null) {
+      if (typeof raw.sms !== 'boolean') {
+        errors.push({ code: 'alertes_invalides', message: 'L’alerte par texto doit être vrai ou faux.' });
+      } else {
+        sms = raw.sms;
+      }
+    }
     if (errors.length) return { ok: false, value: null, errors };
-    return { ok: true, value: { pace, urgentOnly }, errors: [] };
+    return { ok: true, value: { pace, urgentOnly, sms }, errors: [] };
   }
   // What a STORED profile's alerts are — the default when the notary said
   // nothing, and the default again when the stored value is corrupt: a
@@ -3469,6 +3479,65 @@
     const digits = s.replace(/\D/g, '');
     if (!digits) return null;
     return 'tel:' + (plus ? '+' + digits : '+1' + digits);
+  }
+
+  // The SAME loose rule as validateTelephone, resolved to one canonical shape
+  // for a carrier: E.164, North-American plan. « (418) 555-0100 » and
+  // « 1 418 555 0100 » both become « +14185550100 »; anything that is not a
+  // dialable 10/11-digit NANP number is null — a text message is never sent
+  // to a guess. The port (apps/api/src/sms-port.js) refuses anything else.
+  function toE164(raw) {
+    const s = String(raw == null ? '' : raw).trim();
+    if (!s) return null;
+    const digits = s.replace(/\D/g, '');
+    if (digits.length === 10) return '+1' + digits;
+    if (digits.length === 11 && digits.charAt(0) === '1') return '+' + digits;
+    return null;
+  }
+
+  // --- Le texto : un canal de consentement EXPRÈS (ADR 0051) -----------------
+  // LCAP / CASL : un texto est un message électronique commercial, et Nota n'y
+  // lit aucune exemption transactionnelle. Le consentement est donc un fait
+  // que la personne a POSÉ — une case cochée, un interrupteur — jamais une
+  // déduction. Absent ou nul vaut « non » ; tout ce qui n'est pas un booléen
+  // strict est refusé, parce qu'un « oui » en chaîne est exactement le genre de
+  // valeur qu'un formulaire mal câblé enverrait sans que personne l'ait voulu.
+  function validateSmsConsent(raw) {
+    if (raw === undefined || raw === null) return { ok: true, value: false, error: null };
+    if (typeof raw !== 'boolean') {
+      return { ok: false, value: null, error: { code: 'sms_consent_invalide', message: 'Le consentement aux textos doit être vrai ou faux.' } };
+    }
+    return { ok: true, value: raw, error: null };
+  }
+
+  // Ce qu'un carrier reçoit : UNE ligne, dans la langue du destinataire — le
+  // sujet du gabarit (déjà passé par la surcharge admin) puis le lien profond
+  // que le courriel porte. Un texto est un signal d'ouvrir le courriel ou
+  // l'application, jamais une seconde copie du message. Le plafond est celui
+  // d'un envoi concaténé raisonnable (320 = deux segments GSM-7) ; quand il
+  // faut couper, c'est le sujet qui cède, jamais le lien.
+  const SMS_TEXT_MAX = 320;
+  const SMS_PREFIX = Object.freeze({ fr: 'Nota : ', en: 'Nota: ' });
+  const SMS_SEPARATOR = ' — ';
+  function smsText({ lang, subject, url } = {}) {
+    const prefix = SMS_PREFIX[lang === 'en' ? 'en' : 'fr'];
+    const sujet = String(subject == null ? '' : subject).replace(/\s+/g, ' ').trim();
+    if (!sujet) return null;
+    const lien = String(url == null ? '' : url).trim();
+    const tail = lien ? SMS_SEPARATOR + lien : '';
+    const room = SMS_TEXT_MAX - prefix.length - tail.length;
+    if (room <= 1) return (prefix + tail).slice(0, SMS_TEXT_MAX);
+    const body = sujet.length > room ? sujet.slice(0, room - 1).trimEnd() + '…' : sujet;
+    return prefix + body + tail;
+  }
+
+  // Ce que l'écran des préférences a le droit de montrer du numéro enregistré :
+  // les quatre derniers chiffres, assez pour reconnaître SON téléphone, pas
+  // assez pour le composer.
+  function maskTelephone(raw) {
+    const digits = String(raw == null ? '' : raw).replace(/\D/g, '');
+    if (digits.length < 4) return null;
+    return '••• ••• ' + digits.slice(-4);
   }
 
   // --- Carnet pulse ----------------------------------------------------------
@@ -6238,6 +6307,11 @@
     CNQ_LINK_MAX,
     validateNotaryProfile,
     validateTelephone,
+    toE164,
+    validateSmsConsent,
+    SMS_TEXT_MAX,
+    smsText,
+    maskTelephone,
     NOTARY_NAME_MAX,
     NOTARY_ADDRESS_MAX,
     NOTARY_CONTACT_REQUIRED,
