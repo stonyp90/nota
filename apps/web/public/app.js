@@ -8441,13 +8441,10 @@
   // Public teaser of the live inventory on the signed-out landing: the month's
   // real open demands, soonest first, each card a button into the sign-in gate.
   // Capped — the full list is the payoff of signing in; overflow collapses into
-  // one "+N autres" card. Hidden signed-in (the console's open list takes over)
-  // and when the month has nothing open (no data → no empty section).
-  // The teaser is a 12-tile block (owner's call, 2026-08-26: at 8 the left
-  // column stopped a row short of the gate+agenda column and left a hole):
-  // with overflow, 11 demands + the "+N autres" card in the LAST slot — the
-  // lead-in sits bottom right of a full grid, never on an orphan row. A month
-  // with 12 or fewer open demands shows them all.
+  // one "+N autres" card. Hidden signed-in (the console's open list takes over).
+  // Keep twelve slots even for an empty or sparse month so the landing keeps
+  // its shape. Empty slots are inert, clearly labelled, and never fake offers.
+  // At zero, one large empty-state panel covers the same twelve-slot footprint.
   var NC_LIVE_MAX = 12;
   function ncFocusGate() {
     // Land on whichever gate step is showing: the signup CTA mid-branch,

@@ -3474,19 +3474,8 @@ dialog:focus, dialog:focus-visible { outline: none; }
 #pane-notaires > .wrap:has(#notary-auth-form:not([hidden])) {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
-  /* Six rows: a two-column band (demands | gate + agenda), then two FULL-WIDTH
-     lines — the compliance band, then the guarantee. Each column is sized by
-     its own content and simply ends; whichever is shorter runs out against a
-     band that spans the page, so a ragged bottom never reads as a hole.
-
-     History, so this is not re-broken: the layout used to chase an exact
-     bottom-to-bottom match between the two columns (five rows, the guarantee
-     tucked into the left one) and the teaser was padded to twelve tiles to
-     reach it. That balance held for exactly one content height — ADR 0033's
-     compliance block landed INSIDE the gate card, the rail grew ~400px, and
-     the content column opened a 586px hole (owner, 2026-09-03: « le UI UX
-     semble brisé »). Nothing below now depends on how many demands the month
-     holds, or on how tall the gate is. */
+  /* The inventory keeps twelve slots at every offer count. Compliance remains
+     a full-width band below both columns, outside the sign-in card. */
   /* 2026-09-05 — l'agenda descend SOUS la grille, dans la colonne de gauche.
      Sous la grille des demandes s'ouvrait un trou de 137 px pendant que la
      colonne de droite continuait : le contenu s'arrêtait, la page non. La

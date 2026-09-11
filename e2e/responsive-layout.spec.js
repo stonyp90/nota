@@ -325,6 +325,70 @@ test.describe('notary inventory keeps its footprint', () => {
   }
 });
 
+// Inventory count must not move the gate, agenda or compliance band. Exercise
+// actual successful API responses, including empty, rather than offline demos.
+test.describe('notary inventory keeps its footprint', () => {
+  for (const vp of VIEWPORTS) {
+    for (const lang of ['fr', 'en']) {
+      test(`${vp.name}, ${lang}: zero, one and partial inventory match a full grid`, async ({ page }) => {
+        await page.setViewportSize({ width: vp.width, height: vp.height });
+        await page.addInitScript(() => {
+          localStorage.setItem('nota.introSeen', '1');
+          localStorage.setItem('nota.onboarded.v1', '1');
+        });
+        const seed = domain.makeFixtures(domain.businessDay()).filter((b) => b.status !== domain.STATUS.RETENUE);
+        const targetMonth = domain.businessDay().slice(0, 7);
+        let count = 12;
+        await page.route('**/bids?*', async (route) => {
+          const month = new URL(route.request().url()).searchParams.get('month');
+          const bids = month === targetMonth ? Array.from({ length: count }, (_, i) => ({
+            ...seed[i % seed.length], id: 'layout-' + i,
+            // Keep every synthetic bid in the requested month so each count
+            // really exercises the twelve-slot grid, including February.
+            dateISO: `${month}-${String(i + 1).padStart(2, '0')}`,
+          })) : [];
+          await route.fulfill({ json: { bids: bids.filter((b) => b.dateISO.startsWith(month)) }, headers: { 'access-control-allow-origin': '*' } });
+        });
+        let full;
+        for (count of [12, 0, 1, 5, 13]) {
+          if (count === 12) await page.goto(`/?lang=${lang}#t=notaires`);
+          else await page.reload();
+          await expect(page.locator('#notary-live')).toBeVisible();
+          await expect(page.locator('#notary-live-grid .nc-live-card')).toHaveCount(Math.min(count, 12));
+          await expect(page.locator('#notary-live-grid .nc-live-slot')).toHaveCount(Math.max(0, 12 - count));
+          await settled(page);
+          const geometry = {};
+          for (const id of ['notary-live-grid', 'notary-console', 'notary-carnet', 'nc-conformite']) {
+            geometry[id] = await boxOf(page, '#' + id);
+          }
+          if (count === 12) full = geometry;
+          else {
+            for (const [id, rect] of Object.entries(geometry)) {
+              for (const key of ['top', 'left', 'width', 'height']) {
+                expect(Math.abs(rect[key] - full[id][key]), `${count} offers: ${id}.${key} stays stable`).toBeLessThan(2);
+              }
+            }
+          }
+          if (count === 0) {
+            const empty = page.locator('.nc-live-empty');
+            await expect(empty.locator('strong')).toHaveText(lang === 'fr' ? 'Pas d’offres' : 'No offers');
+            const rect = await boxOf(page, '.nc-live-empty');
+            expect(rect.height).toBe(full['notary-live-grid'].height);
+            expect(rect.width).toBe(full['notary-live-grid'].width);
+          } else {
+            await expect(page.locator('.nc-live-empty')).toHaveCount(0);
+            if (count < 12) {
+              await expect(page.locator('.nc-live-slot').first()).toHaveText(lang === 'fr' ? 'Pas d’offre' : 'No offer');
+            }
+          }
+          const sizes = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scroll: document.documentElement.scrollWidth }));
+          expect(sizes.scroll).toBeLessThanOrEqual(sizes.width + 1);
+        }
+      });
+    }
+  }
+});
+
 // The partners pane has a denser story than the other public doors: a reward
 // hero, audience chips, an estimator, a timeline and a claim form. Keep its
 // own geometry contract explicit at every supported width so a translation or
