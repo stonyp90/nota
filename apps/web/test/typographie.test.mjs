@@ -158,3 +158,15 @@ test('aucun nombre du calendrier ne porte de fond coloré', () => {
   assert.ok(extreme, 'la règle du palier extrême existe');
   assert.doesNotMatch(extreme[1], /background/, 'le prix « dès … $ » du palier extrême n’a plus de fond');
 });
+
+test('la salle de signature ne pose aucune taille de titre hors échelle', () => {
+  // Une seule feuille minifiée : les blocs de titre s'y lisent comme partout.
+  const bad = [];
+  for (const b of headingBlocks(SIG_CSS)) {
+    const size = b.body.match(/font-size:\s*([^;}]+)/);
+    if (size && !/^var\(--type-h[1-4](-compact)?\)$/.test(size[1].trim())) bad.push(b.sel + ' → font-size: ' + size[1].trim());
+    const family = b.body.match(/font-family:\s*([^;}]+)/);
+    if (family && family[1].trim() !== 'var(--font-display)') bad.push(b.sel + ' → font-family: ' + family[1].trim());
+  }
+  assert.deepEqual(bad, [], 'titres de la salle hors échelle :\n  ' + bad.join('\n  '));
+});
