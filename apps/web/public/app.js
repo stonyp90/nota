@@ -12038,8 +12038,16 @@
   // Both theme switches (header pill + drawer preference row) mirror the one
   // source of truth, html[data-theme] — checked means dark. CSS positions the
   // knob from the same attribute, so this only has to keep AT in the loop.
+  // Le thème EFFECTIF : le choix explicite s'il existe, sinon celui de
+  // l'appareil. Sans cette lecture, un visiteur en mode sombre qui n'a rien
+  // choisi voyait l'interrupteur dire « clair » sur une page sombre.
+  function effectiveTheme() {
+    var chosen = document.documentElement.getAttribute('data-theme');
+    if (chosen === 'dark' || chosen === 'light') return chosen;
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  }
   function syncThemeSwitches() {
-    var dark = document.documentElement.getAttribute('data-theme') === 'dark';
+    var dark = effectiveTheme() === 'dark';
     ['theme-toggle', 'mnav-theme'].forEach(function (id) {
       var el = $(id);
       if (el) el.setAttribute('aria-checked', dark ? 'true' : 'false');
@@ -12249,8 +12257,7 @@
     if (pHero) pHero.addEventListener('click', goPartnerClaim);
 
     $('theme-toggle').addEventListener('click', function () {
-      var cur = document.documentElement.getAttribute('data-theme');
-      setTheme(cur === 'dark' ? 'light' : 'dark');
+      setTheme(effectiveTheme() === 'dark' ? 'light' : 'dark');
     });
     // The beta controls remain wired for the dedicated Beta surface. If the
     // hidden landing markup is ever reused, the explanation stays floating and
@@ -12353,8 +12360,7 @@
         });
       });
       $('mnav-theme').addEventListener('click', function () {
-        var cur = document.documentElement.getAttribute('data-theme');
-        setTheme(cur === 'dark' ? 'light' : 'dark');
+        setTheme(effectiveTheme() === 'dark' ? 'light' : 'dark');
       });
       var mLogin = $('mnav-login'); if (mLogin) mLogin.addEventListener('click', function () { openAuthModal(null, 'signin'); });
       var mSignup = $('mnav-signup'); if (mSignup) mSignup.addEventListener('click', function () { openAuthModal(null, 'signup'); });

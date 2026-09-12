@@ -36,9 +36,9 @@ export function renderPage(page, lang = 'fr') {
   const cta = `/?lang=${lang}#t=carnet`;
   const section = (heading, body) => `<section><h2>${t(heading)}</h2><p>${t(body)}</p></section>`;
   return `<!doctype html>
-<html lang="${lang}-CA" data-theme="light"><head>
+<html lang="${lang}-CA"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<script>try{var t=JSON.parse(localStorage.getItem('nota.theme')||'null');document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light');}catch(e){}</script>
+<script>try{var t=JSON.parse(localStorage.getItem('nota.theme')||'null');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);}catch(e){}</script>
 <meta name="theme-color" content="#101820" media="(prefers-color-scheme: dark)"><meta name="theme-color" content="#386888">
 <title>${t(page.title)} | Nota</title>
 <meta name="description" content="${t(page.description)}">

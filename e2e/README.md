@@ -79,3 +79,30 @@ kill`) if you hit odd, stale-data failures.
 - The demo repo is in-memory and long-lived across a local run, so anything that
   writes uses a **unique** value per run (the partner code is time-based) to stay
   clear of idempotency / 409 paths.
+
+## The brand, measured on production as well as on localhost
+
+`brand-conformance.spec.js` reads what each surface actually **serves** — the
+rendered DOM after the page's scripts run, plus every SVG it points at — and
+holds it to the decided lockup (ADR 0048), the type scale (ADR 0050), the
+colour ramp and the two themes. `ux-nav.test.mjs` pins the drawing in the
+repository; this one catches a surface that drifted, a stale bundle, or an
+older deploy. It takes its hosts from the environment, so the same file runs
+against the live site:
+
+```bash
+BRAND_WEB=https://gonota.ca BRAND_ADMIN=https://admin.gonota.ca \
+BRAND_DOCS=https://gonota.ca BRAND_BRAND_HOST=https://brand.gonota.ca \
+BRAND_PLAN_HOST=https://plan.gonota.ca \
+npx playwright test e2e/brand-conformance.spec.js --project=chromium
+```
+
+A production run that fails on a surface the local run passes means that
+surface has not been deployed yet — the brand is right in the tree and stale in
+the world. Emails are the one interface a browser cannot open: their shell is
+pinned by `apps/api/test/emails-brand.test.mjs`.
+
+**Local runs need fresh servers.** `seo-pages.mjs` reads `index.html` once, at
+module load, so a dev server started before a lockup change serves the old
+drawing for as long as it lives (this is how the acquisition pages first failed
+this spec). Kill the four ports and let Playwright boot them.

@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="fr-CA" data-theme="light">
+<html lang="fr-CA">
   <head>
     <meta name="nota:analytics" content="__NOTA_GA4_ID__" />
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <!-- Apply both preferences before first paint: ?lang, then the saved
          choice, then the browser's first French/English preference. -->
-    <script>try{var t=JSON.parse(localStorage.getItem('nota.theme')||'null');document.documentElement.setAttribute('data-theme',t==='dark'?'dark':'light');var q=/[?&]lang=(en|fr)(?=&|$)/.exec(location.search||'');var s=localStorage.getItem('nota.lang');var p=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language];var l=q?q[1]:(s==='en'||s==='fr'?s:'fr');if(!q&&s!=='en'&&s!=='fr'){for(var i=0;i<p.length;i++){if(/^fr\b/i.test(String(p[i]||''))){l='fr';break}if(/^en\b/i.test(String(p[i]||''))){l='en';break}}}document.documentElement.lang=l+'-CA';}catch(e){document.documentElement.setAttribute('data-theme','light');document.documentElement.lang='fr-CA';}</script>
+    <script>try{var t=JSON.parse(localStorage.getItem('nota.theme')||'null');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t);var q=/[?&]lang=(en|fr)(?=&|$)/.exec(location.search||'');var s=localStorage.getItem('nota.lang');var p=navigator.languages&&navigator.languages.length?navigator.languages:[navigator.language];var l=q?q[1]:(s==='en'||s==='fr'?s:'fr');if(!q&&s!=='en'&&s!=='fr'){for(var i=0;i<p.length;i++){if(/^fr\b/i.test(String(p[i]||''))){l='fr';break}if(/^en\b/i.test(String(p[i]||''))){l='en';break}}}document.documentElement.lang=l+'-CA';}catch(e){document.documentElement.setAttribute('data-theme','light');document.documentElement.lang='fr-CA';}</script>
     <title>Nota — le carnet public des actes notariés à Québec</title>
     <meta
       name="description"

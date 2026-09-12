@@ -21,15 +21,33 @@
       --line:#c5d8df; --wash:var(--nota-blue-50); --ink-2:var(--nota-blue-800); --on-signal:#ffffff;
       --canvas-dark:#101820; --ink-dark:#f4f8fa; --muted-dark:#afc2cf; --line-dark:#294353; --wash-dark:#132b3f;
       --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      --font-display: 'Sora', var(--font-sans); --weight-display: 800; }
+      --font-display: 'Sora', var(--font-sans); --weight-display: 800;
+      /* L'échelle (ADR 0050, amendement du 2026-09-11), verbatim de styles.css :
+         une planche de marque qui titrerait à sa propre taille ne montrerait pas
+         la marque. */
+      --type-h1: clamp(30px, 2.6vw, 44px); --type-h1-lh: 1.02; --type-h1-ls: -.055em;
+      --type-h2: clamp(20px, 1.6vw, 26px); --type-h2-lh: 1.15; --type-h2-ls: -.045em;
+      --type-h3: 17px; --type-h3-lh: 1.3; --type-h3-ls: -.02em;
+      --type-body: 16px; --type-body-lh: 1.5; }
+
+    /* Les deux thèmes, par le mécanisme du produit : le clair sur :root nu, le
+       sombre sous la préférence de l'appareil (sauf choix clair explicite) puis
+       sous le choix explicite. La planche suit l'appareil : elle ne porte pas
+       d'interrupteur, c'est une pièce de référence, pas une application. */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) { color-scheme: dark; --ink:var(--ink-dark); --muted:var(--muted-dark);
+        --canvas:var(--canvas-dark); --card:var(--wash-dark); --line:var(--line-dark); --wash:var(--wash-dark); --ink-2:var(--nota-blue-400); }
+    }
+    :root[data-theme="dark"] { color-scheme: dark; --ink:var(--ink-dark); --muted:var(--muted-dark);
+      --canvas:var(--canvas-dark); --card:var(--wash-dark); --line:var(--line-dark); --wash:var(--wash-dark); --ink-2:var(--nota-blue-400); }
     * { box-sizing: border-box; }
-    body { margin:0; background:var(--canvas); color:var(--ink); font:15px/1.5 var(--font-sans); }
+    body { margin:0; background:var(--canvas); color:var(--ink); font:var(--type-body)/var(--type-body-lh) var(--font-sans); }
     main { width:min(1320px, calc(100% - 40px)); margin:0 auto; padding:48px 0 64px; }
     .intro { display:flex; justify-content:space-between; gap:32px; align-items:end; margin-bottom:30px; }
     .eyebrow { display:inline-flex; padding:6px 9px; border-radius:999px; background:#fce8d5; color:var(--gold-deep); font-size:11px; font-weight:800; letter-spacing:.14em; text-transform:uppercase; }
     /* The board's own chrome speaks with the brand voice: one display face. */
     h1, h2 { font-family:var(--font-display); font-weight:var(--weight-display); }
-    h1 { margin:8px 0 8px; font-size:clamp(28px,3.4vw,42px); letter-spacing:-.045em; line-height:1.08; }
+    h1 { margin:8px 0 8px; font-size:var(--type-h1); letter-spacing:var(--type-h1-ls); line-height:var(--type-h1-lh); }
     .lede { max-width:660px; color:var(--muted); margin:0; }
     .note { color:var(--muted); font-size:12px; max-width:250px; text-align:right; }
     .board { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:18px; }
@@ -39,7 +57,7 @@
     .tile:hover { transform:translateY(-3px) rotate(-.2deg); box-shadow:0 18px 38px rgb(25 40 46 / .16); transition:transform .16s,box-shadow .16s; }
     .tile-head { display:flex; justify-content:space-between; gap:14px; align-items:start; }
     .number { color:var(--muted); font-size:12px; font-weight:800; letter-spacing:.08em; }
-    h2 { margin:0; font-size:18px; letter-spacing:-.025em; }
+    h2 { margin:0; font-size:var(--type-h3); letter-spacing:var(--type-h3-ls); line-height:var(--type-h3-lh); }
     .direction { margin:4px 0 0; color:var(--muted); font-size:12px; }
     /* The nine specimens are the subject, not the voice: they stay on the text
        face they were drawn on, deliberately, and the display face stops above. */

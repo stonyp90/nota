@@ -434,8 +434,10 @@ test('theme switches show the current theme, stay in sync, and never close the d
   const { doc } = await boot();
   const header = $(doc, 'theme-toggle');
   const drawerSwitch = $(doc, 'mnav-theme');
-  // Light is the boot default; both switches must say so (checked = dark).
-  assert.equal(doc.documentElement.getAttribute('data-theme'), 'light');
+  // Nothing is stamped before the viewer chooses (2026-09-11): the device
+  // decides, and the switches report what is EFFECTIVELY on screen — the test
+  // harness reports a light device, so both say light (checked = dark).
+  assert.equal(doc.documentElement.getAttribute('data-theme'), null);
   assert.equal(header.getAttribute('aria-checked'), 'false');
   assert.equal(drawerSwitch.getAttribute('aria-checked'), 'false');
   header.click();

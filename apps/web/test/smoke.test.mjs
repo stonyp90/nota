@@ -418,17 +418,24 @@ test('clicking a has-bids cell opens the day modal with bid rows', async () => {
   assert.ok($(doc, 'day-title').textContent.trim().length > 0, 'day-title is empty');
 });
 
-// 11. Theme toggle flips document[data-theme] between light and dark.
+// 11. Theme: nothing is stamped until the viewer chooses — the device decides
+//     (2026-09-11, « nous devons avoir les deux thèmes dans tout »: pinning
+//     data-theme="light" on first paint made the dark blocks unreachable for a
+//     visitor whose device is dark). The switch then stamps a real choice, read
+//     from what the viewer is EFFECTIVELY seeing, not from the bare attribute.
 test('theme toggle flips documentElement[data-theme]', async () => {
   const { doc } = await boot();
   const root = doc.documentElement;
-  assert.equal(root.getAttribute('data-theme'), 'light'); // light is the default
+  assert.equal(root.getAttribute('data-theme'), null, 'no theme is stamped before the viewer chooses');
 
-  $(doc, 'theme-toggle').click();
+  $(doc, 'theme-toggle').click(); // the harness reports a light device
   assert.equal(root.getAttribute('data-theme'), 'dark');
 
   $(doc, 'theme-toggle').click();
   assert.equal(root.getAttribute('data-theme'), 'light');
+
+  $(doc, 'theme-toggle').click();
+  assert.equal(root.getAttribute('data-theme'), 'dark', 'a stamped choice keeps flipping');
 });
 
 // 12b. Optional courriel field exists and never blocks a valid offer, and the
