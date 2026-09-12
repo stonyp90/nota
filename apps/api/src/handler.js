@@ -1913,6 +1913,13 @@ function createApp(repo, opts = {}) {
       return json(200, {
         month,
         bids: bids.filter((b) => isLive(b) && b.status !== domain.STATUS.ANNULEE).map(publicBid),
+        // LA JOURNÉE OUVRABLE DU SERVEUR, pour la même raison que le tarif :
+        // le palier d'urgence se calcule sur la date d'ici (America/Toronto),
+        // et un navigateur ailleurs dans le monde calculait le sien sur SA
+        // date. À 22 h à Vancouver, le client lisait « standard » et se faisait
+        // autoriser « rapide » — 149 $ de plus, sans un mot (audit du
+        // 2026-09-12). La première réponse du carnet suffit à les accorder.
+        today: now(),
         // Le carnet est la PREMIÈRE réponse que le navigateur reçoit : le tarif
         // y voyage pour qu'aucune surface n'ait à coder un prix en dur ni à
         // deviner ce que le client paiera en plus de son offre.
@@ -4698,7 +4705,13 @@ function createApp(repo, opts = {}) {
         question: v.texte,
         historique,
         locale,
-      }) : { texte: null, escalade: previousState.escalade, motif: thread.escaladeMotif || null };
+      // SANS assistant configuré, la question part DIRECTEMENT à une personne :
+      // `notifyOperator` le fait déjà plus bas. Ce qui manquait, c'est de le
+      // DIRE au visiteur — la porte répondait `escalade: false`, le fil restait
+      // muet, et la personne qui venait d'écrire ne voyait rien du tout, pas
+      // même « quelqu'un l'a » (audit du 2026-09-12). L'escalade est vraie ici :
+      // il n'y a personne d'autre que l'opérateur pour répondre.
+      }) : { texte: null, escalade: true, motif: thread.escaladeMotif || 'sans_assistant' };
       // Sans assistant configuré, `texte` est nul et le fil reste muet : la
       // messagerie se comporte exactement comme avant l'ADR 0046.
       const preparedReply = reponse.texte

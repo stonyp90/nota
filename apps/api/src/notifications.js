@@ -422,7 +422,14 @@ function createNotifier({ repo, mailer, sms, baseUrl, apiBaseUrl, operatorEmail,
     // tout le reste — résumé, nouvelle demande, campagne — reste suppressible.
     const meta = emails.TEMPLATE_META && emails.TEMPLATE_META[templateKey];
     const transactionnel = !!(meta && meta.transactionnel === true);
-    if (!transactionnel && (await repo.isUnsubscribed(to))) return { sent: false, reason: 'unsubscribed', kind };
+    // Le RETRAIT GLOBAL est celui d'un destinataire qui ne veut plus de courrier
+    // de Nota : il ne peut pas viser une alerte INTERNE. Les douze alertes
+    // opérateur partent vers l'adresse de Nota elle-même ; un clic sur le lien
+    // de désabonnement d'une seule d'entre elles aveuglait toute la maison,
+    // escalade comprise, sans erreur ni trace (audit du 2026-09-12). L'opérateur
+    // garde son vrai interrupteur : la console, gabarit par gabarit.
+    const interne = !!(meta && ['operateur', 'operator', 'admin'].includes(meta.audience));
+    if (!transactionnel && !interne && (await repo.isUnsubscribed(to))) return { sent: false, reason: 'unsubscribed', kind };
     if (repo.getNotificationPreferences && !/MagicLink$/.test(templateKey)) {
       const preferences = await repo.getNotificationPreferences(to);
       if (preferences[templateKey] === false) return { sent: false, reason: 'preference', kind };
@@ -659,7 +666,14 @@ function createNotifier({ repo, mailer, sms, baseUrl, apiBaseUrl, operatorEmail,
     const tier = domain.tierById(bid.tier);
     const facts = demandeFacts(bid);
     for (const n of notaries) {
-      if (!n || !n.email || n.status !== 'active') continue;
+      // MÊME définition d'« actif » que le lot quotidien (repo.listActiveNotaries,
+      // 2026-09-02) : un notaire approuvé par l'opérateur est sur le marché, quoi
+      // que Stripe dise de ses versements. Ici on lisait `status === 'active'`
+      // seul, alors deux chemins réels — brancher Stripe AVANT l'approbation
+      // (statut `onboarding`) et une déconnexion Stripe (`restricted`) — coupaient
+      // l'alerte immédiate sans rien dire, pendant que le résumé du soir partait
+      // (audit du 2026-09-12). Deux portes, une seule définition.
+      if (!n || !n.email || !(n.status === 'active' || n.approuveLe)) continue;
       const alertes = alertesOf(n);
       if (alertes.pace !== 'instant') continue;
       if (alertes.urgentOnly && !(tier && tier.eleve)) continue;

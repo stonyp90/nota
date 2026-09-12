@@ -4,10 +4,13 @@
    WebRTC, MediaRecorder et crypto.subtle sont des interfaces du navigateur : ce
    module n'apporte aucune bibliothèque. Il tient quatre choses, et rien de plus.
 
-     1. LE LIEN. Une connexion pair à pair directe. Le média ne traverse aucun
-        serveur de Nota — il n'y a pas de serveur média à traverser. Ce qui
-        passe par l'API, c'est la signalisation, et elle ne sert à rien sans les
-        clés DTLS des deux navigateurs.
+     1. LE LIEN. Une connexion directe entre les deux navigateurs quand elle
+        est possible, chiffrée de bout en bout : Nota ne peut pas la lire. Quand
+        elle ne l'est pas, un relais fourni par Nota (TURN, voir
+        apps/api/src/salle.js) achemine les paquets — il les transporte sans
+        pouvoir les ouvrir, les clés DTLS ne quittant pas les deux navigateurs.
+        Ce module ne force aucun des deux chemins. Ce qui passe par l'API, c'est
+        la signalisation, et elle ne sert à rien sans ces mêmes clés.
      2. LA CHAÎNE D'AUTHENTIFICATION. Dérivée des DEUX empreintes DTLS par le
         domaine, affichée en grand des deux côtés, lue à voix haute. Un
         intercepteur négocie deux sessions distinctes : il ne peut pas produire
@@ -40,6 +43,14 @@
   // présence.
   var SONDAGE_CONNEXION_MS = 800;
   var SONDAGE_ETABLI_MS = 3000;
+
+  // Le délai au bout duquel une offre restée sans lien est REFAITE. Une offre
+  // n'est pas un acquis : le pair d'en face peut avoir fermé sa page et rouvert
+  // la salle, et il attend alors une offre que ce navigateur croit avoir déjà
+  // faite. Assez long pour laisser le rassemblement ICE et la poignée DTLS
+  // aboutir, assez court pour qu'une personne qui revient ne regarde pas un
+  // écran noir en se demandant quoi faire.
+  var RELANCE_LIEN_MS = 8000;
 
   var deps = {
     fetch: function () { return (typeof fetch === 'function' ? fetch.apply(null, arguments) : Promise.reject(new Error('no fetch'))); },
@@ -128,62 +139,172 @@
     if (!PC) throw new Error('webrtc_indisponible');
     var pc = new PC({ iceServers: ice || [], bundlePolicy: 'max-bundle' });
 
+    // UNE connexion à la fois parle pour la séance. Quand le lien est refait,
+    // l'ancienne agonise encore quelques instants et continue d'émettre :
+    // sans cette garde, son dernier râle (« closed », « failed ») écraserait
+    // l'état de la neuve et la salle se croirait morte au moment même où elle
+    // renaît.
+    var courante = function () { return !!S && S.pc === pc; };
+
     pc.onicecandidate = function (ev) {
-      if (!ev.candidate) return;
+      if (!ev.candidate || !courante()) return;
       appel('/salle/signal', { method: 'POST', body: { type: 'candidat', charge: JSON.stringify(ev.candidate) } });
     };
     pc.ontrack = function (ev) {
+      if (!courante()) return;
       S.fluxDistant = ev.streams && ev.streams[0] ? ev.streams[0] : S.fluxDistant;
       var v = $('salle-video-distant');
       if (v && S.fluxDistant) { v.srcObject = S.fluxDistant; if (v.play) { try { v.play(); } catch (e) { /* autoplay refusé */ } } }
       rendre();
     };
     pc.onconnectionstatechange = function () {
+      if (!courante()) return;
       S.connexion = pc.connectionState;
       // Une connexion qui tombe n'est pas un message : c'est un état. On le
-      // remonte tout de suite plutôt que d'attendre que le silence le dise.
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') envoyerPistes();
+      // remonte tout de suite plutôt que d'attendre que le silence le dise —
+      // et une connexion qui REVIENT se remonte pareillement, sans quoi les
+      // pistes resteraient déclarées mortes après le rétablissement et la
+      // porte de présence ne se rouvrirait jamais. `envoyerPistes` ne parle
+      // que si l'état a vraiment changé.
+      envoyerPistes();
       rendre();
     };
     return pc;
+  }
+
+  // Refaire le lien, pour de bon. Une RTCPeerConnection dont la poignée de main
+  // est morte ne se rattrape pas en lui renvoyant une offre : ses clés DTLS et
+  // ses identifiants ICE sont ceux d'un pair qui n'est plus là. On en construit
+  // une neuve — c'est le geste que la salle bêta d'à côté fait déjà
+  // (`releasePeer`, puis une nouvelle négociation), avec le vocabulaire d'ici.
+  function refaireConnexion() {
+    var ancienne = S.pc;
+    S.candidatsEnAttente = [];
+    S.empreintePubliee = null;
+    S.empreinteDistante = null;
+    S.offreA = 0;
+    S.offreN = 0;
+    S.connexion = 'new';
+    S.fluxDistant = null;
+    S.pc = creerConnexion(S.ice);
+    if (S.fluxLocal && S.fluxLocal.getTracks) {
+      S.fluxLocal.getTracks().forEach(function (t) { S.pc.addTrack(t, S.fluxLocal); });
+    }
+    if (ancienne) { try { ancienne.close(); } catch (e) { /* déjà fermée */ } }
+    var v = $('salle-video-distant');
+    if (v) v.srcObject = null;
+    // Le lien reparti de zéro vaut ce que vaut une séance qui s'ouvre : les
+    // pistes redeviennent déclarables, et la porte de présence peut rouvrir.
+    envoyerPistes();
+    rendre();
+    return S.pc;
   }
 
   // Le notaire offre, le client répond. Un rôle fixe évite la collision de deux
   // offres simultanées (« glare ») sans négociation parfaite : c'est le notaire
   // qui conduit la séance, il conduit aussi la négociation.
   function offrir() {
-    if (S.partie !== 'notaire' || S.offreFaite) return Promise.resolve();
-    S.offreFaite = true;
-    return S.pc.createOffer()
-      .then(function (offre) { return S.pc.setLocalDescription(offre); })
+    if (S.partie !== 'notaire') return Promise.resolve();
+    var pc = S.pc;
+    // L'heure de la tentative, pas un verrou. `offreFaite` était un booléen à
+    // sens unique : une fois posé, plus jamais d'offre, et un client qui
+    // revenait attendait indéfiniment celle que le notaire ne referait pas.
+    S.offreA = deps.now();
+    return pc.createOffer()
+      .then(function (offre) { return pc.setLocalDescription(offre); })
+      // L'empreinte AVANT l'offre, et attendue : le pair d'en face se sert de
+      // celle que le serveur détient pour reconnaître l'offre COURANTE. Postée
+      // après, elle laisserait passer une offre périmée pour la bonne.
+      .then(function () { return publierEmpreinte(); })
       .then(function () {
-        publierEmpreinte();
-        return appel('/salle/signal', { method: 'POST', body: { type: 'offre', charge: JSON.stringify(S.pc.localDescription) } });
+        // La séance a pu être quittée pendant la négociation : `S` n'existe
+        // alors plus, et rien de ce qui suit n'a de destinataire.
+        if (!S || S.pc !== pc) return null;
+        return appel('/salle/signal', { method: 'POST', body: { type: 'offre', charge: JSON.stringify(pc.localDescription) } })
+          .then(function (r) { if (r && r.ok && r.body && r.body.n) S.offreN = r.body.n; return r; });
       });
   }
 
+  // Le lien tient-il, et sinon, depuis assez longtemps pour qu'on le refasse ?
+  // Appelé à chaque sondage : c'est une vérification, pas un événement, parce
+  // que ce qui casse un lien ne s'annonce pas.
+  function assurerLien() {
+    if (S.partie !== 'notaire' || !S.pc) return Promise.resolve();
+    var enRoute = (S.connexion === 'connected' || S.connexion === 'connecting') && !lienDementi();
+    if (enRoute) return Promise.resolve();
+    if (!S.offreA) return offrir();
+    if ((deps.now() - S.offreA) < RELANCE_LIEN_MS) return Promise.resolve();
+    refaireConnexion();
+    return offrir();
+  }
+
+  // Le SERVEUR voit ce que la connexion locale met une demi-minute à admettre.
+  // RTCPeerConnection reste « connected » longtemps après que le pair a fermé
+  // sa page — la fraîcheur du consentement ICE expire lentement — alors que la
+  // séance, elle, est déjà suspendue. Quand la séance est suspendue, que NOS
+  // pistes vivent et que l'autre déclare les siennes vivantes, ce n'est ni sa
+  // caméra ni la nôtre : c'est le lien, et il est à refaire.
+  function lienDementi() {
+    var s = S && S.salle;
+    if (!s || s.statut !== 'suspendue') return false;
+    var mien = pistesVivantes();
+    if (!mien.video || !mien.audio) return false;
+    var autre = (s.parties && s.parties[S.partie === 'notaire' ? 'client' : 'notaire']) || {};
+    var pistes = autre.pistes || {};
+    return pistes.video === true && pistes.audio === true;
+  }
+
   function repondre(offre) {
-    return S.pc.setRemoteDescription(offre)
-      .then(function () { return S.pc.createAnswer(); })
-      .then(function (reponse) { return S.pc.setLocalDescription(reponse); })
+    // Une offre qui ne porte pas l'empreinte de celle à laquelle on a déjà
+    // répondu est une NOUVELLE négociation : le pair a refait sa connexion,
+    // avec d'autres clés. On refait la nôtre plutôt que de recoller sa poignée
+    // de main neuve sur une connexion qui a fini de mourir.
+    var empreinte = empreinteDe(offre && offre.sdp);
+    if (S.empreinteDistante && empreinte && !memeEmpreinte(S.empreinteDistante, empreinte)) refaireConnexion();
+    S.empreinteDistante = empreinte;
+    var pc = S.pc;
+    return pc.setRemoteDescription(offre)
+      .then(viderCandidatsEnAttente)
+      .then(function () { return pc.createAnswer(); })
+      .then(function (reponse) { return pc.setLocalDescription(reponse); })
+      .then(function () { return publierEmpreinte(); })
       .then(function () {
-        publierEmpreinte();
-        return appel('/salle/signal', { method: 'POST', body: { type: 'reponse', charge: JSON.stringify(S.pc.localDescription) } });
+        if (!S || S.pc !== pc) return null;
+        return appel('/salle/signal', { method: 'POST', body: { type: 'reponse', charge: JSON.stringify(pc.localDescription) } });
       });
   }
 
   function publierEmpreinte() {
+    if (!S || !S.pc) return Promise.resolve();
     var e = empreinteDe(S.pc.localDescription && S.pc.localDescription.sdp);
-    if (!e || e === S.empreintePubliee) return;
+    if (!e || e === S.empreintePubliee) return Promise.resolve();
     S.empreintePubliee = e;
-    appel('/salle/rejoindre', { method: 'POST', body: { empreinte: e } });
+    return appel('/salle/rejoindre', { method: 'POST', body: { empreinte: e } });
+  }
+
+  function memeEmpreinte(a, b) {
+    return String(a || '').trim().toUpperCase() === String(b || '').trim().toUpperCase();
   }
 
   function recevoirSignal(signal) {
     var charge;
     try { charge = JSON.parse(signal.charge); } catch (e) { return Promise.resolve(); }
-    if (signal.type === 'offre') return repondre(charge).catch(function () {});
+    if (signal.type === 'offre') {
+      // Une offre PÉRIMÉE traîne dans la file quand on rouvre la salle : la
+      // signalisation survit à la page qui l'attendait. Y répondre renverrait
+      // une réponse que le notaire ne peut plus appliquer, et les deux
+      // resteraient à s'attendre. L'empreinte que le serveur détient est celle
+      // de la négociation courante — elle y est déposée avant l'offre — donc
+      // une offre qui ne la porte pas n'est plus d'actualité.
+      var attendue = S.salle && S.salle.lien && S.salle.lien.empreinteNotaire;
+      var portee = empreinteDe(charge && charge.sdp);
+      if (attendue && portee && !memeEmpreinte(attendue, portee)) return Promise.resolve();
+      return repondre(charge).catch(function () {});
+    }
     if (signal.type === 'reponse') {
+      // Une réponse à une offre qu'on a déjà remplacée arrive après coup, dans
+      // l'ordre où elle a été déposée : son rang la trahit.
+      if (S.offreN && signal.n && signal.n < S.offreN) return Promise.resolve();
       return S.pc.setRemoteDescription(charge).then(viderCandidatsEnAttente).catch(function () {});
     }
     if (signal.type === 'candidat') {
@@ -205,7 +326,11 @@
   // ---------------------------------------------------------------------------
   // Les pistes, et le battement de présence
   // ---------------------------------------------------------------------------
-  function etatPistes() {
+  // Ce que la caméra et le micro de CE navigateur font, et rien d'autre. La
+  // question « le lien tient-il ? » est une autre question, et les confondre
+  // est ce qui faisait dire au notaire que sa propre caméra avait lâché quand
+  // c'était la page d'en face qui s'était fermée.
+  function pistesVivantes() {
     var flux = S.fluxLocal;
     if (!flux || !flux.getTracks) return { video: false, audio: false };
     var vivante = function (kind) {
@@ -213,10 +338,17 @@
         return t.kind === kind && t.enabled !== false && t.muted !== true && t.readyState !== 'ended';
       });
     };
+    return { video: vivante('video'), audio: vivante('audio') };
+  }
+
+  function etatPistes() {
+    var p = pistesVivantes();
     // Une connexion tombée rend les pistes inutiles, quelle que soit la caméra :
-    // le notaire ne voit plus rien.
+    // le notaire ne voit plus rien. Ce que le serveur en conclut est à lui —
+    // le domaine croise cette déclaration avec le silence de chaque pair avant
+    // de nommer une cause.
     var lien = S.connexion !== 'failed' && S.connexion !== 'closed';
-    return { video: lien && vivante('video'), audio: lien && vivante('audio') };
+    return { video: lien && p.video, audio: lien && p.audio };
   }
 
   function envoyerPistes() {
@@ -240,7 +372,9 @@
         suite.then(function () {
           // Le notaire n'offre qu'une fois le client dans la salle : offrir
           // dans le vide fait expirer les candidats avant que personne n'écoute.
-          if (S && S.salle && S.salle.parties && S.salle.parties.client.authentifie && S.salle.parties.notaire.authentifie) offrir();
+          // Et il REVÉRIFIE à chaque sondage, parce qu'un lien qui tombe ne
+          // prévient pas et qu'un pair qui revient n'a rien d'autre à attendre.
+          if (S && S.salle && S.salle.parties && S.salle.parties.client.authentifie && S.salle.parties.notaire.authentifie) assurerLien();
         });
       }
       planifier();
@@ -529,7 +663,11 @@
       id: o.id, dateISO: o.dateISO, partie: o.partie, jeton: o.token,
       mode: o.mode || 'strict', demonstration: o.demonstration !== false,
       salle: null, pc: null, fluxLocal: null, fluxDistant: null,
-      curseur: 0, connexion: 'new', candidatsEnAttente: [], offreFaite: false,
+      curseur: 0, connexion: 'new', candidatsEnAttente: [],
+      // L'heure de la dernière offre et son rang dans la signalisation, plus
+      // l'empreinte du pair : de quoi refaire un lien, et reconnaître ce qui
+      // appartient à la négociation courante.
+      offreA: 0, offreN: 0, empreinteDistante: null,
       empreintePubliee: null, dernieresPistes: null, minuterie: null,
       enregistreur: null, cleEnregistrement: null, morceaux: [],
     };
@@ -627,8 +765,14 @@
     empreinteDe: empreinteDe,
     etapeSuivante: etapeSuivante,
     etapePrecedente: etapePrecedente,
+    // Le lien se refait tout seul, au sondage. Les deux gestes sont exposés
+    // parce qu'un test doit pouvoir provoquer la relance sans attendre huit
+    // secondes de vrai temps, et vérifier qu'une offre repart.
+    assurerLien: function () { return S ? assurerLien() : Promise.resolve(); },
+    refaireConnexion: function () { return S ? refaireConnexion() : null; },
     SONDAGE_CONNEXION_MS: SONDAGE_CONNEXION_MS,
     SONDAGE_ETABLI_MS: SONDAGE_ETABLI_MS,
+    RELANCE_LIEN_MS: RELANCE_LIEN_MS,
     // Remplaçables par les tests : jsdom n'a ni caméra ni RTCPeerConnection.
     __deps: deps,
   };

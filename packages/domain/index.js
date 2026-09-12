@@ -5670,7 +5670,11 @@
       nom: 'Bout en bout, sans enregistrement',
       nomEn: 'End-to-end, no recording',
       enregistre: false,
-      aide: 'Le lien vidéo est chiffré entre vous deux seulement. Rien n’est enregistré : la preuve de la séance est le procès-verbal scellé.',
+      // « Entre vous deux seulement » était faux : quand la connexion directe
+      // est impossible, un relais fourni par Nota achemine les paquets. Il ne
+      // peut pas les lire — les clés DTLS ne quittent pas les deux
+      // navigateurs — mais il est sur le chemin, et la phrase doit le dire.
+      aide: 'Le lien vidéo est chiffré de bout en bout : Nota ne peut pas le lire, et un relais fourni par Nota peut l’acheminer lorsque la connexion directe est impossible. Rien n’est enregistré : la preuve de la séance est le procès-verbal scellé.',
     },
     {
       id: 'temoin',
@@ -5703,6 +5707,13 @@
   // Une coupure plus courte que ceci est un hoquet de réseau ; plus longue, le
   // notaire n'a plus vu ni entendu la personne et la séance se suspend.
   const PRESENCE_TOLERANCE_MS = 10000;
+
+  // Au-delà de ce silence, un pair n'est plus là — qu'il l'ait dit ou non. Deux
+  // fois la tolérance : un sondage manqué est normal, deux ne le sont pas.
+  // C'est le seuil que l'observateur de l'API applique déjà pour dater une
+  // coupure ; il est ici pour que le domaine puisse NOMMER ce qui s'est passé
+  // au lieu d'accuser la caméra de celui qui lit l'écran.
+  const PRESENCE_SILENCE_MS = PRESENCE_TOLERANCE_MS * 2;
 
   const SALLE_PARTIES = Object.freeze(['notaire', 'client']);
 
@@ -5862,6 +5873,34 @@
 
   function presenceEtat(salle, nowMs) {
     const parties = salle.parties && typeof salle.parties === 'object' ? salle.parties : {};
+
+    // 1. QUI N'EST PLUS LÀ. Cette cause prime, parce qu'elle explique les
+    //    autres : quand une page se ferme, le navigateur d'en face voit son
+    //    lien tomber et déclare ses PROPRES pistes mortes. Nommer alors la
+    //    caméra de celui qui lit l'écran, c'est lui faire débrancher un
+    //    appareil qui marche pendant que l'autre attend qu'on le rappelle. Le
+    //    fait observable, c'est le silence, et l'heure du dernier signe de vie
+    //    est dans la séance.
+    for (const p of SALLE_PARTIES) {
+      const vuLe = parties[p] && parties[p].vuLe;
+      if (Number.isFinite(vuLe) && (nowMs - vuLe) > PRESENCE_SILENCE_MS) {
+        return porteFermee('pair_absent', p === 'notaire'
+          ? 'Le notaire a quitté la séance ou a perdu sa connexion.'
+          : 'Le client a quitté la séance ou a perdu sa connexion.');
+      }
+    }
+
+    // 2. LES DEUX À LA FOIS. Deux caméras ne lâchent pas à la même seconde :
+    //    ce qui lâche entre elles, c'est le lien.
+    const muettes = SALLE_PARTIES.filter((p) => {
+      const pistes = (parties[p] && parties[p].pistes) || {};
+      return pistes.video !== true || pistes.audio !== true;
+    });
+    if (muettes.length === SALLE_PARTIES.length) {
+      return porteFermee('lien_perdu', 'Le lien vidéo entre les deux navigateurs est perdu. Aucune des deux parties ne reçoit plus l’autre.');
+    }
+
+    // 3. UNE SEULE, et elle est présente : c'est bien son matériel.
     for (const p of SALLE_PARTIES) {
       const pistes = (parties[p] && parties[p].pistes) || {};
       if (pistes.video !== true) {

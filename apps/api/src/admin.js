@@ -106,11 +106,52 @@ const ADMIN_CUSTOMIZATION = Object.freeze([
   ['notaires', 'Activation des notaires après vérification', 'Notary activation after verification', 'operational', 'moderation:write'],
 ]);
 
-function featureSnapshot() {
+// CE DONT CHAQUE FONCTIONNALITÉ DÉPEND, dehors. Une fonctionnalité qui n'a
+// besoin de rien est livrée : son code tourne. Les autres attendent un
+// interrupteur, une clé ou un seau, et tant qu'il manque, elles ne font RIEN —
+// silencieusement. L'inventaire affichait « actif » sur les trente et une, y
+// compris sur Stripe pendant que la section Paiements, deux portes plus loin,
+// disait « Inactif · clé manquante » (audit du 2026-09-12). Une pastille verte
+// qui ment sur l'état de la production est pire qu'aucune pastille.
+const FEATURE_DEPENDENCIES = Object.freeze({
+  'stripe-checkout': ['NOTA_STRIPE_SECRET_CONFIGURED', 'NOTA_STRIPE_WEBHOOK_CONFIGURED'],
+  'stripe-connect': ['NOTA_STRIPE_SECRET_CONFIGURED'],
+  'stripe-webhooks': ['NOTA_STRIPE_WEBHOOK_CONFIGURED'],
+  cancellation: ['NOTA_STRIPE_SECRET_CONFIGURED'],
+  'signing-beta': ['NOTA_SIGNING_BETA_ENABLED'],
+  'messages-documents': ['NOTA_DOCS_BUCKET'],
+  s3: ['NOTA_DOCS_BUCKET'],
+  ses: ['NOTA_FROM_EMAIL'],
+  support: ['NOTA_ASSISTANT_API_KEY|NOTA_ASSISTANT_KEY_PARAM'],
+  'financing-ai': ['NOTA_FINANCING_AI_ENABLED'],
+  'act-ai': ['NOTA_ACT_AI_ENABLED'],
+  outlook: ['NOTA_OUTLOOK_CLIENT_ID'],
+  oauth: ['NOTA_OAUTH_ENCRYPTION_KEY'],
+});
+
+// Un interrupteur est « posé » s'il vaut 'true' (drapeau) ou s'il porte une
+// valeur non vide (clé, seau, paramètre). `A|B` : l'un ou l'autre suffit.
+function switchOn(env, name) {
+  return name.split('|').some((one) => {
+    const value = String((env || {})[one] == null ? '' : (env || {})[one]).trim();
+    if (!value) return false;
+    return value !== 'false' && value !== '0';
+  });
+}
+
+function featureStatus(env, id) {
+  const needs = FEATURE_DEPENDENCIES[id];
+  if (!needs) return { statut: 'actif', statutEn: 'active', manquant: [] };
+  const manquant = needs.filter((name) => !switchOn(env, name));
+  if (!manquant.length) return { statut: 'actif', statutEn: 'active', manquant: [] };
+  return { statut: 'en attente', statutEn: 'waiting', manquant };
+}
+
+function featureSnapshot(env = process.env) {
   return {
     groupes: ADMIN_FEATURES.map((group) => ({
       id: group.id, nom: group.nom, nomEn: group.nomEn,
-      fonctionnalites: group.features.map(([id, nom, nomEn]) => ({ id, nom, nomEn, statut: 'actif', statutEn: 'active' })),
+      fonctionnalites: group.features.map(([id, nom, nomEn]) => ({ id, nom, nomEn, ...featureStatus(env, id) })),
     })),
     personnalisations: ADMIN_CUSTOMIZATION.map(([id, nom, nomEn, mode, permission]) => ({ id, nom, nomEn, mode, permission })),
   };
@@ -147,6 +188,10 @@ function createAdmin({
   now, // () => ISO datetime string (audit timestamps)
   nowMs, // () => epoch ms (token + session windows)
   config = {},
+  // L'environnement DE CE DÉPLOIEMENT : l'inventaire des fonctionnalités y lit
+  // quels interrupteurs sont réellement posés. Injectable pour qu'un test
+  // puisse décrire une production incomplète sans toucher process.env.
+  env = process.env,
 } = {}) {
   if (!repo) throw new Error('createAdmin: repo is required');
 
@@ -1305,7 +1350,9 @@ function createAdmin({
     if (!rbac.can(p.permissions, 'analytics:read')) {
       return refuserAcces(p, { porte: 'getFeatures', permission: 'analytics:read', ip, message: 'Lecture de l’inventaire des fonctionnalités non autorisée.' });
     }
-    return { ok: true, ...featureSnapshot() };
+    // L'inventaire lit l'environnement DE CE DÉPLOIEMENT : la même console
+    // qui dit « Stripe inactif » dans Paiements ne peut plus dire « actif » ici.
+    return { ok: true, ...featureSnapshot(env) };
   }
 
   const GROUP_ID = /^[a-z0-9][a-z0-9_-]{0,39}$/;

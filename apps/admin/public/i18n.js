@@ -177,6 +177,9 @@
     "Trouver une section": "Find a section",
     "Rechercher une section": "Search sections",
     "Changer de section": "Change section",
+    "en attente": "waiting",
+    "type d’événement suivi": "tracked event type",
+    "types d’événement suivi": "tracked event types",
     "Accès refusé": "Access denied",
     "Aucune section trouvée. Effacez la recherche pour tout afficher.": "No sections found. Clear your search to show all sections.",
 

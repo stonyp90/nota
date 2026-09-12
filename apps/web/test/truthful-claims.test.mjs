@@ -748,3 +748,159 @@ test('the two replacements say where the evaluation really goes, and are transla
       'French left in the English: ' + en);
   }
 });
+
+// ---------------------------------------------------------------------------
+// Audit du 2026-09-12 — la salle de signature, de bout en bout.
+//
+// Deux affirmations de la salle ne tenaient pas devant le code qui part en
+// production :
+//
+//  4. LES CERTIFICATIONS SE CONTREDISAIENT SUR LA MÊME PAGE. La carte 02 de la
+//     bêta annonçait « des contrôles alignés sur les référentiels SOC 2 et
+//     ISO 27001 » pendant que la section « Sécurité et conformité », dix
+//     écrans plus haut, dit que la démarche est EN PRÉPARATION, cible 1er
+//     trimestre 2027. Aligné sur un référentiel n'est pas certifié — mais un
+//     lecteur qui n'ouvre qu'une des deux cartes lit une certification.
+//  5. « ENTRE VOUS DEUX » N'EST PAS VRAI EN PRODUCTION POUR LA SALLE BÊTA.
+//     signature.js force `iceTransportPolicy: 'relay'` dès que le TURN est
+//     configuré : le média TRANSITE par un relais fourni par Nota. Il reste
+//     chiffré de bout en bout et Nota ne peut pas le lire — mais « pair à
+//     pair », « Nota n'est pas sur le chemin du média » et « aucun serveur »
+//     sont faux tels qu'écrits. La salle de l'ADR 0047 (salle.js), elle, ne
+//     force rien : elle prend le chemin direct quand il existe, d'où « PEUT
+//     acheminer » et jamais « achemine toujours ».
+//
+// Les deux directions sont verrouillées ici : l'ancienne formulation ne peut
+// pas revenir, et la nouvelle doit dire la chose vraie.
+// ---------------------------------------------------------------------------
+
+const SALLE_SRC = readFileSync(fileURLToPath(new URL('../public/salle.js', import.meta.url)), 'utf8');
+const SIGNATURE_SRC = readFileSync(fileURLToPath(new URL('../public/signature.js', import.meta.url)), 'utf8');
+
+// 4. Certifications ---------------------------------------------------------
+
+const FRAMEWORK = /SOC ?2|ISO\/IEC 27001|ISO ?27001/i;
+// Ce qui rend une mention honnête : elle dit que la démarche est en cours, ou
+// que le contrôle est seulement CALQUÉ sur le référentiel.
+const NOT_HELD = /préparons|en préparation|cible|1er trimestre 2027|Q1 2027|calqué|modelled|modeled|n’est obtenue|ne sont pas obtenues|not been obtained|Types? I et II|Type I and Type II/i;
+
+test('the page’s own statement of record: SOC 2 and ISO 27001 are NOT obtained', () => {
+  // Prémisse. Si la démarche aboutit un jour, ce test tombe ici — et c'est
+  // exactement là qu'il faut relire toutes les autres surfaces.
+  const compliance = FLAT(staticDoc().getElementById('securite-conformite').textContent);
+  assert.match(compliance, /Nous préparons actuellement notre démarche vers SOC 2 et ISO\/IEC 27001/, compliance.slice(0, 240));
+  assert.match(compliance, /Notre cible est le 1er trimestre 2027/, compliance.slice(0, 240));
+  assert.match(compliance, /En préparation/, compliance.slice(0, 240));
+});
+
+test('no surface claims a certification the page elsewhere says is not held', () => {
+  const doc = staticDoc();
+  const walker = doc.createTreeWalker(doc.body, doc.defaultView.NodeFilter.SHOW_TEXT);
+  let node;
+  let vus = 0;
+  while ((node = walker.nextNode())) {
+    const txt = FLAT(node.textContent).trim();
+    // Les vignettes de la grille (« SOC 2 », « ISO/IEC 27001 », « Types I et
+    // II ») sont des étiquettes, pas des affirmations : c'est la phrase qui
+    // ment, jamais le nom du référentiel seul.
+    if (txt.length < 40 || !FRAMEWORK.test(txt)) continue;
+    vus++;
+    assert.match(txt, NOT_HELD,
+      'une phrase nomme un référentiel sans dire que la certification n’est pas obtenue : ' + txt);
+    // Le NOM « certification » est permis — c'est ainsi qu'on dit qu'on ne l'a
+    // pas. C'est l'ADJECTIF, lui, qui affirme la détenir.
+    assert.ok(!/\bcertifi(é|ée|és|ées)(?![\w’-])|\bcertified\b|\battesté|\baccrédit|\baccredited\b/i.test(txt),
+      'une surface se dit certifiée : ' + txt);
+  }
+  assert.ok(vus >= 2, 'les phrases de conformité ont disparu de index.html — ' + vus + ' trouvée(s)');
+
+  // L'anglais dit la même chose, et la formulation retirée ne revient nulle part.
+  for (const [label, src] of [['index.html', HTML_SRC], ['app.js', APP_SRC], ['i18n.js', I18N_SRC]]) {
+    assert.ok(!/contrôles alignés sur les référentiels SOC 2 et ISO 27001/.test(src),
+      label + ' porte encore « contrôles alignés sur les référentiels SOC 2 et ISO 27001 »');
+    assert.ok(!/controls aligned with the SOC 2 and ISO 27001/i.test(src),
+      label + ' still carries the English « controls aligned with the SOC 2 and ISO 27001 »');
+  }
+  for (const [, en] of Object.entries(I18N.dictionaries().text)) {
+    if (typeof en !== 'string' || en.length < 40 || !FRAMEWORK.test(en)) continue;
+    assert.match(en, NOT_HELD, 'an English entry names a framework without the caveat: ' + en);
+  }
+});
+
+test('the corrected certification sentence says both halves, in both languages', () => {
+  const carte = FLAT(staticDoc().getElementById('beta-security-title')
+    .closest('section').textContent);
+  assert.match(carte, /calqués sur les référentiels SOC 2 et ISO 27001/, carte);
+  assert.match(carte, /Ni l’une ni l’autre certification n’est obtenue/, carte);
+  assert.match(carte, /1er trimestre 2027/, 'la carte reprend la cible de la section conformité : ' + carte);
+
+  I18N.force('en');
+  const fr = 'Les éléments de séance et les documents de la bêta sont conservés sur une infrastructure canadienne, avec des contrôles calqués sur les référentiels SOC 2 et ISO 27001. Ni l’une ni l’autre certification n’est obtenue : notre cible est le 1er trimestre 2027.';
+  assert.ok(HTML_SRC.includes(fr), 'index.html ne porte plus la phrase corrigée');
+  assert.ok(I18N.covered(fr), 'aucune entrée anglaise pour la phrase corrigée');
+  const en = I18N.tEn(fr);
+  assert.match(en, /modelled on the SOC 2 and ISO 27001 frameworks/, en);
+  assert.match(en, /Neither certification has been obtained/, en);
+  assert.ok(!/[àâçèéêëîïôùû]|\bcalqué|\bobtenue\b/i.test(en), 'French left in the English: ' + en);
+});
+
+// 5. Le chemin du média -----------------------------------------------------
+
+test('the beta room really can put a Nota relay on the media path — the copy is written for that fact', () => {
+  // Prémisse 1 : la salle BÊTA force le relais dès que le TURN est configuré.
+  assert.match(SIGNATURE_SRC, /iceTransportPolicy\s*:\s*[^,]*turnConfigured[^,]*['"]relay['"]/,
+    'signature.js ne force plus le relais — relire la copie « un relais PEUT acheminer »');
+  // Prémisse 2 : la salle de l'ADR 0047 ne force rien — chemin direct quand il
+  // existe. C'est ce qui interdit d'écrire « le relais achemine TOUJOURS ».
+  assert.ok(!/iceTransportPolicy/.test(SALLE_SRC),
+    'salle.js force désormais un chemin : la copie doit cesser de dire « peut »');
+  assert.match(SALLE_SRC, /new PC\(\{\s*iceServers/, 'salle.js ne construit plus sa connexion avec des iceServers');
+});
+
+test('no surface claims the media is peer to peer or that no Nota server is on its path', () => {
+  const ABSOLUS = [
+    [/pair à pair/i, 'affirme un chemin pair à pair'],
+    [/peer[- ]to[- ]peer/i, 'claims a peer-to-peer media path'],
+    [/n’est pas sur le chemin du média|pas sur le chemin du média/i, 'affirme que Nota n’est pas sur le chemin du média'],
+    [/not on the media path/i, 'claims Nota is not on the media path'],
+    [/ne traverse aucun serveur|aucun serveur de Nota/i, 'affirme qu’aucun serveur de Nota n’est traversé'],
+    [/never (reaches|touches|passes through) (a |any )?(Nota )?server/i, 'claims the media never reaches a server'],
+    [/face-à-face vidéo chiffré entre vous deux seulement/i, 'affirme un face-à-face « entre vous deux seulement »'],
+    [/video meeting between the two of you alone/i, 'claims a meeting « between the two of you alone »'],
+  ];
+  for (const [label, src] of [['index.html', HTML_SRC], ['i18n.js', I18N_SRC]]) {
+    for (const [re, quoi] of ABSOLUS) {
+      assert.ok(!re.test(src), label + ' ' + quoi + ' — le relais de la salle bêta le dément (' + re + ')');
+    }
+  }
+});
+
+test('the media claims that remain say the exact thing: end to end, unreadable by Nota, a relay MAY carry it', () => {
+  I18N.force('en');
+  const CORRIGEES = [
+    // La carte 01 de la bêta — la seule surface de index.html qui décrit le média.
+    ['La salle de bêta utilise une communication vidéo propriétaire sur une infrastructure canadienne. Le son et l’image sont chiffrés de bout en bout : Nota ne peut pas les lire, et un relais fourni par Nota peut les acheminer lorsque la connexion directe est impossible. La caméra et le micro restent inactifs jusqu’à votre accord.',
+      /encrypted end to end/, /Nota cannot read them/, /may carry them when a direct connection is impossible/],
+    // Les deux entrées de l'annonce « salle de signature » du dictionnaire.
+    ['Un face-à-face vidéo chiffré de bout en bout : Nota ne peut pas le lire, et un relais fourni par Nota peut l’acheminer lorsque la connexion directe est impossible. Le notaire vous identifie, vous lit l’acte, répond à vos questions, puis libère la signature. Chaque instant de la séance entre dans un procès-verbal scellé dont vous repartez avec une copie.',
+      /encrypted end to end/, /Nota cannot read it/, /may carry it when a direct connection is impossible/],
+    ['Vous conduisez la séance : identité, lecture, questions, signature. Le lien vidéo est chiffré de bout en bout — Nota ne peut pas l’écouter, même lorsqu’un relais fourni par Nota l’achemine faute de connexion directe.',
+      /encrypted end to end/, /Nota cannot listen in/, /relay provided by Nota/],
+  ];
+  for (const [fr, ...attendus] of CORRIGEES) {
+    // Le français dit les trois choses.
+    assert.match(fr, /chiffrés? de bout en bout/, fr);
+    assert.match(fr, /Nota ne peut pas (les lire|le lire|l’écouter)/, fr);
+    assert.match(fr, /relais fourni par Nota/, fr);
+    // …et jamais l'inverse : le relais n'est pas promis à tous les coups.
+    assert.ok(!/toujours acheminé|passe toujours par un relais/.test(fr), 'le relais est présenté comme systématique : ' + fr);
+    // L'anglais aussi, vivant.
+    assert.ok(I18N.covered(fr), 'aucune entrée anglaise pour : ' + fr.slice(0, 80));
+    const en = I18N.tEn(fr);
+    assert.notEqual(en, fr, 'identity — la phrase atteint un lecteur anglais en français : ' + fr.slice(0, 80));
+    for (const re of attendus) assert.match(en, re, en);
+    assert.ok(!/[àâçèéêëîïôùû]|\brelais\b|\bbout en bout\b/i.test(en), 'French left in the English: ' + en);
+  }
+  // Et la carte 01 est bien celle que la page affiche.
+  assert.ok(HTML_SRC.includes(CORRIGEES[0][0]), 'index.html ne porte plus la phrase corrigée de la carte 01');
+});

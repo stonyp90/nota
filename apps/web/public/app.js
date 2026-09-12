@@ -67,7 +67,22 @@
   // LOCAL calendar date (Québec), not the UTC slice — otherwise every evening in
   // UTC-4/-5 "today" would roll to tomorrow, mis-marking is-today and blocking the
   // current local day. Display formatters keep timeZone:'UTC' on the ISO date.
-  var todayISO = function () { var d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  var localISO = function () { var d = new Date(); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+  // ... and the server's own business day wins as soon as it answers. The tier
+  // that prices a date is decided in America/Toronto (domain.businessDay); a
+  // browser elsewhere computed it on ITS date, so at 22:00 in Vancouver the
+  // client read « standard » and was authorized « rapide » — 149 $ more,
+  // silently (audit du 2026-09-12). The carnet's first reply carries `today`;
+  // until it lands, the local date is the best guess available.
+  var serverToday = null;
+  var todayISO = function () { return serverToday || localISO(); };
+  function adoptServerToday(iso) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(iso || '')) || iso === serverToday) return false;
+    var first = serverToday === null;
+    serverToday = iso;
+    // A first adoption that agrees with this browser changes nothing to repaint.
+    return !(first && iso === localISO());
+  }
 
   // ---------------------------------------------------------------------------
   // store shim. Interface: listMonth(month) -> [bid]; createBid(payload) -> res.
@@ -138,6 +153,10 @@
           // peut se calculer, et il vaut mieux ne rien afficher qu'un prix
           // inventé (art. 68 C.déont.).
           if (j.tarif && j.tarif.grille && j.tarif.grille.services) this.tarif = j.tarif;
+          // The server's business day, adopted before the month is rendered:
+          // everything below (is-today, the tier of a date, what may still be
+          // booked) then reads the same clock the money reads.
+          adoptServerToday(j.today);
           return j.bids || [];
         }
       } catch (e) { /* offline */ }
@@ -275,7 +294,23 @@
     var m = D.tierMultiplier(tierId, state.monthBids, svc && svc.id);
     return Math.round((svc && svc.prixDepart || 0) * (m || 1));
   }
-  function tierFromLabel(tierId, svc) { return 'dès ' + D.money(tierAmount(tierId, svc)); }
+  // LE TOTAL, jamais la moitié. Un « dès X $ » sur une case du calendrier ou
+  // dans la légende est un PRIX ANNONCÉ : la LPC art. 224 c) et la Loi sur la
+  // concurrence art. 74.01 (1.1) veulent le total que le client paiera, et
+  // l'ADR 0042 le redit dans nos mots. Cette étiquette ne portait que les
+  // honoraires du notaire : la légende disait « Standard — dès 2 000 $ » quand
+  // la ligne du pouls, pour le même acte, disait « à partir de 2 279 $ » et le
+  // devis 2 828 $ (audit du 2026-09-12). Le prix de Nota pour ce service ET la
+  // garantie de date de CE palier s'ajoutent ici, par la même fonction du
+  // domaine que le devis — jamais une seconde formule.
+  function tierTotalAmount(tierId, svc) {
+    svc = svc || carnetService();
+    var honoraires = tierAmount(tierId, svc);
+    var t = store.tarif;
+    var prix = D.prixNota(svc && svc.id, tierId, t && t.grille ? t.grille : null);
+    return honoraires + Math.round(prix.totalCents) / 100;
+  }
+  function tierFromLabel(tierId, svc) { return 'dès ' + D.money(tierTotalAmount(tierId, svc)); }
   // ---------------------------------------------------------------------------
   // Demonstration data — declared, never disguised
   // ---------------------------------------------------------------------------
@@ -5733,7 +5768,9 @@
       var v = D.validateTelephone(inp.value);
       clear(prev);
       if (!v.ok) { prev.dataset.state = 'warn'; prev.textContent = v.error.message; }
-      else if (v.value) { prev.dataset.state = 'ok'; prev.textContent = 'Le notaire qui vous retient pourra vous appeler.'; }
+      // Par T() : écrite droit dans textContent, cette phrase restait en
+      // français en mode anglais (audit du 2026-09-12).
+      else if (v.value) { prev.dataset.state = 'ok'; prev.textContent = T('Le notaire qui vous retient pourra vous appeler.'); }
       else prev.removeAttribute('data-state');
     }
     validateOfferUI();
@@ -6169,6 +6206,29 @@
     return link;
   }
 
+  // CE QUE LE CLIENT A PAYÉ, une fois l'acte réglé. L'API l'envoyait déjà
+  // (`acte`, ADR 0028/0031 : « la transparence va dans les deux sens ») et
+  // AUCUNE surface ne le lisait — le notaire avait son relevé, le client qui
+  // venait de payer ne pouvait lire le chiffre nulle part (audit 2026-09-12).
+  // Deux lignes et un total, jamais un partage : les honoraires reviennent au
+  // notaire en entier, le prix de Nota est à côté (art. 32 C.déont.).
+  function acteRecu(acte) {
+    var box = el('div', 'my-offer-receipt');
+    box.appendChild(el('div', 'my-offer-receipt-h', 'Ce que vous avez payé'));
+    var list = el('dl', 'my-offer-receipt-lines');
+    function ligne(label, montant, cls) {
+      var k = el('dt', cls || null, label);
+      var v = el('dd', cls || null, D.money(montant));
+      list.appendChild(k); list.appendChild(v);
+    }
+    ligne('Honoraires du notaire', acte.honoraires);
+    ligne('Service Nota', acte.prixNota);
+    ligne('Total', acte.total != null ? acte.total : (acte.honoraires + acte.prixNota), 'my-offer-receipt-total');
+    box.appendChild(list);
+    box.appendChild(el('p', 'help', 'Vos honoraires vont au notaire en entier. Le prix du service de Nota s’ajoute à côté; il n’en est jamais retranché.'));
+    return box;
+  }
+
   function fillMyOfferDetail(cell, o, st, status) {
     clear(cell);
     // Is any notary named in this band? The « says who? » line is owed exactly
@@ -6210,6 +6270,7 @@
     // the evaluation — five stars, an optional word. One per act; once sent,
     // the block shows what was said and thanks them.
     if (st === 'approved' && status && status.acte && status.acte.complete) {
+      cell.appendChild(acteRecu(status.acte));
       cell.appendChild(evaluationBlock(o, status));
     }
     // The retained-act conversation: once a notary holds the act, the two
@@ -7945,6 +8006,13 @@
     // ledger's original figure, never the retried one.
     ncRetainedUpdate(nc.email, id, { completed: true, actAmount: j.actAmount != null ? j.actAmount : amt, commissionCents: j.commissionCents || 0 });
     ncRenderRetained();
+    // Le relevé est chargé UNE fois par session (ncActsFor) : sans cette
+    // invalidation, le notaire venait de régler un acte, la carte l'affichait,
+    // et « Votre relevé » disait encore qu'il s'ouvrirait « dès votre premier
+    // acte réglé » jusqu'à la prochaine connexion (audit du 2026-09-12). Un
+    // règlement change le relevé : on le relit.
+    ncActsFor = null;
+    if (typeof ncLoadActs === 'function') ncLoadActs();
     toast(j.paid === true
       ? 'Acte complété. Vos honoraires : ' + D.money(j.honorairesCents != null ? j.honorairesCents / 100 : (j.actAmount != null ? j.actAmount : amt)) + ', virés en entier.'
       : 'Acte complété. Aucun paiement n’a été effectué par Nota.');
@@ -8900,7 +8968,10 @@
   // /notary/profile (`alertes`) and rendered from profil.alertes — the
   // notifier honours exactly what the console shows. What stays LOCAL is the
   // lender roster: it filters THIS console's feed (ncFilteredOpen), nothing
-  // else reads it. No SMS switch anywhere: nothing sends texts.
+  // else reads it. Le texto, lui, EXISTE depuis l'ADR 0051 : il part sur le
+  // même geste que le courriel, pour un destinataire qui a donné un
+  // consentement exprès (SMSCONSENT#) — il n'a simplement pas d'interrupteur
+  // dans cette console. Le commentaire disait le contraire (audit 2026-09-12).
   var LS_NC_PREFS = 'nota.notary.prefs.v1';
   var ncPrefsSavedT = null;
   var NC_PACES = ['instant', 'daily', 'weekly', 'off'];

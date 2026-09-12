@@ -246,3 +246,74 @@ La salle est visible dans l'application dès maintenant, et elle porte son état
 > texte officiel depuis cet environnement, et une ADR qui cite un article qu'elle
 > n'a pas lu est pire qu'une ADR qui n'en cite aucun. Ils sont à ajouter, contre
 > le texte, avant la présentation à la Chambre.
+
+---
+
+## Amendement du 2026-09-12 — le relais est sur le chemin, et le §2 est désormais qualifié
+
+Un audit bout en bout de la salle a comparé ce que le produit DIT à ce que le
+code FAIT. Deux affirmations ne tenaient pas telles qu'écrites.
+
+**1. Les certifications se contredisaient sur la même page.** La carte 02 de la
+bêta (`apps/web/public/index.html`) annonçait « des contrôles alignés sur les
+référentiels SOC 2 et ISO 27001 » pendant que la section « Sécurité et
+conformité » de la même page dit que la démarche est **en préparation**, cible
+1er trimestre 2027. Corrigé : « … avec des contrôles **calqués** sur les
+référentiels SOC 2 et ISO 27001. **Ni l'une ni l'autre certification n'est
+obtenue** : notre cible est le 1er trimestre 2027. » (anglais miroir dans
+`i18n.js` : *controls modelled on … Neither certification has been obtained*).
+
+**2. « Entre vous deux » n'est pas vrai en production pour la salle bêta.**
+`apps/web/public/signature.js` construit sa `RTCPeerConnection` avec
+`iceTransportPolicy: capabilities.turnConfigured ? 'relay' : 'all'`. Dès qu'un
+TURN est configuré — c'est le cas visé en production — **le média transite par
+un relais provisionné par Nota**. Il reste chiffré de bout en bout par
+DTLS-SRTP et le relais ne peut pas le lire : il achemine des paquets qu'il ne
+déchiffre pas. Mais « pair à pair », « aucun serveur » et « Nota n'est jamais
+sur le chemin du média » sont faux tels qu'écrits.
+
+La copie corrigée dit exactement les trois choses, et rien de plus : le média
+est **chiffré de bout en bout**, **Nota ne peut pas le lire**, et **un relais
+fourni par Nota PEUT l'acheminer lorsque la connexion directe est impossible**.
+Le « peut » n'est pas une précaution de langage : la salle de l'ADR 0047
+(`salle.js`) ne force aucune politique ICE et prend le chemin direct quand il
+existe — écrire « le relais achemine toujours » serait faux dans l'autre sens.
+
+### Ce que devient le §2
+
+Le §2 « Le chiffrement de bout en bout est structurel, pas une option » **reste
+vrai sur le chiffrement** : pas de SFU, pas de MCU, pas de pont
+d'enregistrement, aucun troisième déchiffreur, et le mode strict n'enregistre
+rien. Sa phrase absolue — « **Nota n'est jamais sur le chemin du média** » —
+est en revanche **qualifiée à compter d'aujourd'hui** :
+
+> Nota n'est jamais sur le chemin *en clair*. Un relais TURN provisionné par
+> Nota peut se trouver sur le chemin des paquets, sans jamais détenir les clés
+> DTLS : il relaie, il ne déchiffre pas. La salle de l'ADR 0047 n'y recourt que
+> faute de chemin direct ; la salle bêta l'impose dès que le TURN est
+> configuré.
+
+C'est aussi ce que le §7 anticipait sans le dire : la CSP devait « autoriser le
+relais TURN ». Un relais autorisé est un relais sur le chemin.
+
+### Le filet
+
+`apps/web/test/truthful-claims.test.mjs` verrouille les deux directions —
+l'ancienne formulation ne peut pas revenir (« pair à pair », « not on the media
+path », « aucun serveur de Nota », « entre vous deux seulement », « contrôles
+alignés sur les référentiels SOC 2 et ISO 27001 »), la nouvelle doit dire la
+chose vraie dans les deux langues, et deux prémisses gardent le code sous la
+copie : `signature.js` force encore le relais, `salle.js` ne force encore rien.
+Si l'une des deux change, le test tombe sur la prémisse et la copie se relit.
+
+### Reste ouvert (hors de la portée de cet amendement)
+
+- `packages/domain/index.js` — `SALLE_MODES.strict.aide` dit encore « chiffré
+  entre vous deux seulement ». L'affirmation reste exacte sur le chiffrement,
+  mais le mot « seulement » gagnerait la même qualification.
+- `apps/web/public/signature.html` — le principe titré « Entre vous deux » dit
+  « Audio et vidéo chiffrés entre les navigateurs avec WebRTC ». Exact, mais
+  muet sur le relais.
+- `apps/web/public/salle.js` — l'en-tête du module affirme encore « Le média ne
+  traverse aucun serveur de Nota ». Vrai du chemin direct, faux dès qu'un TURN
+  de Nota est servi par `/salle` (`apps/api/src/salle.js`, `iceServers`).

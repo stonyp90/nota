@@ -780,7 +780,21 @@
     var list = el('ul', 'feature-list');
     var items = group.fonctionnalites || [];
     card.appendChild(collectionCount(items.length, 'fonctionnalité', 'feature'));
-    items.forEach(function (f) { var li = el('li', 'feature-row'); dynamicText(li.appendChild(el('span')), isEnglish() ? f.nomEn : f.nom); dynamicText(li.appendChild(el('span', 'status-ok')), isEnglish() ? f.statutEn : f.statut); list.appendChild(li); });
+    items.forEach(function (f) {
+      var li = el('li', 'feature-row');
+      dynamicText(li.appendChild(el('span')), isEnglish() ? f.nomEn : f.nom);
+      // « En attente » n'est pas « actif » : l'API lit les interrupteurs de CE
+      // déploiement et nomme ceux qui manquent. La pastille verte se méritait.
+      var enAttente = f.statut !== 'actif';
+      dynamicText(li.appendChild(el('span', enAttente ? 'status-pill' : 'status-ok')), isEnglish() ? f.statutEn : f.statut);
+      if (enAttente && f.manquant && f.manquant.length) {
+        var why = el('span', 'help feature-missing');
+        why.title = (isEnglish() ? 'Missing: ' : 'Manque : ') + f.manquant.join(', ');
+        dynamicText(why, (isEnglish() ? 'Missing: ' : 'Manque : ') + f.manquant.join(' · '));
+        li.appendChild(why);
+      }
+      list.appendChild(li);
+    });
     if (!items.length) list.appendChild(el('li', 'collection-empty-inline', isEnglish() ? 'None configured.' : 'Aucune fonctionnalité configurée.'));
     card.appendChild(list); return card;
   }
@@ -808,33 +822,9 @@
   // deliberately small here: CRM ownership and conversion data remain in the
   // dedicated CRM section below, while this prerequisite route must still be
   // defined so the admin shell can boot safely.
-  async function renderCabinets() {
-    if (!me || !me.email) {
-      var loaded = await loadMe();
-      if (!loaded.ok) { if (loaded.status !== 401) renderFatal('Impossible de charger votre profil.', renderCabinets); return; }
-    }
-    renderUserbar();
-    var content = el('div', 'admin-content');
-    content.appendChild(buildPageHeader('Réseau', 'Cabinets', 'Organisations commerciales et membres notaires — lecture du registre.'));
-    var body = el('div'); content.appendChild(body); mountAuthed('cabinets', content); focusTitle();
-    if (!canReadCabinets()) { body.appendChild(buildDenied('Voir les cabinets et leurs forfaits')); return; }
-    body.appendChild(buildLoadingGrid(2));
-    var response = await call('GET', '/cabinets'); clear(body);
-    if (response.status === 403) { body.appendChild(buildDenied('Voir les cabinets et leurs forfaits')); return; }
-    if (!response.ok || !response.json) { body.appendChild(buildErrorBanner(function () { renderCabinets(); })); return; }
-    var cabinets = response.json.cabinets || [];
-    if (!cabinets.length) { body.appendChild(collectionEmpty(0, 'cabinet', 'practice', 'Aucun cabinet configuré.', 'No practices configured.')); return; }
-    cabinets.forEach(function (cabinet) {
-      var card = el('section', 'chart-card service-card');
-      var head = el('div', 'chart-card-head');
-      dynamicText(head.appendChild(el('h2', 'chart-card-title')), cabinet.nom || cabinet.id);
-      dynamicText(head.appendChild(el('span', 'status-pill')), cabinet.statut || '—');
-      card.appendChild(head);
-      var plan = cabinet.plan && (isEnglish() ? cabinet.plan.nomEn : cabinet.plan.nom);
-      dynamicText(card.appendChild(el('p', 'chart-card-sub')), (plan || cabinet.planId || '—') + ' · ' + ((cabinet.membres || []).length) + ' ' + (isEnglish() ? 'member(s)' : 'membre(s)'));
-      body.appendChild(card);
-    });
-  }
+  // (Une PREMIÈRE définition de renderCabinets vivait ici : elle était
+  //  masquée par celle plus bas dans le fichier — même nom, déclaration
+  //  ultérieure — et n'a jamais rendu un pixel. Retirée le 2026-09-12.)
 
   // Section registry: navigation and routes share one source of truth.
   var ADMIN_SECTIONS = [
@@ -1765,7 +1755,10 @@
       card.appendChild(el('p', 'chart-card-sub', 'Données du parcours indisponibles.'));
       return card;
     }
-    card.appendChild(collectionCount(events.length, 'événement', 'event'));
+    // `events` est la liste des CATÉGORIES du parcours, pas des visites : le
+    // titre annonçait « 34 événements » au-dessus de 34 lignes toutes à zéro
+    // (audit du 2026-09-12). On compte ce qu'on montre.
+    card.appendChild(collectionCount(events.length, 'type d’événement suivi', 'tracked event type'));
     if (!events.length) { card.appendChild(el('p', 'chart-card-sub', 'Aucun événement enregistré pour cette période.')); return card; }
     var scroll = el('div', 'chart-scroll');
     var table = el('table', 'ptable');

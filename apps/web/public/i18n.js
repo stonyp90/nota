@@ -37,6 +37,9 @@
     'Précédent': 'Back',
     'Suivant': 'Forward',
     'Pas d’offres': 'No offers',
+    'Ce que vous avez payé': 'What you paid',
+    'Le notaire qui vous retient pourra vous appeler.': 'The notary who takes your request will be able to call you.',
+    'Vos honoraires vont au notaire en entier. Le prix du service de Nota s’ajoute à côté; il n’en est jamais retranché.': 'Your notary’s fees go to them in full. Nota’s service price is added beside them; it is never taken out of them.',
     'Pas d’offre': 'No offer',
     '0 acte complété. Vos honoraires s’afficheront ici dès votre premier acte complété.': '0 completed acts. Your fees will appear here after your first completed act.',
     'Concept': 'Concept',
@@ -129,10 +132,10 @@
     "Une salle pensée pour vos échanges sensibles.": "A room designed for sensitive conversations.",
     "Communication sécurisée": "Secure communication",
     "Une visioconférence propriétaire, hébergée au Canada.": "Proprietary video communication hosted in Canada.",
-    "La salle de bêta utilise une communication vidéo propriétaire sur une infrastructure canadienne. La caméra et le micro restent inactifs jusqu’à votre accord.": "The beta room uses proprietary video communication on Canadian infrastructure. Your camera and microphone stay off until you agree.",
+    "La salle de bêta utilise une communication vidéo propriétaire sur une infrastructure canadienne. Le son et l’image sont chiffrés de bout en bout : Nota ne peut pas les lire, et un relais fourni par Nota peut les acheminer lorsque la connexion directe est impossible. La caméra et le micro restent inactifs jusqu’à votre accord.": "The beta room uses proprietary video communication on Canadian infrastructure. Audio and video are encrypted end to end: Nota cannot read them, and a relay provided by Nota may carry them when a direct connection is impossible. Your camera and microphone stay off until you agree.",
     "Conservation contrôlée": "Controlled retention",
     "Des preuves conservées avec des contrôles reconnus.": "Evidence retained with recognized controls.",
-    "Les éléments de séance et les documents de la bêta sont conservés sur une infrastructure canadienne avec des contrôles alignés sur les référentiels SOC 2 et ISO 27001.": "Beta session materials and documents are retained on Canadian infrastructure with controls aligned with the SOC 2 and ISO 27001 frameworks.",
+    "Les éléments de séance et les documents de la bêta sont conservés sur une infrastructure canadienne, avec des contrôles calqués sur les référentiels SOC 2 et ISO 27001. Ni l’une ni l’autre certification n’est obtenue : notre cible est le 1er trimestre 2027.": "Beta session materials and documents are retained on Canadian infrastructure, with controls modelled on the SOC 2 and ISO 27001 frameworks. Neither certification has been obtained: our target is Q1 2027.",
     "Langue et consentement": "Language and consent",
     "Le parcours reste en français.": "The experience stays in French.",
     "Les écrans, communications et consentements sont prévus en français québécois, dans le respect de la Charte de la langue française.": "Screens, communications and consent prompts are designed in Quebec French, respecting the Charter of the French language.",
@@ -2349,11 +2352,11 @@
      apps/web/test/i18n.test.mjs les exige comme le reste du catalogue. */
   "Bêta · bientôt": "Beta · coming soon",
   "Signer avec votre notaire, à distance, sans quitter Nota": "Sign with your notary, remotely, without leaving Nota",
-  "Un face-à-face vidéo chiffré entre vous deux seulement. Le notaire vous identifie, vous lit l’acte, répond à vos questions, puis libère la signature. Chaque instant de la séance entre dans un procès-verbal scellé dont vous repartez avec une copie.": "An encrypted video meeting between the two of you alone. The notary verifies your identity, reads you the act, answers your questions, then releases the signature. Every moment of the session enters a sealed record, and you leave with a copy of it.",
+  "Un face-à-face vidéo chiffré de bout en bout : Nota ne peut pas le lire, et un relais fourni par Nota peut l’acheminer lorsque la connexion directe est impossible. Le notaire vous identifie, vous lit l’acte, répond à vos questions, puis libère la signature. Chaque instant de la séance entre dans un procès-verbal scellé dont vous repartez avec une copie.": "A video meeting encrypted end to end: Nota cannot read it, and a relay provided by Nota may carry it when a direct connection is impossible. The notary verifies your identity, reads you the act, answers your questions, then releases the signature. Every moment of the session enters a sealed record, and you leave with a copy of it.",
   "La signature juridique passe par le flux admis par la Chambre des notaires du Québec. Pendant la bêta, aucun acte réel n’est reçu dans la salle.": "The legal signature goes through the workflow admitted by the Chambre des notaires du Québec. During the beta, no real act is received in the room.",
   "Ouvrir la salle de démonstration": "Open the demonstration room",
   "La salle de signature": "The signing room",
-  "Vous conduisez la séance : identité, lecture, questions, signature. Le lien vidéo est pair à pair et chiffré — Nota n’est pas sur le chemin du média et ne peut pas l’écouter.": "You lead the session: identity, reading, questions, signature. The video link is peer-to-peer and encrypted — Nota is not on the media path and cannot listen in.",
+  "Vous conduisez la séance : identité, lecture, questions, signature. Le lien vidéo est chiffré de bout en bout — Nota ne peut pas l’écouter, même lorsqu’un relais fourni par Nota l’achemine faute de connexion directe.": "You lead the session: identity, reading, questions, signature. The video link is encrypted end to end — Nota cannot listen in, even when a relay provided by Nota carries it for want of a direct connection.",
   "La séance produit un procès-verbal en chaîne d’empreintes : une heure déplacée, une entrée retirée, et l’empreinte finale ne concorde plus. Vous en repartez avec une copie ; Nota garde la même empreinte dans un journal qu’il ne peut pas réécrire.": "The session produces a hash-chained record: move one timestamp, remove one entry, and the final fingerprint no longer matches. You leave with a copy; Nota keeps the same fingerprint in a log it cannot rewrite.",
   "La signature juridique et la minute passent par le flux admis par la Chambre des notaires du Québec. Pendant la bêta, aucun acte réel ne peut être reçu dans la salle.": "The legal signature and the minute go through the workflow admitted by the Chambre des notaires du Québec. During the beta, no real act can be received in the room.",
   "Ouvrir une séance de démonstration": "Open a demonstration session",
@@ -2403,7 +2406,10 @@
 
   /* Les modes de séance (domain.SALLE_MODES). */
   "Bout en bout, sans enregistrement": "End-to-end, no recording",
-  "Le lien vidéo est chiffré entre vous deux seulement. Rien n’est enregistré : la preuve de la séance est le procès-verbal scellé.": "The video link is encrypted between the two of you alone. Nothing is recorded: the proof of the session is the sealed record.",
+  /* Le mode « strict » ne promet plus un canal à deux : quand la connexion
+     directe est impossible, un relais fourni par Nota achemine les paquets
+     sans pouvoir les ouvrir. La phrase dit désormais les trois choses. */
+  "Le lien vidéo est chiffré de bout en bout : Nota ne peut pas le lire, et un relais fourni par Nota peut l’acheminer lorsque la connexion directe est impossible. Rien n’est enregistré : la preuve de la séance est le procès-verbal scellé.": "The video link is encrypted end to end: Nota cannot read it, and a relay provided by Nota may carry it when a direct connection is impossible. Nothing is recorded: the proof of the session is the sealed record.",
   "Bout en bout, avec enregistrement chiffré": "End-to-end, with encrypted recording",
   "La séance est enregistrée dans le navigateur du notaire et chiffrée avant d’être déposée. Nota conserve les octets sans pouvoir les lire. Exige l’accord des deux parties.": "The session is recorded in the notary’s browser and encrypted before being stored. Nota keeps the bytes without being able to read them. Requires both parties’ consent.",
   "Répétition, sans valeur": "Rehearsal, no legal value",
@@ -2426,6 +2432,9 @@
   "Retirer mon accord": "Withdraw my consent",
   "Attester l’identité — notaire": "Attest identity — notary",
   "Attester l’identité — client": "Attest identity — client",
+  /* La confirmation anti-interception : le SEUL geste qui ouvre la porte du
+     lien, et il restait en français sur un écran anglais. */
+  "Les deux chaînes concordent": "Both strings match",
   "Reprendre la séance": "Resume the session",
   "Libérer la signature": "Release the signature",
   "Sceller le procès-verbal": "Seal the record",
@@ -2474,10 +2483,22 @@
   "Le notaire n’a pas encore confirmé que les deux chaînes concordent.": "The notary has not yet confirmed that the two strings match.",
   "Le lien chiffré n’est pas encore établi entre les deux navigateurs.": "The encrypted link is not yet established between the two browsers.",
   "Le lien chiffré a changé depuis la confirmation. Relisez les chaînes.": "The encrypted link changed since the confirmation. Read the strings again.",
+  /* Ce que la porte de présence dit quand le pair d'en face n'est plus là. La
+     caméra de celui qui lit l'écran n'y est pour rien : le domaine nomme
+     désormais le silence de l'autre, et l'anglais doit le nommer aussi. */
+  "Le client a quitté la séance ou a perdu sa connexion.": "The client has left the session or lost their connection.",
+  "Le notaire a quitté la séance ou a perdu sa connexion.": "The notary has left the session or lost their connection.",
+  "Le lien vidéo entre les deux navigateurs est perdu. Aucune des deux parties ne reçoit plus l’autre.": "The video link between the two browsers is lost. Neither party is receiving the other any more.",
   "La caméra du notaire n’envoie plus d’image.": "The notary’s camera is no longer sending video.",
   "La caméra du client n’envoie plus d’image.": "The client’s camera is no longer sending video.",
   "Le micro du notaire n’envoie plus de son.": "The notary’s microphone is no longer sending audio.",
   "Le micro du client n’envoie plus de son.": "The client’s microphone is no longer sending audio.",
+  /* La porte d'identité nomme les parties qui manquent : trois assemblages
+     possibles, trois entrées — une règle traduirait le cadre et laisserait les
+     noms en français. */
+  "L’identité n’est pas encore vérifiée pour : notaire.": "Identity is not yet verified for: notary.",
+  "L’identité n’est pas encore vérifiée pour : client.": "Identity is not yet verified for: client.",
+  "L’identité n’est pas encore vérifiée pour : notaire, client.": "Identity is not yet verified for: notary, client.",
   "Le notaire n’est pas encore authentifié.": "The notary is not yet authenticated.",
   "Le client n’est pas encore authentifié.": "The client is not yet authenticated.",
   "Aucune des deux parties n’est encore authentifiée.": "Neither party is authenticated yet.",
@@ -3617,8 +3638,19 @@
     "pattern": "^Trop de tentatives\\. Réessayez dans (\\d+) minutes\\.$",
     "flags": "",
     "replacement": "Too many attempts. Try again in $1 minutes."
-  }
+  },
   /* /F4 */
+  /* ADR 0047 — la salle. La porte de présence COMPOSE la durée de la coupure :
+     seul un nombre entre dans la capture, donc la règle ne peut pas laisser de
+     français dedans. (L'aria-label que `rendrePortes` compose — « Présence
+     continue : fermée — <motif> » — n'a délibérément PAS de règle : une règle
+     à capture large rendrait la phrase à moitié française tout en faisant
+     répondre `covered()` par oui, ce qui est pire que le manque.) */
+  {
+    "pattern": "^Le lien est coupé depuis (\\d+) s\\.$",
+    "flags": "",
+    "replacement": "The link has been down for $1 s."
+  }
 ]);
   // === END DICTIONARY ========================================================
 

@@ -1191,14 +1191,20 @@ test('URGENCY: every upcoming day prices its own notice, from the domain', async
     assert.equal(mark.dataset.tier, tierId);
     assert.equal(cell.dataset.tier, tierId, 'the cell edge matches the marker');
 
-    // The number shown must be the number the booking form pre-fills, or the
-    // calendar quotes a price the form then contradicts. It is the TUNED
-    // multiplier — learned from the month's retained offers — not the static
-    // ladder midpoint — applied to the carnet's act, and said in DOLLARS: a
-    // client thinks in dollars, not in multiples.
+    // The number shown must be the TOTAL a client pays at that notice, or the
+    // calendar quotes a price the sheet then contradicts — and a partial
+    // « dès X $ » is an incomplete advertised price (LPC art. 224 c), ADR 0042;
+    // the legend read « dès 2 000 $ » while the pulse row for the same act
+    // read « à partir de 2 279 $ » (audit du 2026-09-12). It is the TUNED
+    // multiplier — learned from the month's retained offers, not the static
+    // ladder midpoint — on the carnet's act, PLUS Nota's price for that
+    // service and the date guarantee of that very tier, in DOLLARS: a client
+    // thinks in dollars, not in multiples.
     const svc = ctx.D.serviceById(ctx.D.DEFAULT_SERVICE_ID);
     const m = ctx.D.tierMultiplier(tierId, ctx.Nota.state.monthBids, svc.id);
-    assert.equal(mark.textContent, 'dès ' + ctx.D.money(Math.round(svc.prixDepart * m)), 'the cell quotes the tuned price in dollars');
+    const prix = ctx.D.prixNota(svc.id, tierId, null);
+    const total = Math.round(svc.prixDepart * m) + Math.round(prix.totalCents) / 100;
+    assert.equal(mark.textContent, 'dès ' + ctx.D.money(total), 'the cell quotes the total in dollars');
     assert.ok(!mark.textContent.includes('×'), 'no multiplier jargon on the grid');
   });
 
@@ -1215,8 +1221,9 @@ test('URGENCY: every upcoming day prices its own notice, from the domain', async
   assert.ok(key, 'the legend keys each tier');
   const legendSvc = ctx.D.serviceById(ctx.D.DEFAULT_SERVICE_ID);
   const legendMult = ctx.D.tierMultiplier('prioritaire', ctx.Nota.state.monthBids, legendSvc.id);
-  const legendLabel = 'dès ' + ctx.D.money(Math.round(legendSvc.prixDepart * legendMult));
-  assert.ok(key.textContent.includes(legendLabel), 'with its (tuned) price in dollars, not just a name');
+  const legendPrix = ctx.D.prixNota(legendSvc.id, 'prioritaire', null);
+  const legendLabel = 'dès ' + ctx.D.money(Math.round(legendSvc.prixDepart * legendMult) + Math.round(legendPrix.totalCents) / 100);
+  assert.ok(key.textContent.includes(legendLabel), 'with the (tuned) TOTAL in dollars, not just a name and not half of it');
 });
 
 

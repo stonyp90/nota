@@ -2547,6 +2547,14 @@ input[type='range'] { flex: 1; accent-color: var(--brand); }
 .my-offer-next-k { font-weight: 700; color: var(--ink-muted); text-transform: uppercase; font-size: 10.5px; letter-spacing: .03em; align-self: center; }
 .my-offer-next-v { color: var(--ink); }
 .my-offer-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+/* Le reçu du client : deux lignes et un total, dans le registre carré de la
+   carte. Il paraît une fois l'acte réglé, au-dessus de l'évaluation. */
+.my-offer-receipt { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); }
+.my-offer-receipt-h { font-weight: 700; color: var(--ink-muted); text-transform: uppercase; font-size: 10.5px; letter-spacing: .03em; margin-bottom: 6px; }
+.my-offer-receipt-lines { display: grid; grid-template-columns: 1fr auto; gap: 3px 12px; margin: 0; font-size: 12.5px; }
+.my-offer-receipt-lines dt { color: var(--ink-muted); margin: 0; }
+.my-offer-receipt-lines dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; color: var(--ink); }
+.my-offer-receipt-lines .my-offer-receipt-total { font-weight: 700; color: var(--ink); border-top: 1px solid var(--border); padding-top: 4px; margin-top: 2px; }
 /* ADR 0035 — la carte a été refusée au moment de réserver la somme. Un bloc
    qui se voit (filet rouge, fond teinté) sans crier : rien n'est perdu, mais
    il y a un geste à poser avant la signature. */

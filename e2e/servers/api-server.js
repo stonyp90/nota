@@ -95,7 +95,14 @@ const app = createApp(repo, {
 });
 // Exercise the real local shared-store composition: admin replies must become
 // visible in the public widget without a test-only messaging implementation.
-const localAdmin = createLocalAdminApp({ repo, adminRlMax: RL_MAX });
+// Un postier de test pour la console : sans lui, le notifieur de campagne
+// n'existe pas et « Envoyer » répond 503 — le chemin d'envoi, le registre des
+// destinataires et « Qui a reçu » ne seraient traversés par aucun test de bout
+// en bout (audit du 2026-09-12). Rien ne part sur le réseau : les messages
+// s'empilent en mémoire, et la suite peut les lire.
+const { createFakeMailer } = require(path.join(apiRoot, 'src', 'notify-port'));
+const adminMailer = createFakeMailer();
+const localAdmin = createLocalAdminApp({ repo, adminRlMax: RL_MAX, mailer: adminMailer });
 
 const server = http.createServer(async (req, res) => {
   try {

@@ -22,6 +22,7 @@ const http = require('node:http');
 const { createAdminApp } = require('./src/admin-handler');
 const { createAdmin } = require('./src/admin');
 const { createMemoryRepo } = require('./src/repo-memory');
+const { createNotifier } = require('./src/notifications');
 const { createDynamoRepo } = require('./src/repo-dynamo');
 const domain = require('@nota/domain');
 const { devToday, devBids, devPartners, devNotaries, devStatsDeltas, seedDevAdministration } = require('./scripts/dev-fixtures');
@@ -93,10 +94,20 @@ function createLocalAdminApp({ today, repo: sharedRepo, mailer, notifier, adminR
   // Build the admin use-case explicitly (rather than via env inside the
   // handler) so the local composition is visible in one place. devEcho stays
   // conditional on NODE_ENV exactly like production wiring.
+  // Le port d'ENVOI des campagnes. La composition locale ne le posait pas, si
+  // bien que la console répondait 503 « envoi indisponible » sur toute pile de
+  // développement et d'E2E : le chemin d'envoi, le registre des destinataires
+  // et « Qui a reçu » n'étaient donc traversés par AUCUN test de bout en bout
+  // (audit du 2026-09-12). La production, elle, le posait. On monte ici le même
+  // notifieur que la production — celui de notifications.js, qui honore la
+  // liste de retrait et pose l'en-tête RFC 8058 — sur le postier local.
+  const campagnes = notifier || (mailer
+    ? createNotifier({ repo, mailer, baseUrl: process.env.NOTA_BASE_URL || 'http://localhost:4311', adminUrl: baseUrl, now: () => new Date().toISOString() })
+    : null);
   const admin = createAdmin({
     repo,
     mailer,
-    notifier,
+    notifier: campagnes,
     config: {
       allowlist: emails,
       baseUrl,
@@ -107,7 +118,7 @@ function createLocalAdminApp({ today, repo: sharedRepo, mailer, notifier, adminR
       ...(adminRlMax ? { rlMax: adminRlMax } : {}),
     },
   });
-  const app = createAdminApp(repo, { admin, adminBaseUrl: baseUrl, mailer, notifier });
+  const app = createAdminApp(repo, { admin, adminBaseUrl: baseUrl, mailer, notifier: campagnes });
 
   const ready = useDynamo
     ? Promise.resolve()
