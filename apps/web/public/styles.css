@@ -5748,6 +5748,10 @@ dialog[open]::backdrop { animation: backdropIn .2s ease both; }
   /* flex:none — in the drawer head the lockup grew and squeezed the close
      button to 32px wide (android lens, 2026-09-11); a thumb target does not shrink. */
   .icon-btn { width: 44px; height: 44px; flex: none; }
+  /* « Offrir autant · N $ » is a 26px text button on the booking sheet; it only
+     appears when the day already has an offer, which is why the lens caught it
+     in CI and not locally. A thumb target is 44px whatever the data. */
+  .day-beat { min-height: 44px; }
 }
 @media (max-width: 420px) {
   .nav-tabs { gap: 0; }
