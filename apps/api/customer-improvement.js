@@ -6,22 +6,25 @@
  * legal, pricing or AI configuration; it only evaluates the public guidance
  * policy in `src/customer-improvement.js`.
  */
-const domain = require('@nota/domain');
-const { createDynamoRepo } = require('./src/repo-dynamo');
-const { runCustomerImprovement } = require('./src/customer-improvement');
-
 function enabledFromEnvironment() {
-  return !['false', '0', 'off'].includes(String(process.env.NOTA_AUTONOMOUS_IMPROVEMENT_ENABLED || 'true').trim().toLowerCase());
+  return ['true', '1', 'on'].includes(String(process.env.NOTA_AUTONOMOUS_IMPROVEMENT_ENABLED || '').trim().toLowerCase());
 }
 
 exports.handler = async () => {
+  // A disabled Lambda is a stop, not the engine's read-only dry run. Check
+  // before loading AWS clients so missing/invalid configuration cannot spend
+  // on DynamoDB reads or resolve credentials. Terraform also stops delivery.
+  if (!enabledFromEnvironment()) return { skipped: true, reason: 'disabled', applied: false, auditRecorded: false };
+  const domain = require('@nota/domain');
+  const { createDynamoRepo } = require('./src/repo-dynamo');
+  const { runCustomerImprovement } = require('./src/customer-improvement');
   const repo = createDynamoRepo({
     tableName: process.env.TABLE_NAME,
     region: process.env.AWS_REGION,
   });
   const result = await runCustomerImprovement({
     repo,
-    enabled: enabledFromEnvironment(),
+    enabled: true,
     now: () => domain.businessDay(null, process.env.NOTA_TIMEZONE),
   });
   // The report contains aggregate counters and a bounded decision only. Never

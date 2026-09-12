@@ -8,6 +8,12 @@
 # reversible guidance mode the browser may use.
 ###############################################################################
 
+variable "enable_customer_improvement" {
+  description = "Opt in to daily customer-improvement processing. False stops scheduled delivery and Lambda execution; existing storage/alarms may still cost money."
+  type        = bool
+  default     = false
+}
+
 resource "aws_iam_role" "customer_improvement" {
   name               = "${var.project_name}-customer-improvement-role"
   assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
@@ -87,10 +93,9 @@ resource "aws_lambda_function" "customer_improvement" {
   timeout     = 60
   memory_size = 256
 
-  # This worker processes one complete-day aggregate at a time. A single
-  # concurrent execution keeps scheduler retries from duplicating work and
-  # caps spend during an incident.
-  reserved_concurrent_executions = 1
+  # Limit simultaneous work when opted in. This is a concurrency limit, not
+  # a dollar budget or a guarantee against duplicate asynchronous delivery.
+  reserved_concurrent_executions = var.enable_customer_improvement ? 1 : 0
 
   depends_on = [aws_cloudwatch_log_group.customer_improvement]
 
@@ -99,7 +104,7 @@ resource "aws_lambda_function" "customer_improvement" {
       TABLE_NAME                          = aws_dynamodb_table.main.name
       NODE_ENV                            = "production"
       NOTA_TIMEZONE                       = var.time_zone
-      NOTA_AUTONOMOUS_IMPROVEMENT_ENABLED = "true"
+      NOTA_AUTONOMOUS_IMPROVEMENT_ENABLED = tostring(var.enable_customer_improvement)
     }
   }
 
@@ -158,10 +163,37 @@ resource "aws_iam_role_policy" "customer_improvement_scheduler_dlq" {
   })
 }
 
+resource "aws_iam_role_policy" "customer_improvement_failure_destination" {
+  name = "${var.project_name}-customer-improvement-failure-destination"
+  role = aws_iam_role.customer_improvement.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = "sqs:SendMessage"
+      Resource = aws_sqs_queue.customer_improvement_dlq.arn
+    }]
+  })
+}
+
+# Scheduler retries delivery; Lambda separately retries accepted asynchronous
+# invocations. Disable function-error retries and bound queued event age. The
+# existing DLQ also receives processing failures (not just delivery failures).
+resource "aws_lambda_function_event_invoke_config" "customer_improvement" {
+  function_name                = aws_lambda_function.customer_improvement.function_name
+  maximum_event_age_in_seconds = 3600
+  maximum_retry_attempts       = 0
+  destination_config {
+    on_failure { destination = aws_sqs_queue.customer_improvement_dlq.arn }
+  }
+  depends_on = [aws_iam_role_policy.customer_improvement_failure_destination]
+}
+
 # A little after the reminders run so its complete-day window includes the
 # prior day and cannot compete with the reminder batch for a hot partition.
 resource "aws_scheduler_schedule" "customer_improvement" {
-  name = "${var.project_name}-daily-customer-improvement"
+  name  = "${var.project_name}-daily-customer-improvement"
+  state = var.enable_customer_improvement ? "ENABLED" : "DISABLED"
 
   flexible_time_window {
     mode = "OFF"

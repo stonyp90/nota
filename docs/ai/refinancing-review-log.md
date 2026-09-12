@@ -1,5 +1,65 @@
 # Refinancing improvement log
 
+## 2026-09-12 — production execution paused
+
+- Rebased the cost-stop branch onto `2281338` after the independent brand release
+  reached main. Verified the expected AWS account and the schedule's exact worker
+  target, then disabled `nota-daily-customer-improvement`, set worker reserved
+  concurrency to zero and set its environment opt-in to false.
+- Read back all three controls successfully; Lambda configuration status was
+  `Successful`. The production workload is paused independently of the code
+  release. Existing stored data and alarms are retained; no zero-dollar billing
+  guarantee follows from a pause.
+- Used temporary credentials in process memory for the targeted control-plane
+  changes. No credentials were written to repository/configuration files. No
+  worker/model invocation, live evaluation, Cost Explorer read, paid training
+  job or full Terraform apply was performed. Additional asynchronous
+  retry/failure-destination infrastructure remains declared, not yet applied.
+- Rebased release validation passed: domain 460, API 2116, web 1120, admin 245,
+  BDD 300 scenarios / 2105 steps, both builds, Terraform formatting/validation
+  and `git diff --check`. These are local tests with synthetic/model doubles.
+
+## 2026-09-12 — explicit cost stop and document-role regression
+
+- Worked on isolated branch `codex/ai-worker-cost-stop-2026-09-12`, based on
+  `b6c1c2e`, preserving unrelated edits in the main working directory. GitHub
+  reports successful public/admin deployments for that base; this branch has
+  not been deployed or applied to AWS.
+- Found and fixed the worker's false stop: setting its environment flag false
+  previously left DynamoDB reads active. Missing/invalid/disabled flags now
+  return before imports, client creation, reads or application logs. An explicit
+  Terraform opt-in (default false) links the scheduler state, reserved
+  concurrency and handler flag. The operator CLI also requires `--read-aws`
+  or `--apply` before it can access a configured table.
+- Distinguished Scheduler delivery retries from Lambda asynchronous processing
+  retries. Added zero function-error retries, one-hour maximum event age and a
+  queue-specific failure destination using the existing DLQ. These bounds are
+  not a dollar cap or exactly-once guarantee. Existing alarms/storage may still
+  cost money while computation is paused; a code-only deployment does not
+  apply Terraform's stop. No zero-account-cost assertion is made.
+- Rechecked the public [RBC Quebec forms](https://www.rbcroyalbank.com/fr/formulesjuridiques/qc-residential.html)
+  and [FCAC mortgage discharge guidance](https://www.canada.ca/en/financial-consumer-agency/services/mortgages/mortgage-discharge.html).
+  Added synthetic development case `client-document-date-decoys-fr` and bumped
+  dataset version to `2026-09-12.1` (nine cases). The evaluator now rejects an
+  offer version mislabeled as lender instructions, and a monthly statement
+  date mislabeled as official payout validity, despite literal page quotes.
+  This verifies the evaluator, not a live model or a runtime document-role fix:
+  literal validation still cannot establish document authority. Professional
+  instruction, payout and closing checks remain pending.
+- No new authorized professional labels were supplied in this task; no private
+  customer documents were accessed. No AWS API, Cost Explorer, live model,
+  training, outreach, account creation or deployment operation was performed.
+  Model weights remain unchanged and whole-workflow effort reduction is unknown.
+- Validation: domain 450/450, final API 2107/2107, web 989/989, admin 244/244,
+  BDD 296 scenarios / 2066 steps passed. Both production builds, Terraform
+  formatting/validation and `git diff --check` passed. All model responses in
+  regression tests were synthetic doubles; passing does not establish 90%
+  automation or professional qualification.
+- [Operating limits and AWS source references](customer-improvement-cost-stop-2026-09-12.md).
+  Next: review/apply the production stop using the correct Terraform state if
+  execution must be paused; design authenticated document-role provenance before
+  suppressing official-evidence questions from extracted values.
+
 ## 2026-09-09 — cost and performance controls
 
 - Added deterministic exact-result reuse before provider resolution or AI

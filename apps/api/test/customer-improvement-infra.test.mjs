@@ -31,3 +31,21 @@ test('the public Lambda keeps the learning stream append-only and observable', (
   assert.match(LOGS, /aws_cloudwatch_log_group" "customer_improvement/);
   assert.match(OBSERVABILITY, /customer_improvement/);
 });
+
+test('daily processing defaults off and its single switch stops delivery and execution', () => {
+  assert.match(WORKER, /variable "enable_customer_improvement" \{[^}]*type\s*=\s*bool[^}]*default\s*=\s*false/s);
+  assert.match(WORKER, /state\s*=\s*var\.enable_customer_improvement \? "ENABLED" : "DISABLED"/);
+  assert.match(WORKER, /reserved_concurrent_executions\s*=\s*var\.enable_customer_improvement \? 1 : 0/);
+  assert.match(WORKER, /NOTA_AUTONOMOUS_IMPROVEMENT_ENABLED\s*=\s*tostring\(var\.enable_customer_improvement\)/);
+});
+
+test('Lambda processing retries are bounded separately from Scheduler delivery retries', () => {
+  const asyncConfig = WORKER.slice(WORKER.indexOf('resource "aws_lambda_function_event_invoke_config" "customer_improvement"'));
+  const scheduler = WORKER.slice(WORKER.indexOf('resource "aws_scheduler_schedule" "customer_improvement"'));
+  assert.match(asyncConfig, /maximum_event_age_in_seconds\s*=\s*3600/);
+  assert.match(asyncConfig, /maximum_retry_attempts\s*=\s*0/);
+  assert.match(asyncConfig, /on_failure \{ destination = aws_sqs_queue\.customer_improvement_dlq\.arn \}/);
+  assert.match(WORKER, /resource "aws_iam_role_policy" "customer_improvement_failure_destination"[\s\S]*?Action\s*=\s*"sqs:SendMessage"[\s\S]*?Resource\s*=\s*aws_sqs_queue\.customer_improvement_dlq\.arn/);
+  assert.match(scheduler, /maximum_event_age_in_seconds\s*=\s*3600/);
+  assert.match(scheduler, /maximum_retry_attempts\s*=\s*2/);
+});
