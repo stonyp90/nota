@@ -678,7 +678,11 @@ test('notaires landing preserves empty slots across live inventory refreshes', a
     assert.equal(grid.querySelectorAll('.nc-live-card').length, Math.min(count, 12));
     // Sparse inventory uses a compact six-slot footprint. Once six real cards
     // exist, the grid grows only for actual demand instead of a hidden reserve.
-    assert.equal(grid.querySelectorAll('.nc-live-slot').length, Math.max(0, 6 - Math.min(count, 12)));
+    // At zero there is no inventory to keep a footprint for: the grid shrinks
+    // to a compact three-slot band and the next-step block below carries the
+    // page. Sparse-but-real inventory still holds the six-slot footprint.
+    const expectedSlots = count === 0 ? 3 : Math.max(0, 6 - Math.min(count, 12));
+    assert.equal(grid.querySelectorAll('.nc-live-slot').length, expectedSlots);
     assert.equal(grid.querySelectorAll('.nc-live-more').length, count > 12 ? 1 : 0);
     for (const slot of grid.querySelectorAll('.nc-live-slot')) {
       assert.equal(slot.textContent, 'Pas d’offre');
@@ -688,9 +692,21 @@ test('notaires landing preserves empty slots across live inventory refreshes', a
     }
     assert.equal(grid.classList.contains('nc-live-grid--empty'), count === 0);
     assert.equal(grid.querySelectorAll('.nc-live-empty').length, count === 0 ? 1 : 0);
+    const next = $(doc, 'notary-live-next');
     if (count === 0) {
-      assert.equal(grid.querySelector('[role="status"] strong').textContent, 'Pas d’offres');
+      assert.equal(grid.querySelector('[role="status"] strong').textContent, 'Aucune demande ouverte');
       assert.equal(grid.querySelectorAll('button').length, 0, 'no fake offers at zero');
+      // A notary who arrives on an empty carnet must still have somewhere to
+      // go: the agenda subscription and the free account, both real actions.
+      assert.ok(next, 'the empty carnet offers a next step');
+      assert.equal(next.hidden, false, 'the next step is visible at zero');
+      assert.equal(next.querySelectorAll('button').length, 2, 'two next steps, no more');
+      assert.ok(
+        next.textContent.includes('agenda'),
+        'the first next step is the agenda subscription',
+      );
+    } else {
+      assert.equal(next && next.hidden, true, 'the next step hides as soon as a demand is open');
     }
   }
 });

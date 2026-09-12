@@ -286,7 +286,11 @@ test.describe('notary inventory keeps its footprint', () => {
           else await page.reload();
           await expect(page.locator('#notary-live')).toBeVisible();
           await expect(page.locator('#notary-live-grid .nc-live-card')).toHaveCount(Math.min(count, 12));
-          await expect(page.locator('#notary-live-grid .nc-live-slot')).toHaveCount(Math.max(0, 6 - Math.min(count, 12)));
+          // At zero the footprint shrinks to NC_LIVE_EMPTY_SLOTS: the next-step
+          // band under the grid carries the page, so the grid stops reserving
+          // room for inventory that is not there.
+          const floor = count ? 6 : 3;
+          await expect(page.locator('#notary-live-grid .nc-live-slot')).toHaveCount(Math.max(0, floor - Math.min(count, 12)));
           await settled(page);
           const geometry = { hero: await boxOf(page, '#pane-notaires .intro--hero') };
           for (const id of ['notary-live-grid', 'notary-console', 'notary-carnet', 'nc-conformite']) {
@@ -307,7 +311,7 @@ test.describe('notary inventory keeps its footprint', () => {
           }
           if (count === 0) {
             const empty = page.locator('.nc-live-empty');
-            await expect(empty.locator('strong')).toHaveText(lang === 'fr' ? 'Pas d’offres' : 'No offers');
+            await expect(empty.locator('strong')).toHaveText(lang === 'fr' ? 'Aucune demande ouverte' : 'No open request');
             const rect = await boxOf(page, '.nc-live-empty');
             expect(rect.height).toBe(geometry['notary-live-grid'].height);
             expect(rect.width).toBe(geometry['notary-live-grid'].width);
