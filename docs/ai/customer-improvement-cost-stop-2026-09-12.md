@@ -1,7 +1,16 @@
 # Customer-improvement execution cost controls
 
-Reviewed: 2026-09-12. This change is local to
-`codex/ai-worker-cost-stop-2026-09-12`. It has not been applied to AWS.
+Reviewed: 2026-09-12. Implementation branch:
+`codex/ai-worker-cost-stop-2026-09-12`.
+
+Production pause applied on 2026-09-12 using targeted control-plane updates:
+`nota-daily-customer-improvement` is `DISABLED`, worker reserved concurrency is
+`0`, and `NOTA_AUTONOMOUS_IMPROVEMENT_ENABLED` is `false`. All three values were
+read back; Lambda reported `LastUpdateStatus=Successful`. The account and
+schedule target were checked before changes. No model or worker invocation was
+performed. The handler/CLI patch is released separately through CI. Additional
+Terraform asynchronous retry/failure-destination settings below remain declared
+changes until explicitly applied; no full Terraform apply was performed.
 
 ## What changed
 
@@ -54,9 +63,10 @@ No existing data or alarms are deleted by this patch.
 
 Cost Explorer's API itself is charged per request (the public primary billing
 view price reviewed today is USD 0.01/request). Earlier Cost Explorer reads may
-therefore have added charges. This iteration made no AWS API requests, no model
-calls, no live evaluation and no training job. Public documentation research,
-GitHub status reads, local tests and builds do not invoke Nota's AWS workload.
+therefore have added charges. Development validation made no AWS API requests;
+the subsequent production pause used control-plane requests only. There were no
+model calls, live evaluations, Cost Explorer requests or training jobs. No new
+invoice measurement is asserted here.
 
 Before release, review the Terraform plan against the production backend and
 actual variables; do not reuse the earlier mismatched plan or treat a code-only

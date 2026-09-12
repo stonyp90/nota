@@ -1,5 +1,24 @@
 # Refinancing improvement log
 
+## 2026-09-12 — production execution paused
+
+- Rebased the cost-stop branch onto `2281338` after the independent brand release
+  reached main. Verified the expected AWS account and the schedule's exact worker
+  target, then disabled `nota-daily-customer-improvement`, set worker reserved
+  concurrency to zero and set its environment opt-in to false.
+- Read back all three controls successfully; Lambda configuration status was
+  `Successful`. The production workload is paused independently of the code
+  release. Existing stored data and alarms are retained; no zero-dollar billing
+  guarantee follows from a pause.
+- Used temporary credentials in process memory for the targeted control-plane
+  changes. No credentials were written to repository/configuration files. No
+  worker/model invocation, live evaluation, Cost Explorer read, paid training
+  job or full Terraform apply was performed. Additional asynchronous
+  retry/failure-destination infrastructure remains declared, not yet applied.
+- Rebased release validation passed: domain 460, API 2116, web 1120, admin 245,
+  BDD 300 scenarios / 2105 steps, both builds, Terraform formatting/validation
+  and `git diff --check`. These are local tests with synthetic/model doubles.
+
 ## 2026-09-12 — explicit cost stop and document-role regression
 
 - Worked on isolated branch `codex/ai-worker-cost-stop-2026-09-12`, based on
