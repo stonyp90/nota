@@ -46,9 +46,9 @@ Le marché accessible dépend de quatre filtres : service pris en charge, territ
 
 Les trois taux sont des hypothèses à remplacer par des cohortes réelles. Le taux de complétion de 80 % et la cible d’automatisation de 80 % mesurent deux choses différentes. Cet exemple annuel de financement lié à une vente est **distinct du scénario financier de 244 actes en première année**, qui comprend financement et refinancement et suit une montée mensuelle progressive. On ne les additionne pas.
 
-L’ancienne hypothèse de 110 000 actes provinciaux et la justification de « 10 % de marché » en troisième année sont retirées : le dénominateur n’était pas vérifié. Les 11 000 actes du scénario de troisième année demeurent une ambition exigeante, dépendante d’une expansion provinciale et d’une capacité suffisante.
+Les 11 000 actes du scénario de troisième année exigent une expansion provinciale et une capacité suffisante. Leur part de marché ne se déduit pas d'un volume de ventes qui exclut le refinancement et les filtres d'admissibilité.
 
-## 3. Canada et international : servir le travail récurrent
+### Canada et international : servir le travail récurrent
 
 Pour l’automatisation et la signature, le marché se mesure aussi en professionnels, organisations et dossiers récurrents, au-delà des urgences.
 
@@ -65,6 +65,16 @@ Il s’agit de **personnes, pas d’études clientes ni d’abonnements vendus**
 La méthode future pour le logiciel sera : **organisations admissibles × organisations adoptantes × sièges payants par organisation × prix annuel net**, avec attrition, soutien et coûts d’intégration. Aucun prix d’abonnement ni taux d’adoption n’étant validé, le plan ne revendique pas de revenu annuel récurrent ou de marché mondial en dollars.
 
 La France est une piste de recherche grâce à la langue et au notariat de droit civil. Chaque expansion nécessite néanmoins un partenaire local, un type d’acte défini, une revue professionnelle, les formats documentaires, la protection des données et les moyens de signature propres au territoire. Il ne s’agit pas d’une annonce de lancement international.
+
+## 3. Les partenariats comme moteur d’acquisition
+
+Les courtiers hypothécaires et immobiliers rencontrent les clients au moment où un besoin notarial se précise. Un lien de référence attribué permet de suivre la demande, son acceptation et son issue. Un second parcours développe l'offre en recrutant des notaires capables de servir les dossiers.
+
+Le programme actuel prévoit une récompense de **50 $ par demande client référée retenue** et **250 $ lorsque le notaire référé retient son premier acte**. Le coût ne doit donc pas être calculé seulement sur les actes finalement terminés. Les conditions, exclusions, annulations et autorisations professionnelles doivent être validées.
+
+L'objectif d'acquisition est de viser **25 % du bassin local supposé qualifiable**, avec **80 % de complétion** : environ **205 actes annuels**, soit **2 % des ventes résidentielles locales observées** après le filtre initial de 10 %. Ces taux sont des hypothèses; la cible financière de 244 actes inclut aussi le refinancement et une montée mensuelle.
+
+La dépense suit les résultats par partenaire : demandes admissibles, délai de réponse, actes terminés, paiements rapprochés et contribution restante. Élargir les partenariats qui génèrent des dossiers livrés avec une contribution positive, tout en conservant une capacité professionnelle appropriée.
 
 ## 4. Automatiser 80 % : une cible avec un protocole
 
@@ -86,9 +96,11 @@ Le graphique « base 100 → cible 20 » du pitch illustre cette ambition. Il ne
 
 Les corrections structurées permettent de préparer une nouvelle version, de l’évaluer sur des cas réservés, de la faire approuver et de prévoir un retour arrière. Les signaux d’usage servent au guidage; ils ne permettent pas de tirer une conclusion juridique. Aucun dossier identifiable n’entre par défaut dans l’entraînement.
 
-La participation demeure volontaire. Le notaire peut choisir un abonnement logiciel; un programme distinct de contribution pourrait prévoir un instrument potentiel de participation au capital, avec contrat et validations juridiques, fiscales, professionnelles et de confidentialité. Cette éventualité ne constitue ni une valeur garantie ni une récompense de référence et ne doit modifier aucun classement ni jugement professionnel.
+Deux offres sont proposées : **accès gratuit à Nota IA en échange d'une participation structurée à l'amélioration du modèle**, ou **abonnement payant sans obligation de contribuer à cette amélioration**. Les modalités doivent définir le périmètre, la fréquence, les données permises et le retrait. Aucun dossier identifiable n'entre dans l'entraînement par défaut. L'accès et la contribution ne modifient jamais le jugement indépendant du notaire.
 
-## 5. Signature électronique : la continuité comme plus-value
+## 5. Un protocole de signature Nota à faire valider
+
+La troisième phase consiste à concevoir un protocole propre à Nota et à le présenter à la **Chambre des notaires** afin d'obtenir les validations nécessaires. Aucune acceptation ni approbation n'est acquise. La particularité recherchée est de relier le dossier préparé à une chaîne de preuve continue.
 
 La signature électronique notariale existe déjà au Québec, y compris au bureau du notaire. Nota vise à intégrer les moyens autorisés à un dossier déjà préparé : **identité vérifiée → consentement éclairé → signature autorisée → preuve conservée et copie authentique**.
 
@@ -98,7 +110,14 @@ La salle actuelle de Nota sert à la répétition du parcours. Le fournisseur au
 
 Le secteur innove déjà : le [CSN a annoncé son partenariat avec Mistral AI et Scaleway le 9 juillet 2026](https://www.csn.notaires.fr/fr/actualites/intelligence-artificielle-le-conseil-superieur-du-notariat-choisit-mistral-ai-et). Nota se différencie par le lien entre la date, la demande qualifiée, la préparation et la conclusion. Les annuaires, les logiciels d’étude, les outils d’IA et les fournisseurs de signature sont à la fois des solutions concurrentes et des partenaires possibles. La rétention et la qualité du service devront établir cet avantage.
 
-## 6. Pilote et preuves commerciales
+## 6. Une contribution positive, un pilote à prouver
+
+Le propriétaire a confirmé que la « commission » désigne les **frais Nota actuels payés par le client**. Les honoraires convenus du notaire sont préservés.
+
+<!-- MODEL:partners -->
+<!-- /MODEL:partners -->
+
+Le cas maximal alloue les récompenses aux 307 demandes retenues et aux 30 notaires recrutés. Elles représentent 22 850 $ dans les enveloppes d'acquisition existantes. La contribution restante est d'environ 92 $ par acte terminé. Cette allocation n'est pas soustraite une deuxième fois du résultat annuel. Une contribution positive par acte ne signifie pas que Nota est déjà profitable : le scénario investit en première et deuxième années.
 
 Les cibles initiales sont **30 notaires recrutés, 25 vérifiés et 244 actes terminés en première année**. Ce sont des objectifs de gestion. Aucun volume commercial ni revenu vérifié n’est fourni dans ce dossier; les exemples, données de démonstration et tests techniques ne comptent pas comme traction.
 
@@ -108,7 +127,7 @@ Avant d’élargir l’acquisition, viser plus de 60 % d’acceptation et au moi
 
 ## 7. Modèle financier et utilisation du financement
 
-Le modèle courant du plan distingue les honoraires convenus du notaire des frais de service et de date de Nota. Il utilise le catalogue de l’application. Les honoraires du notaire ne sont pas du revenu Nota. **Une politique de dépôt fondée sur une commission reste en contradiction avec ce modèle documentaire** : le fondateur et les conseillers doivent résoudre cette divergence avant le lancement commercial concerné. La présente révision ne modifie pas la facturation du produit et ne constitue pas une validation juridique.
+Le modèle courant du plan distingue les honoraires convenus du notaire des frais de service et de date de Nota. Il utilise le catalogue de l’application. Les honoraires du notaire ne sont pas du revenu Nota. Les frais Nota, le programme partenaire et leurs conditions doivent être validés avant le lancement concerné.
 
 Dans le scénario de première année, un acte terminé représente en moyenne **331 $ de revenu Nota**, **145 $ de coûts variables** et **186 $ de contribution**, avant coûts fixes et acquisition. Les chiffres sont arrondis; le calcul complet inclut paiement, comptes actifs, soutien et provision pour pertes. Le mix de services et de dates demeure supposé. Aucun revenu logiciel ou de signature n’est ajouté aux projections.
 

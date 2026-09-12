@@ -1,0 +1,19 @@
+/* The presentation starts with its content; controls are direct buttons. */
+.deck-head,.plan-deck-head{position:absolute!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap}
+.controls .hint,.footnote,.progress{display:none}
+.presentation-icon{display:inline-flex!important;align-items:center!important;justify-content:center!important;min-width:44px;min-height:44px;padding:10px!important}
+.presentation-icon svg{display:block;width:20px;height:20px;fill:none!important;stroke:currentColor;flex:none}
+.controls,.plan-controls{gap:8px}
+.stage,.plan-stage{max-height:calc(100svh - 192px)}
+.stage:fullscreen,.plan-stage:fullscreen{max-height:none}
+.thumbs{grid-template-columns:repeat(9,minmax(0,1fr));gap:6px}
+.thumb{background:var(--surface);color:var(--ink);border:1px solid var(--border);padding:4px;min-height:44px}
+.thumb img{display:none}.thumb span{font-size:11px;padding:4px;white-space:nowrap}
+.thumb[aria-current=true]{border-color:var(--brand);background:var(--surface-inset);box-shadow:inset 0 -2px 0 var(--brand)}
+.evidence[hidden],.plan-detail-content[hidden],.plan-notes[hidden],.plan-transcript-panel[hidden]{display:none!important}
+.plan-detail-content:not([hidden]),.plan-notes:not([hidden]),.plan-transcript-panel:not([hidden]){border-top:1px solid var(--border);padding-top:16px}
+.plan-transcript-panel{font-size:14px;color:var(--ink-muted)}
+.plan-experience{gap:14px}.plan-chapters{gap:6px}.plan-chapters button{font-size:12px}
+.plan-experience .market-explorer{padding:10px 14px}.plan-experience .market-inputs{gap:12px}
+@media(max-width:700px){.thumbs{grid-template-columns:repeat(3,minmax(0,1fr))}.plan-chapters{grid-template-columns:repeat(4,minmax(0,1fr))}.plan-chapters button{display:grid;gap:4px}.stage,.plan-stage{max-height:none}.plan-controls,.controls{gap:6px}.presentation-icon{padding:8px!important}.plan-experience .market-inputs{grid-template-columns:1fr}}
+@media print{.presentation-icon{display:none!important}}

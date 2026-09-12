@@ -28,7 +28,7 @@ The proposed **250 000 $ operating envelope** funds a 12-month pilot. The existi
 
 The base case ends Year 1 with about 45 377 $ cash. At least approximately 180 119 $ of additional capital is indicated by the modeled year-end deficits and reserve, before unmodeled obligations and within-year cash troughs. Later hiring remains conditional. No AI subscription or signing revenue is included in the financial forecast.
 
-The current documentation model distinguishes the notary’s agreed professional fee from Nota’s client service/date fees. A conflicting commission-only repository policy remains unresolved in §7. This revision changes the investor narrative and market evidence, not the legal status or production billing rules. The investable proof is a fulfilled local cohort, sound unit economics and measured preparation savings.
+The owner confirmed on September 12 that “commission” means Nota’s existing client-paid service/date fees, with the notary’s agreed professional fee preserved. The investable proof is a fulfilled local cohort, contribution after partner rewards, and measured preparation savings.
 
 ## 2. Customer problem and value proposition
 
@@ -108,7 +108,7 @@ Define the serviceable pool as observed transactions × the share requiring the 
 
 An illustrative annual scenario is **10,271 × 10% qualifiable × 25% captured × 80% completed = 205 completed sale-linked financing files**. Holding the last two rates constant, a 5%, 10% or 20% qualifiable share gives approximately 103, 205 or 411 completions. All three rates are assumed. The 80% completion assumption is separate from the 80% preparation-automation target.
 
-The financial forecast’s 244 Year 1 completions include financing **and refinancing**, with a month-by-month ramp. They are not obtained by adding this 205-act illustration. Retain the forecast as a pilot planning case until the actual pipeline, qualifying share, timing and refinancing demand are measured. Year 3’s 11,000 completions demand substantial provincial distribution and capacity; the old “10% of 110,000 acts” justification is withdrawn because that denominator was unverified.
+The financial forecast’s 244 Year 1 completions include financing **and refinancing**, with a month-by-month ramp. They are not obtained by adding this 205-act illustration. Retain the forecast as a pilot planning case until the actual pipeline, qualifying share, timing and refinancing demand are measured. Year 3’s 11,000 completions require substantial provincial distribution and capacity. Their market share cannot be inferred from a sales count that omits refinancing and eligibility filters.
 
 ### 5.3 International opportunity: software for the profession
 
@@ -129,7 +129,7 @@ The intended differentiation is the **connection between a deadline signal, qual
 
 
 
-Notairo currently advertises online preparation, availability checking and in-person signing for property transactions. Its public starting price for refinancing is 949 $, excluding taxes and disbursements, with possible additional charges for urgency or complexity. That package is not directly comparable with Nota's platform fee alone. The previous 295 $ intake-fee comparison is removed because it was not substantiated by the current homepage. [Notairo, checked September 9](https://notairo.com/).
+
 
 | Alternative | Competitive implication | Nota's proposed response |
 | --- | --- | --- |
@@ -156,6 +156,8 @@ Before launch, reconcile eligibility, earning event, payout event, cancellations
 
 With the Year 1 target of 307 retained requests, rewarding every one would consume 15 350 $ of the 40 000 $ client-acquisition envelope even though only 244 complete. Rewarding all 30 recruited notaries would consume 7 500 $ of the 15 000 $ supply-acquisition envelope. These are upper-bound budget illustrations, not expected referral shares. An unimplemented settlement-only policy cannot be assumed to save those costs.
 
+A conservative Year 1 allocation assigns all 307 retained client requests and all 30 recruited notaries a reward. Its total is 22 850 $, approximately 94 $ per completed act. The model retains approximately 92 $ per completed act after this allocation and variable costs. These rewards remain inside the operating acquisition budgets: subtracting them again from annual operating profit would double-count them.
+
 ### 6.2 Funnel and measurement definitions
 
 | Metric | Definition and purpose |
@@ -176,7 +178,7 @@ The finance model now distinguishes 534 posted, 307 retained and 244 completed r
 
 ## 7. Professional, tax and payment launch gates
 
-The separate Nota fee replaces the retired professional-fee share in the current code and later decisions. The repository's AGENTS.md still describes an older commission model. That contradiction needs a separately reviewed governance update; this document does not silently change repository instructions or revive the old arrangement.
+Nota charges its own client service/date fees. The owner explicitly confirmed this meaning of “commission” for this presentation on September 12, 2026. The notary’s agreed professional fees are preserved; no percentage deduction is modeled.
 
 Québec's Loi sur le notariat, art. 32.1, regulates specified intermediary arrangements. Keeping a notary's fees whole does not by itself resolve every question under that provision. Art. 46 allows a notary to authorize remote signature exceptionally on a party's request when the circumstances and parties' interests permit. An interface cannot grant that authorization. [Loi sur le notariat](https://www.legisquebec.gouv.qc.ca/fr/document/lc/N-3).
 
@@ -202,7 +204,7 @@ The signing room is an internal rehearsal and does not complete an act, charge t
 
 Nota's revenue is its own earned fee. Professional fees passed to notaries, collected tax and other third-party amounts must be tracked separately. The simplified planning model recognizes Nota fees on completed paid acts; an accountant must confirm gross/net presentation, recognition, refunds and any contingent liabilities under the final contracts.
 
-**Future model-enabled monetization.** Once the proprietary models pass a notary-reviewed, held-out validation by act type and the commercial and professional gates are closed, Nota can introduce a separate software subscription or usage fee for the model-enabled preparation layer. The subscription path is intended for notaries who want the product without a direct feedback commitment. A deeper collaboration path may use a potential equity instrument for notaries who contribute structured feedback and evaluation, subject to counsel, professional review and written terms. This future revenue stream and any equity arrangement are intentionally excluded from the base scenario until pricing, support cost, data rights, security, valuation and professional compliance are evidenced. The purpose is to put more capacity in a notary's hands, not to remove the notary: the target is to automate up to 80% of repeatable intake, checks and dossier assembly while the practising notary keeps independent legal judgment. A notary who can safely handle more qualified demand can create more earning capacity and help repair the current supply shortage. Actual income still depends on demand, accepted work, professional fees, operating costs and the final contracts.
+**Future AI offering.** Notaries may choose free access in exchange for a defined, voluntary contribution to model improvement, or a paid software subscription without an improvement contribution requirement. Free access terms must define eligible reviews, contribution cadence, data permissions and the exit path. Paid access does not buy ranking or influence over professional judgment. Pricing and the cost of supporting each group must be validated before recognizing software revenue; neither AI nor signing revenue is included in the base forecast.
 
 The settlement design collects the client's combined amount on the platform and transfers the notary's fee. Published Canadian domestic-card pricing is 2.9% plus 0.30 $ per successful charge. [Stripe Payments](https://stripe.com/en-ca/pricing). The modeled Connect arrangement adds 2 $ per payout-active account-month and 0.25% plus 0.25 $ per bank payout. [Stripe Connect](https://stripe.com/en-ca/connect/pricing).
 
@@ -218,6 +220,9 @@ The calculation is: **Nota fee − processing on the entire charge − payout/ac
 The mix is 40% financing/60% refinancing and 70% standard/18% fast/7% priority/3% urgent/2% same day, at starting bases and recommended multipliers. It is unobserved. The 30 $ service cost and 0.5% of charge loss allowance are planning assumptions covering incremental preparation/support/tooling and net refunds, disputes, cancellation costs or unrecovered funds. Record components separately as data arrives; do not count refunded revenue and the same loss twice.
 
 The model treats the service cost as incremental to budgeted founder/advisor/contractor capacity. If their paid time performs the same work, reclassify it rather than double-count it. Conversely, measure abandoned-file work and any professional validation costs not covered by that allowance.
+
+<!-- MODEL:partners -->
+<!-- /MODEL:partners -->
 
 ### 8.2 Loss segments and optimization order
 
@@ -268,7 +273,9 @@ Use **1 − assisted human minutes / manual human minutes** on the full defined 
 
 Accept a version only when the target is measured and the pre-agreed quality and safety criteria remain satisfied. Do not extrapolate one act type’s result to other services. Use authorized de-identified or synthetic evaluation data, retain traceability, and require documented notary approval and rollback before production changes.
 
-### 10.2 Electronic signing and the integrated dossier
+### 10.2 A Nota signing protocol to validate with the Chambre
+
+Phase 3 is to design a Nota-specific protocol and present it to the Chambre des notaires for the required professional and technical validations. No approval or endorsement has been obtained in this plan. Its distinctive value is the continuity between the prepared file and its chain of evidence, rather than inventing electronic signing.
 
 The value is fewer handoffs: validated identity and file → informed consent → authorized signature → preserved evidence and authentic copy. Québec’s [office signing guidance](https://www.cnq.org/votre-notaire/un-professionnel-numerique/signer-un-acte-notarie-technologique-au-bureau-du-notaire/) confirms that electronic signing already exists. [Remote signing remains exceptional and subject to the notary’s assessment](https://www.cnq.org/votre-notaire/un-professionnel-numerique/signer-un-acte-notarie-technologique/).
 
@@ -284,7 +291,7 @@ Dynamic improvement means daily signal collection and monitoring, held-out evalu
 
 Notaries choose how they participate:
 
-* **Feedback partner:** an opt-in notary contributes structured reviews, corrections and edge cases under a separate agreement and may receive potential equity or equity options. This is not guaranteed value, is not a referral reward and is subject to corporate, securities, tax, privacy and professional review. It cannot affect ranking, pricing, referrals or the notary's independent judgment.
+* **Contributing notary:** proposed free Nota AI access in exchange for structured reviews, corrections and edge cases under agreed terms. Participation is voluntary. Data rights, scope, cadence and withdrawal terms must be documented; the program never changes independent professional judgment.
 * **Paid software user:** a notary may use the AI layer through a monthly subscription or usage plan and decline the model-improvement contribution program. Paid access provides the tool; it does not purchase influence over the marketplace or reduce the notary's professional responsibilities.
 
 The intended win-win is practical. Clients receive clearer intake and faster next steps. Notaries receive a tool that can absorb repeatable preparation and help them serve more qualified requests. Nota receives evidence to improve the product. Contribution remains voluntary, and the model never replaces the responsible notary's advice, decision or signature.
@@ -307,7 +314,7 @@ Month 1 begins when the operating plan is funded and starts; it is not a claim t
 | Months 1–3 | 30 recruited / 25 verified and configured notaries | Service-area coverage, response exercise and named operating cover |
 | Months 4–6 | First controlled financing cohort; 20 cumulative paid completions in the ramp | Mature funnel outcomes and cost ledger; diagnose before scaling |
 | Months 7–9 | Repeatable local fulfillment; 87 cumulative completions | Positive segment contribution, on-time outcomes and repeat supply |
-| Months 7–12 | Invite a notary feedback cohort and test the equity or paid software paths | Written contribution terms, professional review, model-quality evidence and measured software margin |
+| Months 7–12 | Invite a notary feedback cohort and test free contributing access or paid software access | Written contribution terms, professional review, model-quality evidence and measured software margin |
 | Months 10–12 | Reach 244 cumulative completions in the base scenario | 80 813 $ modeled revenue, reconciled costs and evidence for follow-on funding |
 | Before expansion | New region/service readiness | Local supply, legal/integration requirements, measured acquisition and capacity |
 
@@ -368,7 +375,7 @@ Anthony Paquet is the founder and principal builder represented in the repositor
 
 Before circulating as a financing package, assemble incorporation and trade-name records, current cap table and beneficial ownership, IP assignments, contractor agreements, tax registrations, bank balances, liabilities, insurance quotes/policies, customer/provider contract versions and the regulatory opinion. The September 8 record identifies the tax registrant as GESTION A. PAQUET INC.; confirm the relationship between that entity, Nota's trade name, payment descriptor and the entity raising funds.
 
-The learning-loop proposal also needs counsel and a practising notary advisor to approve the feedback agreement, data permissions, equity or option mechanics, tax treatment, privacy boundaries and professional-independence safeguards before any invitation is made.
+The learning-loop proposal also needs counsel and a practising notary advisor to approve the feedback agreement, data permissions, free-access contribution terms, paid-subscription terms, privacy boundaries and professional-independence safeguards before any invitation is made.
 
 The proposed instrument remains a SAFE or convertible note, subject to counsel and negotiation. Valuation/cap, discount, conversion terms, governance rights and dilution are not specified and no investor commitment is claimed. Report funds secured separately from the fundraising target. The investment case should rest on a credible local experiment and its evidence, not unsupported precision about later rounds.
 

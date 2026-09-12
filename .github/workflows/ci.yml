@@ -61,13 +61,24 @@ jobs:
           npm run build --workspace @nota/web
           grep -q '<title>Nota Business Plan</title>' apps/web/dist/business-plan.html
           grep -qi '#386888' apps/web/dist/business-plan.html
-          grep -q 'Slide 1 of 16' apps/web/dist/pitch-deck.html
+          node <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const html = fs.readFileSync('apps/web/dist/pitch-deck.html', 'utf8');
+          const match = html.match(/<script type="application\/json" id="deck-data">([\s\S]*?)<\/script>/);
+          assert.ok(match, 'The native investor deck data must be shipped');
+          const data = JSON.parse(match[1]);
+          for (const lang of ['fr', 'en']) {
+            assert.equal(data.editions[lang].length, 9, 'The investor story has nine slides');
+            for (let n = 1; n <= 9; n++) {
+              assert.ok(fs.existsSync('apps/web/dist/pitch-deck/dark-slide-' + (lang === 'fr' ? 'fr-' : '') + n + '.png'));
+            }
+          }
+          NODE
           if grep -qiE 'Version[[:space:]]+1\.6|Reviewed[[:space:]]+2026' apps/web/dist/pitch-deck.html; then
             echo 'Pitch deck must not expose internal version metadata' >&2
             exit 1
           fi
-          test -f apps/web/dist/pitch-deck/dark-slide-16.png
-          test -f apps/web/dist/pitch-deck/dark-slide-fr-16.png
           head -c 5 apps/web/dist/nota-pitch-deck.pdf | grep -q '%PDF-'
 
       - name: Upload business plan bundle

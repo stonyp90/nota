@@ -1,5 +1,5 @@
 {
-  "version": "1.7",
+  "version": "1.8",
   "date": "2026-09-12",
   "scope": "financing-only planning scenarios; four-service code catalogue",
   "assumptions": {
@@ -416,6 +416,20 @@
         "completed": 410.8400000000001
       }
     ]
+  },
+  "partnerEconomics": {
+    "clientReward": 50,
+    "notaryReward": 250,
+    "rewardedClientRequests": 307,
+    "rewardedNotaries": 30,
+    "completed": 244,
+    "clientBudget": 15350,
+    "notaryBudget": 7500,
+    "total": 22850,
+    "perCompletedAct": 93.64754098360656,
+    "contributionAfterRewards": 22527.163199999988,
+    "contributionPerCompletedAct": 92.32443934426225,
+    "remainingOperatingBudget": 227150
   },
   "months": [
     {

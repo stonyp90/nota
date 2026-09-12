@@ -1,6 +1,7 @@
 /* Nota business plan: eight native slides with an auditable detail layer. */
 (() => {
   'use strict';
+  const ui = window.NotaPresentation;
   const data = JSON.parse(document.getElementById('plan-deck-data').textContent);
   const $ = id => document.getElementById(id);
   const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
@@ -22,9 +23,9 @@
   const combine = ids => ids.map(id => sections[id - 1]).join('');
   const details = {
     fr: french.innerHTML.split(/(?=<h2>)/).slice(1),
-    en: [combine([1,2,3]), part(sections[4], null, '5.3'), part(sections[4], '5.3'),
+    en: [combine([1,2,3]), sections[4], combine([6]),
       part(sections[9], null, '10.2') + part(sections[9], '10.3'),
-      part(sections[9], '10.2', '10.3'), combine([4,6,11]), combine([8,12]), combine([7,9,13,14,15])]
+      part(sections[9], '10.2', '10.3'), combine([4,8,11]), combine([12]), combine([7,9,13,14,15])]
   };
   const brand = document.querySelector('.plan-header .plan-brand').outerHTML;
   const main = document.querySelector('main');
@@ -32,27 +33,27 @@
     '<div class="plan-deck-head"><div><h1 id="planTitle"></h1><p id="planSubtitle"></p></div><span class="plan-counter" id="planCounter" aria-live="polite"></span></div>' +
     '<div class="plan-stage" id="planStage" role="region"><div class="plan-fullscreen-brand">' + brand + '</div><div class="slide" id="planSlide"></div>' +
     '<div class="plan-fullscreen-controls"><button data-plan-fs="prev">←</button><button data-plan-fs="next">→</button><button data-plan-fs="replay"></button><button data-plan-fs="motion"></button><button data-plan-fs="exit"></button></div></div>' +
-    '<div class="plan-controls"><button id="planPrevious">←</button><button id="planNext">→</button><button id="planReplay"></button><button id="planMotion" aria-pressed="false"></button><button id="planPlay" aria-pressed="false"></button><button id="planFullscreen"></button></div>' +
-    '<nav class="plan-chapters" id="planChapters"></nav><p class="plan-evidence" id="planEvidence"></p><div class="plan-source-links" id="planSources"></div>' +
-    '<div class="plan-interaction" id="planInteraction"></div><details class="plan-drilldown"><summary id="planDetailLabel"></summary><div class="plan-detail-content" id="planDetail"></div></details>' +
-    '<details class="plan-transcript"><summary id="planTranscriptLabel"></summary><p id="planTranscript"></p></details></div>';
+    '<div class="plan-controls"><button id="planPrevious">←</button><button id="planNext">→</button><button id="planReplay"></button><button id="planMotion" aria-pressed="false"></button><button id="planPlay" aria-pressed="false"></button><button id="planFullscreen"></button><button id="planDetailToggle"></button><button id="planSourcesToggle"></button><button id="planTranscriptToggle"></button></div>' +
+    '<nav class="plan-chapters" id="planChapters"></nav><section class="plan-notes" id="planNotes" hidden><p class="plan-evidence" id="planEvidence"></p><div class="plan-source-links" id="planSources"></div></section>' +
+    '<div class="plan-interaction" id="planInteraction"></div><section class="plan-detail-content" id="planDetailPanel" hidden><h2 id="planDetailLabel"></h2><div id="planDetail"></div></section>' +
+    '<section class="plan-transcript-panel" id="planTranscriptPanel" hidden><h2 id="planTranscriptLabel"></h2><p id="planTranscript"></p></section></div>';
   const printContent = document.createElement('div'); printContent.className = 'plan-print-only'; main.append(printContent);
   const stage = $('planStage');
   const copy = {
     fr: {title:'Plan d’affaires', subtitle:'Une stratégie en trois étapes. Huit chapitres pour l’examiner.', chapter:'Chapitre',
-      chapters:['Thèse','Marché local','International','Automatisation','Signature','Pilote','Financement','Gouvernance'],
+      chapters:['Thèse','Marché','Partenariats','IA','Signature','Économie','Financement','Exécution'],
       previous:'Chapitre précédent', next:'Chapitre suivant', replay:'Rejouer l’animation', pause:'Pause', resume:'Reprendre',
       disabled:'Animation désactivée', auto:'Défilement automatique', stop:'Arrêter le défilement', full:'Plein écran', exit:'Quitter le plein écran',
-      detail:'Approfondir ce chapitre', transcript:'Lire le contenu de la diapositive', deck:'Présentation', theme:'Thème',
+      sources:'Sources et hypothèses', detail:'Approfondir ce chapitre', transcript:'Lire le contenu de la diapositive', deck:'Présentation', theme:'Thème',
       assumption:'Vision, cibles ou hypothèses internes. Le détail de ce chapitre précise leurs limites.',
       calculator:'Explorer le scénario local', qualify:'Part qualifiable', capture:'Part captée', completion:'Taux de complétion',
       acts:'actes par année', calcNote:'Trois hypothèses à tester sur les 10 271 ventes observées dans la RMR de Québec en 2025. Ce résultat est distinct des 244 actes du modèle de première année.',
       cash:'Solde mensuel de trésorerie', month:'Mois', cashNote:'Scénario de base, après la levée initiale. Les obligations non modélisées et les variations réelles peuvent réduire ce solde.'},
     en: {title:'Business plan', subtitle:'A three-stage strategy. Eight chapters to examine it.', chapter:'Chapter',
-      chapters:['Thesis','Local market','International','Automation','Signing','Pilot','Funding','Governance'],
+      chapters:['Thesis','Market','Partners','AI','Signing','Economics','Funding','Execution'],
       previous:'Previous chapter', next:'Next chapter', replay:'Replay animation', pause:'Pause', resume:'Resume',
       disabled:'Animation disabled', auto:'Auto-advance', stop:'Stop auto-advance', full:'Full screen', exit:'Exit full screen',
-      detail:'Explore this chapter in detail', transcript:'Read the slide content', deck:'Pitch deck', theme:'Theme',
+      sources:'Sources and assumptions', detail:'Explore this chapter in detail', transcript:'Read the slide content', deck:'Pitch deck', theme:'Theme',
       assumption:'Internal vision, targets or assumptions. This chapter’s detail explains their limits.',
       calculator:'Explore the local scenario', qualify:'Qualifiable share', capture:'Captured share', completion:'Completion rate',
       acts:'acts per year', calcNote:'Three assumptions to test against the 10,271 observed 2025 sales in the Québec City CMA. This result is separate from the 244 acts in the Year 1 model.',
@@ -67,7 +68,7 @@
     const off = motionQuery.matches;
     stage.classList.toggle('motion-paused', paused || document.hidden);
     [$('planMotion'), stage.querySelector('[data-plan-fs=motion]')].forEach(button => {
-      button.textContent = copy[language][off ? 'disabled' : paused ? 'resume' : 'pause'];
+      ui.set(button, copy[language][off ? 'disabled' : paused ? 'resume' : 'pause'], off ? 'motionOff' : paused ? 'play' : 'pause');
       button.disabled = off; button.setAttribute('aria-pressed', String(paused || off));
     });
     [$('planReplay'), stage.querySelector('[data-plan-fs=replay]')].forEach(button => { button.disabled = off; });
@@ -76,13 +77,14 @@
     clearInterval(timer); timer = null; playing = value;
     if (value) timer = setInterval(() => current === 8 ? setPlaying(false) : setChapter(current + 1), 12000);
     $('planPlay').setAttribute('aria-pressed', String(value));
-    $('planPlay').textContent = copy[language][value ? 'stop' : 'auto'];
+    ui.set($('planPlay'), copy[language][value ? 'stop' : 'auto'], value ? 'stop' : 'play');
   }
   function updateMarket() {
     const c = copy[language], base = data.market.observed.quebecCmaSales;
     const result = number(base * assumptions.reduce((total,value) => total * value / 100, 1));
     const formula = assumptions.map(value => value + ' %').join(' × ');
-    $('planSlide').querySelector('[data-plan-formula]').textContent = formula;
+    $('planSlide').querySelector('[data-plan-formula]').textContent = number(base) + ' × ' + formula;
+    $('planSlide').querySelector('[data-plan-share]').textContent = assumptions[1] + (language === 'fr' ? ' % du bassin qualifiable' : '% of the qualifiable pool');
     $('planSlide').querySelector('[data-plan-result]').textContent = result;
     const box = $('planInteraction');
     box.querySelector('[data-market-result]').textContent = result;
@@ -104,16 +106,16 @@
     const c = copy[language], target = $('planInteraction');
     target.replaceChildren();
     if (current === 2) {
-      target.innerHTML = '<section class="market-explorer" data-market-lang="' + language + '" aria-labelledby="planCalcTitle"><h3 id="planCalcTitle">' + c.calculator + '</h3><p>' + c.calcNote + '</p><div class="market-inputs">' +
+      target.innerHTML = '<section class="market-explorer" data-market-lang="' + language + '" aria-label="' + c.calculator + '"><div class="market-inputs">' +
         ['qualify','capture','completion'].map((key,i) => '<label>' + c[key] + ' · <output>' + assumptions[i] + ' %</output><input type="range" min="0" max="100" step="5" value="' + assumptions[i] + '" data-assumption="' + i + '" aria-label="' + c[key] + '"></label>').join('') +
-        '</div><div class="market-outcome" aria-live="polite"><strong data-market-result></strong><span>' + c.acts + '</span></div><p data-market-equation></p></section>';
+        '</div><div class="market-outcome sr-only" aria-live="polite"><strong data-market-result></strong><span>' + c.acts + '</span></div><p class="sr-only" data-market-equation></p></section>';
       target.querySelectorAll('input').forEach(input => input.addEventListener('input', () => {
         setPlaying(false); assumptions[Number(input.dataset.assumption)] = Number(input.value); updateMarket();
       }));
       updateMarket();
     }
     if (current === 7) {
-      target.innerHTML = '<div class="plan-cash-control"><label for="planCashMonth">' + c.cash + '</label><input id="planCashMonth" type="range" min="1" max="12" step="1" value="' + cashMonth + '"><p id="planCashLabel" aria-live="polite"></p><p>' + c.cashNote + '</p></div>';
+      target.innerHTML = '<div class="plan-cash-control"><label for="planCashMonth">' + c.cash + '</label><input id="planCashMonth" type="range" min="1" max="12" step="1" value="' + cashMonth + '"><p id="planCashLabel" aria-live="polite"></p></div>';
       $('planCashMonth').addEventListener('input', () => { setPlaying(false); cashMonth = Number($('planCashMonth').value); updateCash(); });
       updateCash();
     }
@@ -145,17 +147,18 @@
     $('theme-toggle').setAttribute('aria-checked', String(dark));
     $('theme-toggle').setAttribute('aria-label', copy[language].theme);
   }
-  function syncFullscreen() { $('planFullscreen').textContent = copy[language][document.fullscreenElement ? 'exit' : 'full']; }
+  function syncFullscreen() { ui.set($('planFullscreen'),copy[language][document.fullscreenElement ? 'exit' : 'full'],document.fullscreenElement ? 'exit' : 'fullscreen'); }
   function setLanguage(lang) {
     language = lang; const c = copy[lang];
     printContent.innerHTML = '<h1>' + c.title + '</h1>' + details[lang].join('');
     document.documentElement.lang = lang === 'fr' ? 'fr-CA' : 'en-CA'; document.title = 'Nota · ' + c.title;
     const names = {planTitle:'title',planSubtitle:'subtitle',planReplay:'replay',planDetailLabel:'detail',planTranscriptLabel:'transcript'};
     Object.entries(names).forEach(([id,key]) => { $(id).textContent = c[key]; });
-    [$('planPrevious'),stage.querySelector('[data-plan-fs=prev]')].forEach(button => button.setAttribute('aria-label',c.previous));
-    [$('planNext'),stage.querySelector('[data-plan-fs=next]')].forEach(button => button.setAttribute('aria-label',c.next));
-    stage.querySelector('[data-plan-fs=replay]').textContent = c.replay;
-    stage.querySelector('[data-plan-fs=exit]').textContent = c.exit;
+    [$('planPrevious'),stage.querySelector('[data-plan-fs=prev]')].forEach(button => ui.set(button,c.previous,'previous'));
+    [$('planNext'),stage.querySelector('[data-plan-fs=next]')].forEach(button => ui.set(button,c.next,'next'));
+    [$('planReplay'),stage.querySelector('[data-plan-fs=replay]')].forEach(button => ui.set(button,c.replay,'replay'));
+    ui.set(stage.querySelector('[data-plan-fs=exit]'),c.exit,'exit');
+    ui.set($('planDetailToggle'),c.detail,'detail');ui.set($('planSourcesToggle'),c.sources,'info');ui.set($('planTranscriptToggle'),c.transcript,'transcript');
     $('planChapters').setAttribute('aria-label', c.title);
     $('planChapters').replaceChildren();
     c.chapters.forEach((title,i) => {
@@ -208,6 +211,9 @@
   let touchX = null;
   stage.addEventListener('touchstart', event => { if (!event.target.closest('button,a')) touchX = event.changedTouches[0].clientX; }, {passive:true});
   stage.addEventListener('touchend', event => { if (touchX !== null) { const delta = event.changedTouches[0].clientX - touchX; if (Math.abs(delta) > 70) move(delta < 0 ? 1 : -1); } touchX = null; }, {passive:true});
+  for (const [buttonId,panelId] of [['planDetailToggle','planDetailPanel'],['planSourcesToggle','planNotes'],['planTranscriptToggle','planTranscriptPanel']]) {
+    const button=$(buttonId),panel=$(panelId);button.setAttribute('aria-controls',panelId);button.setAttribute('aria-expanded','false');button.addEventListener('click',()=>{panel.hidden=!panel.hidden;button.setAttribute('aria-expanded',String(!panel.hidden));});
+  }
   current = chapterFromHash(); setLanguage(language);
-  document.querySelector('.plan-transcript').open = matchMedia('(max-width:600px)').matches;
+
 })();

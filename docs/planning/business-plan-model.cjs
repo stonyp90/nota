@@ -101,7 +101,25 @@ const market = {
 market.localScenario.completed = market.observed.quebecCmaSales * market.localScenario.qualifiableShare * market.localScenario.capturedShare * market.localScenario.completionRate;
 market.localSensitivity = [0.05,0.10,0.20].map(qualifiableShare=>({qualifiableShare,completed:market.observed.quebecCmaSales*qualifiableShare*market.localScenario.capturedShare*market.localScenario.completionRate}));
 assert.ok(Math.abs(market.localScenario.completed-205.42)<1e-8);
-const output={version:'1.7',date:'2026-09-12',scope:'financing-only planning scenarios; four-service code catalogue',assumptions,catalogue,rows,baseline,market,months,years,scenarios};
+// Partner rewards are already inside the acquisition operating envelopes.
+// Allocate their maximum Year 1 cost to completed acts for the unit-economics
+// illustration without subtracting them again from the annual result.
+const partnerEconomics = {
+  clientReward: d.REFERRAL.client,
+  notaryReward: d.REFERRAL.notaire,
+  rewardedClientRequests: assumptions.retained[0],
+  rewardedNotaries: assumptions.notaries[0],
+  completed: assumptions.completed[0],
+};
+partnerEconomics.clientBudget = partnerEconomics.clientReward * partnerEconomics.rewardedClientRequests;
+partnerEconomics.notaryBudget = partnerEconomics.notaryReward * partnerEconomics.rewardedNotaries;
+partnerEconomics.total = partnerEconomics.clientBudget + partnerEconomics.notaryBudget;
+partnerEconomics.perCompletedAct = partnerEconomics.total / partnerEconomics.completed;
+partnerEconomics.contributionAfterRewards = years[0].contribution - partnerEconomics.total;
+partnerEconomics.contributionPerCompletedAct = partnerEconomics.contributionAfterRewards / partnerEconomics.completed;
+partnerEconomics.remainingOperatingBudget = years[0].operating - partnerEconomics.total;
+assert.ok(Math.abs(partnerEconomics.contributionAfterRewards - partnerEconomics.remainingOperatingBudget - years[0].operatingResult)<1e-7);
+const output={version:'1.8',date:'2026-09-12',scope:'financing-only planning scenarios; four-service code catalogue',assumptions,catalogue,rows,baseline,market,partnerEconomics,months,years,scenarios};
 function finite(obj){for(const v of Object.values(obj)){if(typeof v==='number')assert.ok(Number.isFinite(v));else if(v&&typeof v==='object')finite(v);}}
 finite(output);
 for(const y of years){assert.ok(Math.abs(y.charges-y.honoraires-y.revenue)<1e-7);assert.ok(Math.abs(y.revenue-y.card-y.payout-y.account-y.service-y.losses-y.contribution)<1e-7);}

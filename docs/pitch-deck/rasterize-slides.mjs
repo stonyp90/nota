@@ -14,14 +14,14 @@
 //   python3 docs/pitch-deck/render-slides.py --svg-out /tmp/slides
 //   node docs/pitch-deck/rasterize-slides.mjs /tmp/slides
 //
-// Writes docs/pitch-deck/dark-slide-N.png and dark-slide-fr-N.png (N = 1…16),
+// Writes docs/pitch-deck/dark-slide-N.png and dark-slide-fr-N.png (N = 1…9),
 // 1600×900 at 1×, the geometry the deck page expects (the same frame the
 // ImageMagick path of render-slides.py writes).
 //
 // The QUÉBEC badge of the lockup is the one element the SVG cannot size itself:
 // render-slides.py estimates the text width, and this script re-measures it
 // with the real Inter 800 glyphs and fits the ground (padding .55em .7em) to it.
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { join, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
@@ -33,7 +33,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const src = process.argv[2];
 if (!src) { console.error('usage: node rasterize-slides.mjs <dir with the SVG frames>'); process.exit(2); }
 const frames = readdirSync(src).filter((f) => /^dark-slide-(fr-)?\d+\.svg$/.test(f)).sort();
-if (frames.length !== 32) { console.error(`expected 32 frames in ${src}, found ${frames.length}`); process.exit(2); }
+if (frames.length !== 18) { console.error(`expected 18 frames in ${src}, found ${frames.length}`); process.exit(2); }
 
 // Les quatre tranches variables servies par Nota, embarquées en base64 : une
 // page `setContent` n'a pas d'origine, donc une URL file:// y serait refusée.
@@ -75,4 +75,6 @@ for (const f of frames) {
   written++;
 }
 await browser.close();
+const currentNames=new Set(frames.map(name=>basename(name,'.svg')+'.png'));
+for(const name of readdirSync(here))if(/^dark-slide-(fr-)?\d+\.png$/.test(name)&&!currentNames.has(name))unlinkSync(join(here,name));
 console.log(`wrote ${written} frames to ${here}`);

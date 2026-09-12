@@ -383,6 +383,14 @@ def model_blocks(model):
             ["Payment contribution before service/loss", cad(b["paymentBeforeAccount"] - 2)],
         ],
     )
+    pe = model["partnerEconomics"]
+    partners_html = table(
+        ["Mesure" if LANGUAGE=="fr" else "Measure", "Par acte terminé · CAD" if LANGUAGE=="fr" else "Per completed act · CAD"],
+        [[("Frais Nota" if LANGUAGE=="fr" else "Nota fees"), cad(b["nota"])],
+         [("Coûts variables" if LANGUAGE=="fr" else "Variable costs"), cad(b["nota"]-model["years"][0]["contribution"]/pe["completed"])],
+         [("Allocation partenaire maximale A1" if LANGUAGE=="fr" else "Maximum Year 1 partner allocation"), cad(pe["perCompletedAct"])],
+         [("Contribution après récompenses" if LANGUAGE=="fr" else "Contribution after rewards"), cad(pe["contributionPerCompletedAct"])]]
+    )
     annual_rows = []
     for i, y in enumerate(model["years"], 1):
         annual_rows.append([
@@ -397,7 +405,7 @@ def model_blocks(model):
     cash_html = table(["Month", "Completed acts", "Opening cash", "Contribution", "Operating budget", "Closing cash"], cash_rows)
     scenario_rows = [[s["name"], cad(s["capitalWithReserve"]), cad(s["extraBeyondRaise"])] for s in model["scenarios"]]
     scenarios_html = table(["Scenario", "Capital incl. reserve", "Beyond proposed raise"], scenario_rows)
-    return {
+    return {"partners": partners_html,
         "catalogue": catalogue_html,
         "tiers": tier_html,
         "market": market_html,
@@ -444,6 +452,7 @@ def sectionize(rendered):
 
 def clean_public_copy(rendered):
     """Apply production typography to the shareable plan surface."""
+    rendered = re.sub(r"(?<![\\w$])(\\d(?:[\\d \\u00a0]*\\d)?)\\s*\\$", lambda m: cad(float(re.sub(r"[ \\u00a0]", "", m.group(1)))), rendered)
     # Keep the Markdown source readable while avoiding editorial separators in
     # the customer-facing page. Ranges remain explicit in plain language.
     rendered = rendered.replace(" — ", " ").replace(" – ", " to ")
@@ -532,7 +541,7 @@ def main():
     LANGUAGE = 'fr'
     french_blocks = model_blocks(model)
     french_labels = {"Year":"Année","Completed acts":"Actes terminés","Nota revenue":"Revenu Nota","Payment costs":"Coûts de paiement","Service + losses":"Soutien + pertes","Contribution":"Contribution","Operating budget":"Budget d’exploitation","Operating result":"Résultat d’exploitation","Scenario":"Scénario","Capital incl. reserve":"Capital avec réserve","Beyond proposed raise":"Au-delà de la levée proposée","Downside":"Défavorable","Base":"Base","Upside":"Favorable","Y1":"A1","Y2":"A2","Y3":"A3"}
-    for name in ('annual','scenarios'):
+    for name in ('annual','scenarios','partners'):
         block=french_blocks[name]
         for en,fr in french_labels.items(): block=block.replace('>'+en+'<','>'+fr+'<')
         french_source=french_source.replace(f"<!-- MODEL:{name} -->\n<!-- /MODEL:{name} -->",block)
