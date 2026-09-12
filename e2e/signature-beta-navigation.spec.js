@@ -3,6 +3,15 @@ const { test, expect } = require('@playwright/test');
 for (const [language, width] of [['fr', 1440], ['en', 1440], ['fr', 390], ['en', 390]]) {
   test(`signature Beta navigation and preview: ${language}, ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 });
+    // « Signature » needs an account since 2026-09-12 (portes-authentifiees):
+    // signed out, the door is not shown and the deep link lands on the carnet.
+    await page.addInitScript(() => {
+      try {
+        localStorage.setItem('nota.introSeen', '1');
+        localStorage.setItem('nota.onboarded.v1', '1');
+        localStorage.setItem('nota.profile.v1', JSON.stringify({ courriel: 'client@exemple.test', nom: 'Client' }));
+      } catch (e) { /* storage blocked */ }
+    });
     await page.goto('/?lang=' + language + '#t=beta');
     const pane = page.locator('#pane-beta');
     await expect(pane).toBeVisible();

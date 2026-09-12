@@ -1,9 +1,12 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
-const { gotoHome } = require('./helpers');
+const { gotoHome, chooseFinancingLenderAndTravel } = require('./helpers');
 
 for (const language of ['fr', 'en']) {
   test('compatible booking, validation and arrival context — ' + language, async ({ page }) => {
+    // Two navigations, validation, four form steps and publication. This is a
+    // functional journey; allow the same budget as other multi-step specs.
+    test.setTimeout(90_000);
     const errors = [];
     const events = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -29,8 +32,7 @@ for (const language of ['fr', 'en']) {
     await sheet.locator('#crit-valeur_pret').fill('350000');
     await sheet.locator('#crit-contexte__propriete_detenue').click();
     await sheet.locator('#crit-approbation_bancaire__obtenue').click();
-    await sheet.locator('#crit-preteur').selectOption('banque_nationale');
-    await sheet.locator('#crit-deplacement').selectOption('client_50');
+    await chooseFinancingLenderAndTravel(sheet);
     await next.click();
     await next.click();
     await sheet.locator('#o-prefix').fill('G1R');

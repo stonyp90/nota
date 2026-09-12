@@ -25,15 +25,17 @@ const WEB_BASE = `http://localhost:${WEB_PORT}`;
 
 module.exports = defineConfig({
   testDir: './e2e',
+  // The *.test.mjs signing journeys use node:test and own their servers.
+  // Importing them during Playwright discovery starts untracked browsers.
+  testMatch: '**/*.spec.js',
   // Keep the whole suite fast and independent — every spec file runs in parallel.
   fullyParallel: true,
   // A stray test.only must fail the CI run rather than silently shrink coverage.
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  // One worker on CI keeps the shared in-memory API deterministic; local dev
-  // fans out. Specs are written to be mutation-safe either way (unique codes,
-  // additive bookings), so this is a determinism nicety, not a correctness need.
-  workers: process.env.CI ? 1 : undefined,
+  // The suite opens real media peers and several browser engines. Keep the
+  // default local run bounded too; opt into more workers with --workers=N.
+  workers: 1,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : [['list']],
   timeout: 30_000,
   expect: { timeout: 7_000 },
@@ -47,11 +49,11 @@ module.exports = defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'firefox', testMatch: /(compatibility|every-surface)\.spec\.js/, use: { ...devices['Desktop Firefox'] } },
-    { name: 'webkit', testMatch: /(compatibility|every-surface)\.spec\.js/, use: { ...devices['Desktop Safari'] } },
-    { name: 'iphone', testMatch: /(compatibility|every-surface)\.spec\.js/, use: { ...devices['iPhone 13'] } },
-    { name: 'android', testMatch: /(compatibility|every-surface)\.spec\.js/, use: { ...devices['Pixel 7'] } },
-    { name: 'ipad', testMatch: /(compatibility|every-surface)\.spec\.js/, use: { ...devices['iPad (gen 7)'] } },
+    { name: 'firefox', testMatch: /(compatibility|every-surface|client-calendar-guide)\.spec\.js/, use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', testMatch: /(compatibility|every-surface|client-calendar-guide)\.spec\.js/, use: { ...devices['Desktop Safari'] } },
+    { name: 'iphone', testMatch: /(compatibility|every-surface|client-calendar-guide)\.spec\.js/, use: { ...devices['iPhone 13'] } },
+    { name: 'android', testMatch: /(compatibility|every-surface|client-calendar-guide)\.spec\.js/, use: { ...devices['Pixel 7'] } },
+    { name: 'ipad', testMatch: /(compatibility|every-surface|client-calendar-guide)\.spec\.js/, use: { ...devices['iPad (gen 7)'] } },
   ],
   // Start the API first (its /health gate), then the web app that proxies to it.
   // reuseExistingServer keeps local iteration instant; CI always boots clean.

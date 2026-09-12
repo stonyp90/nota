@@ -35,9 +35,9 @@ const blocks = (sel) => {
   return list;
 };
 
-test('chooser: two real door buttons and the enter link, no durations anywhere', () => {
+test('chooser: three real door buttons and the enter link, no durations anywhere', () => {
   const doors = doc.querySelectorAll('#intro-gate .ig-door');
-  assert.equal(doors.length, 2, 'two doors: client and notaire');
+  assert.equal(doors.length, 3, 'three doors: client, notaire and partner');
   for (const d of doors) {
     assert.equal(d.tagName, 'BUTTON', 'a door is a real button');
     assert.equal(d.getAttribute('type'), 'button', 'never an implicit submit');
@@ -90,7 +90,7 @@ test('film: the frame is a fixed, edge-to-edge viewport layer with no card chrom
   // The stage supplies both axes for responsive spacing; text has a fixed minimum.
   assert.ok(stage.some((b) => /container-type:\s*size/.test(b)),
     'the stage is a size container (cqw AND cqh available)');
-  assert.match(css, /font-size: clamp\(32px, 5.4cqw, 72px\)/, 'headings retain a readable minimum');
+  assert.match(css, /font-size: clamp\(28px, 4.5cqw, 56px\)/, 'headings retain a readable minimum and a restrained maximum');
 });
 
 // The detailed professional commitments remain readable on the notary landing.
@@ -102,7 +102,7 @@ function assertThreeArticles(root, tileSel) {
   assert.equal(tiles.length, 3, 'three tiles: ' + tileSel);
   for (const t of tiles) assert.ok(t.querySelector('svg'), 'each tile is illustrated');
   const txt = FLAT(root.textContent);
-  assert.match(txt, /Nota respecte les règles de votre profession/);
+  assert.match(txt, /Votre indépendance et vos obligations restent entières/);
   assert.match(txt, /Art\. 32\.1/); assert.match(txt, /Loi sur le notariat/); assert.match(txt, /100 %/);
   assert.match(txt, /Art\. 32 et 29\.1/); assert.match(txt, /Code de déontologie/);
   assert.match(txt, /Art\. 49/);
@@ -111,26 +111,37 @@ function assertThreeArticles(root, tileSel) {
   assert.ok(!/commission|pourcentage|\d+\s*%(?!\s*du montant)/.test(txt.replace('100 %', '')), 'no share vocabulary: ' + txt);
 }
 
-test('both films explain the outcome in four scenes, keep Nota visible and offer a direct next step', () => {
+test('both films explain the outcome in four scenes and offer a direct next step', () => {
   for (const film of ['client', 'notaire']) {
     const stage = doc.querySelector('#ig-stage-' + film);
     const scenes = [...stage.querySelectorAll('.ig-scene')];
     assert.equal(scenes.length, 4);
     const masthead = stage.querySelector('.ig-masthead');
     const wordmark = masthead && masthead.querySelector('.ig-wordmark');
-    assert.ok(wordmark && wordmark.querySelector('svg'), 'the persistent header carries the Nota mark');
-    assert.equal(wordmark.querySelector('.ig-word')?.textContent.trim(), 'OTA', 'the intro uses the complete Nota lockup');
-    assert.ok(!masthead.closest('.ig-scene'), 'the brand stays outside the changing scenes');
     assert.equal(stage.querySelector('.ig-dollar, .ig-step'), null, 'each message stands on its own without dollar scenery or repeated step cards');
     for (const scene of scenes) {
       assert.ok(scene.querySelector('.ig-h'));
       assert.ok(scene.querySelector('.ig-sub'));
       assert.ok(!scene.hasAttribute('aria-hidden'), 'visible scene text stays accessible');
     }
-    for (const scene of [scenes[0], scenes.at(-1)]) {
-      const signature = scene.querySelector('.ig-signature');
-      assert.ok(signature && signature.querySelector('svg'), 'Nota opens and closes each film');
-      assert.equal(signature.querySelector('.ig-word')?.textContent.trim(), 'OTA', 'scene signatures use the complete Nota lockup');
+    if (film === 'notaire') {
+      assert.ok(wordmark && wordmark.querySelector('svg'), 'the notary header carries the Nota mark');
+      assert.equal(wordmark.querySelector('.ig-word')?.textContent.trim(), 'OTA');
+      assert.ok(!masthead.closest('.ig-scene'));
+      for (const scene of [scenes[0], scenes.at(-1)]) {
+        const signature = scene.querySelector('.ig-signature');
+        assert.ok(signature && signature.querySelector('svg'), 'Nota opens and closes the notary film');
+        assert.equal(signature.querySelector('.ig-word')?.textContent.trim(), 'OTA', 'scene signatures use the complete Nota lockup');
+      }
+    } else {
+      assert.equal(masthead, null, 'the client animation keeps only the calendar and its explanation');
+      assert.equal(stage.querySelectorAll('.ig-wordmark').length, 1, 'one persistent Nota signature identifies the calendar');
+      assert.ok(stage.querySelector('.ig-client-calendar .ig-client-brand'), 'the calendar carries the approved Nota lockup');
+      assert.ok(stage.querySelector('#ig-client-dates'), 'the client sees which calendar gesture to make');
+      assert.equal(stage.querySelector('#ig-client-dates').closest('.ig-scene'), null, 'the calendar stays visible between scenes');
+      assert.match(scenes[1].textContent, /Refinancement/);
+      assert.match(scenes[2].textContent, /Votre offre.*Service Nota.*Prix total/s);
+      assert.ok(scenes[3].querySelector('.ig-client-publish'), 'publication is demonstrated before the real guide');
     }
     const next = scenes.at(-1).querySelector('.ig-cta');
     assert.ok(next && next.tagName === 'BUTTON', 'the last scene has a real next-step button');
@@ -147,14 +158,13 @@ test('both films explain the outcome in four scenes, keep Nota visible and offer
   assert.match(appSrc, /function igSeekScene\(/, 'the progress control can jump between scenes');
 });
 
-test('notary landing: the same three articles sit in the content column, and fold away signed-in', () => {
+test('notary landing: the three articles remain available in a secondary disclosure', () => {
   const sec = doc.querySelector('#nc-conformite');
   assert.ok(sec, 'the Conformité section exists');
   assert.equal(sec.tagName, 'SECTION');
-  // It is a child of the pane's .wrap, not of the gate card: inside
-  // #notary-console it made the rail ~400px taller than the demand grid beside
-  // it and opened a hole in the content column (2026-09-03).
-  assert.ok(sec.parentElement.classList.contains('wrap'), 'a grid child of the pane, not of the console');
+  assert.equal(sec.parentElement.id, 'notary-calendar-obligations');
+  assert.equal(sec.parentElement.open, false, 'calendar subscription is the initial focus');
+  assert.ok(sec.parentElement.querySelector('summary'), 'professional obligations remain discoverable');
   assert.ok(!sec.closest('#notary-console'), 'never back inside the gate card');
   assert.equal(sec.closest('#pane-notaires') && sec.closest('#pane-notaires').id, 'pane-notaires');
   assertThreeArticles(sec, '.nc-conformite-tile');

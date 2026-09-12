@@ -452,10 +452,52 @@ paths:
   /notary/ai-beta/enroll:
     post:
       summary: Opt the notary into the one-time AI beta
+      description: >-
+        ADR 0052 — the free lane is paid for in reviews. `contribue: true`
+        records the notary's consent to contribute their own review of Nota's
+        proposals in the same gesture that activates the trial. Without it the
+        trial exists but serves no analysis.
       security: [{ notarySession: [] }]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                contribue: { type: boolean }
       responses:
         '200':
           description: Beta activated idempotently.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok, access]
+                properties:
+                  ok: { const: true }
+                  access: { type: object, additionalProperties: true }
+        default: { $ref: '#/components/responses/FinancingAIError' }
+  /notary/ai-contribution:
+    post:
+      summary: Record or withdraw the notary's consent to contribute reviews
+      description: >-
+        ADR 0052. Withdrawing closes the free lane of assisted preparation and
+        nothing else: requests, calendar, console and payouts are untouched. A
+        paid entitlement makes the contribution optional.
+      security: [{ notarySession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contribue]
+              properties:
+                contribue: { type: boolean }
+      responses:
+        '200':
+          description: Consent state updated.
           content:
             application/json:
               schema:
@@ -3465,8 +3507,8 @@ paths:
       operationId: sendSupportMessage
       summary: Live chat — a visitor's message (mints the thread on first send).
       description: >-
-        With an assistant configured, explicit human requests, complaints and detected
-        sensitive information bypass the model and escalate. Sensitive prior messages
+        Explicit human requests, complaints and detected sensitive information bypass
+        the model and escalate, even when no model is configured. Sensitive prior messages
         are masked in model context. Prepared discussion guides cover common topics;
         malformed or unsafe answers escalate to human support.
         The site's chat widget (ADR 0026, assisted by ADR 0046). No auth to
@@ -3485,8 +3527,10 @@ paths:
         answer. A real operator reply clears `escalade` and sets `humain: true`;
         subsequent questions stay with the person, without invoking the assistant.
         Both state flags are always returned, including on a thread refresh.
-        With no assistant configured, `reponse` is
-        absent and EVERY message emails the operator, exactly as before.
+        Admin-approved bilingual knowledge is matched against the complete question,
+        after safety checks; it cannot override built-in catalogue answers. Approved
+        matches work without a model provider. With no configured model or approved
+        match, ordinary questions have no automated reply and reach the operator.
         `courriel` is optional — it only adds an offline copy of the reply.
 
         A stale/tampered token is 401 (never a silent new thread); domain
@@ -5614,6 +5658,17 @@ components:
         complexity:
           type: object
           additionalProperties: true
+        details:
+          type: array
+          description: All catalogue criteria in display order, including zero-complexity answers. Values are French catalogue labels or domain-formatted amounts/counts; null means not provided. No free-text identity fields.
+          items:
+            type: object
+            required: [id, label, value]
+            additionalProperties: false
+            properties:
+              id: { type: string }
+              label: { type: string }
+              value: { type: [string, "null"] }
         caution:
           $ref: "#/components/schemas/CautionState"
         proposition:

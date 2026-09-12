@@ -1909,6 +1909,27 @@ function createDynamoRepo({ tableName, adminTableName, endpoint, region, doc } =
     // One item per thread, addressed by the id its signed token carries — a
     // A revision condition protects each read/append/write from concurrent
     // visitor and operator requests. Legacy items without a revision start at 0.
+    async getSupportKnowledge() {
+      const { PK, SK } = require('./support-knowledge');
+      const out = await doc.send(new GetCommand({ TableName: tableName, Key: { PK, SK }, ConsistentRead: true }));
+      return out.Item ? { revision: out.Item.revision, entries: out.Item.entries } : { revision: 0, entries: [] };
+    },
+    async putSupportKnowledge(value, { expectedRevision } = {}) {
+      if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0) return false;
+      const { PK, SK } = require('./support-knowledge');
+      const saved = { entries: value.entries, revision: expectedRevision + 1 };
+      try {
+        await doc.send(new PutCommand({
+          TableName: tableName, Item: { PK, SK, ...saved },
+          ConditionExpression: expectedRevision === 0 ? 'attribute_not_exists(PK)' : '#rev = :rev',
+          ...(expectedRevision === 0 ? {} : { ExpressionAttributeNames: { '#rev': 'revision' }, ExpressionAttributeValues: { ':rev': expectedRevision } }),
+        }));
+      } catch (err) {
+        if (err && err.name === 'ConditionalCheckFailedException') return false;
+        throw err;
+      }
+      return saved;
+    },
     async putSupportThread(thread, { expectedRevision } = {}) {
       // The inbox overload (keys.supportGSI1PK): month-sharded, newest last.
       // Written on every rewrite, so a thread that wakes up in a new month

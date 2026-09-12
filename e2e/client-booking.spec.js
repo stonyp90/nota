@@ -43,8 +43,10 @@ test('a client publishes a financing offer end to end', async ({ page }) => {
   await onb.locator('.onb-choice[data-role="client"]').click();
   const cta = page.locator('#onb-cta');
   await expect(cta).toBeVisible();
-  // The client CTA chains into the booking sheet.
+  // The client explicitly chooses a date after the guide.
   await cta.click();
+  await page.locator('#cal-grid .client-walk-target').click();
+  await page.locator('#client-walk-skip').click();
 
   // --- Booking sheet ----------------------------------------------------------
   const sheet = page.locator('#day-dialog');

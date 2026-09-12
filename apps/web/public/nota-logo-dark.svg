@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-16 -16 204.3977142857 96" role="img" aria-label="Nota"><title>Nota</title><g><rect width="64" height="64" rx="7" fill="#264961"/>
+        <g fill="#ffffff">
+          <rect x="16" y="15" width="9.5" height="34" rx="1"/>
+          <rect x="38.5" y="15" width="9.5" height="34" rx="1"/>
+          <polygon points="16,15 26.2,15 48,49 37.8,49"/>
+        </g>
+        <rect x="40" y="8" width="16" height="16" rx="3" fill="#407598" stroke="#264961" stroke-width="3"/></g><g transform="translate(71.68 16.64) scale(1.0971428571) translate(0 -3.5)" color="#f4f8fa"><g fill="currentColor" fill-rule="evenodd">
+
+          <path d="M0 8.5a5 5 0 0 1 5-5H22a5 5 0 0 1 5 5V26.5a5 5 0 0 1-5 5H5a5 5 0 0 1-5-5ZM7.8 12.8v9.4a1.5 1.5 0 0 0 1.5 1.5h8.4a1.5 1.5 0 0 0 1.5-1.5V12.8a1.5 1.5 0 0 0-1.5-1.5H9.3a1.5 1.5 0 0 0-1.5 1.5Z"/>
+
+          <path d="M31 3.5H57.6V11.3H48.2V27.02L40.4 31.5V11.3H31Z"/>
+
+          <path d="M65.17 6.7L70.74 3.5H72.5L84.1 31.5H75.77L73.93 25.89H64.95L63.23 31.5H54.9ZM69.5 10L73 20.3H66Z"/>
+
+          <rect x="87.4" y="27.1" width="4.4" height="4.4" rx="1" fill="#407598"/>
+        </g></g></svg>

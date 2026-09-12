@@ -106,7 +106,7 @@ test('« Nous joindre » keeps the support thread token and opens a door into th
     routes: [monthRoute(), { match: (u) => u.endsWith('/contact'), reply: () => jsonRes(202, { recu: true, threadId: 'th-9', token: 'sup.tok.9' }) },
       { match: (u) => u.endsWith('/support/thread'), reply: () => jsonRes(200, { messages: [{ id: 'x', de: 'visiteur', texte: 'Bonjour, une question.', createdAt: '2026-08-12T10:00:00.000Z' }] }) }],
   });
-  $(doc, 'mnav-contact').click();
+  doc.defaultView.Nota.contact.openEmail();
   $(doc, 'ct-message').value = 'Bonjour, une question.';
   $(doc, 'ct-submit').click();
   await wait(60);

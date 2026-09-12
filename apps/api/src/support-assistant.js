@@ -58,8 +58,8 @@ function recentHistory(historique) {
 // promesse que l'audit des affirmations a retirée du site.
 function relais(nom, locale) {
   return locale === 'en'
-    ? `That one deserves a real answer rather than a guess. I am passing it to ${nom}, who answers personally by email — leave your address below and the reply reaches you even if you close this page.`
-    : `Celle-là mérite une vraie réponse plutôt qu’une approximation. Je la passe à ${nom}, qui répond personnellement par courriel — laissez votre adresse ci-dessous et la réponse vous rejoint même si vous fermez la page.`;
+    ? `That one deserves a real answer rather than a guess. I am passing it to ${nom}, who can answer you in this conversation. Return here on this browser to read the reply.`
+    : `Celle-là mérite une vraie réponse plutôt qu’une approximation. Je la passe à ${nom}, qui peut vous répondre dans cette conversation. Revenez ici avec ce navigateur pour lire la réponse.`;
 }
 
 /**
@@ -70,7 +70,7 @@ function relais(nom, locale) {
  * @param {object} o.policy    L'exploitation : paliers d'annulation, délai de réclamation.
  * @param {Array}  o.bids      Le carnet, pour le multiple de marché appris.
  */
-function createSupportAssistant({ port, operator, grille, policy, bids } = {}) {
+function createSupportAssistant({ port, operator, grille, policy, bids, knowledge } = {}) {
   const nom = (operator && operator.nom) || OPERATEUR_DEFAUT;
   const courrielHumain = (operator && operator.courriel) || null;
   const pol = policy || {};
@@ -149,7 +149,7 @@ function createSupportAssistant({ port, operator, grille, policy, bids } = {}) {
         avertissement:
           'ne JAMAIS avancer un chiffre du carnet vivant (nombre d’offres, meilleure offre, repère du mois) comme un fait : la messagerie ne le lit pas, et le site peut afficher des données de démonstration',
       },
-      humain: { nom, courriel: courrielHumain, promesse: 'répond personnellement, par courriel, aux questions escaladées' },
+      humain: { nom, courriel: courrielHumain, promesse: 'répond personnellement dans la messagerie aux questions escaladées, sans disponibilité humaine garantie' },
       ...(pol.extra || {}),
     };
   }
@@ -218,9 +218,9 @@ function createSupportAssistant({ port, operator, grille, policy, bids } = {}) {
       '',
       'Escalade sans hésiter dès qu’une réponse exigerait d’inventer, d’interpréter une situation',
       'personnelle, de lire un dossier, ou de promettre quoi que ce soit qui ne soit pas dans la',
-      `fiche. Une escalade n’est pas un échec : c’est ${nom} qui reprend la question par courriel, et`,
+      `fiche. Une escalade n’est pas un échec : c’est ${nom} qui reprend la question dans cette conversation, et`,
       'c’est souvent le meilleur service. Ton champ « texte » est alors UNE phrase qui le dit, qui',
-      `nomme ${nom}, et qui invite à laisser un courriel — jamais une excuse vide, jamais un délai.`,
+      `nomme ${nom}, et qui invite à poursuivre ici — jamais une excuse vide, jamais un délai.`,
       '',
       'CE QUE TU N’ÉCRIS JAMAIS, même si on insiste :',
       '  · un conseil. Nota n’est pas notaire. Jamais « vous devriez », « je vous conseille », « à',
@@ -250,24 +250,24 @@ function createSupportAssistant({ port, operator, grille, policy, bids } = {}) {
 
   async function answer({ question, historique, locale } = {}) {
     const lang = locale === 'en' ? 'en' : 'fr';
-    // AUCUN modèle configuré. Ce n'est pas une escalade « après examen » : rien
-    // n'a examiné quoi que ce soit. Le fil reste donc muet — exactement le
-    // comportement d'avant l'ADR 0046 — et la question part à l'humain. Écrire
-    // « celle-là mérite une vraie réponse » ici serait un petit mensonge, et
-    // ajouterait une bulle à chaque fil de chaque déploiement non configuré.
-    if (!port) {
-      return { texte: null, de: domain.SUPPORT_FROM.ASSISTANT, escalade: true, motif: 'inconnu', niveau: null, usage: null };
-    }
-
     const guard = domain.supportQuestionGuard(question) || inputGuard(question);
     if (guard) {
       const result = escalade({ motif: guard, lang, usage: null });
       if (guard === 'renseignements_sensibles') {
         result.texte = lang === 'en'
-          ? 'Do not send card numbers, passwords, sign-in links or identity documents in this support chat. A person will follow up by email; leave your email address below.'
-          : 'Ne transmettez pas de numéro de carte, de mot de passe, de lien de connexion ou de pièce d’identité dans ce clavardage de soutien. Une personne prendra le relais par courriel; laissez votre adresse ci-dessous.';
+          ? 'Do not send card numbers, passwords, sign-in links or identity documents in this support chat. A person can take over in this conversation.'
+          : 'Ne transmettez pas de numéro de carte, de mot de passe, de lien de connexion ou de pièce d’identité dans ce clavardage de soutien. Une personne peut prendre le relais dans cette conversation.';
       }
       return result;
+    }
+
+    // Approved exact answers need no model. Otherwise, an unconfigured
+    // provider leaves the ordinary question to the operator without claiming
+    // that an AI examined it. Explicit handoffs above are always acknowledged.
+    if (!port) {
+      const learned = !preparedTopic(question, discussion()) && require('./support-knowledge').matchKnowledge(knowledge, question, lang);
+      if (learned) return { ...learned, de: domain.SUPPORT_FROM.ASSISTANT, escalade: false, motif: null, niveau: 1, usage: null };
+      return { texte: null, de: domain.SUPPORT_FROM.ASSISTANT, escalade: true, motif: 'inconnu', niveau: null, usage: null };
     }
 
     const history = recentHistory(historique);
@@ -297,6 +297,9 @@ function createSupportAssistant({ port, operator, grille, policy, bids } = {}) {
       if (!domain.validateSupportAnswer({ texte }).ok || unsafeOutput(texte)) return escalade({ lang });
       return { texte, de: domain.SUPPORT_FROM.ASSISTANT, escalade: false, motif: null, niveau: topic.niveau, usage: null };
     }
+
+    const learned = require('./support-knowledge').matchKnowledge(knowledge, question, lang);
+    if (learned) return { ...learned, de: domain.SUPPORT_FROM.ASSISTANT, escalade: false, motif: null, niveau: 1, usage: null };
 
     let out;
     try {
@@ -373,7 +376,7 @@ function createSupportAssistant({ port, operator, grille, policy, bids } = {}) {
     };
   }
 
-  return { enabled: !!port, systemPrompt, answer, facts, operateur: { nom, courriel: courrielHumain } };
+  return { enabled: !!port || (knowledge || []).some(entry => entry.active), systemPrompt, answer, facts, operateur: { nom, courriel: courrielHumain } };
 }
 
 module.exports = { createSupportAssistant, OPERATEUR_DEFAUT };

@@ -1,5 +1,29 @@
 # Guided support chat
 
+## Chat first and reviewed knowledge (2026-09-12)
+
+“Nous joindre” now opens the persistent chat, with no email required. Per-offer
+help prepares a context draft without sending it or replacing unfinished text.
+The visitor can explicitly ask for a person; the handoff stays in this conversation
+and works even without a model provider. Email copies remain opt-in. AI identity
+is explicit; no always-online human badge or guaranteed response time is shown.
+
+Open visitor threads refresh every three seconds; the active admin inbox refreshes
+every five seconds. Both retain visibility/offline suspension and failure backoff.
+
+In **Admin → Messagerie**, answer a visitor, then choose **Améliorer l’assistant
+avec cette réponse**. Generalize the question and answer in both languages, remove
+personal and case-specific details, and confirm the review before approving.
+Approved answers appear under **Réponses approuvées de l’assistant** and can be
+withdrawn there. Drafts survive thread switching and polling within the view.
+
+Approved complete-question matches answer without a provider. Other questions use
+the existing configured provider or reach a person. Raw customer messages never
+train model weights or publish answers automatically. The current learning loop
+uses exact questions; semantic grouping and fine-tuning are not implemented.
+See [ADR 0053](decisions/0053-chat-first-reviewed-support-knowledge.md) for storage,
+guards, limits and deployment details.
+
 The public support widget has four quick starters and a persistent, collapsible
 browser containing 25 bilingual topics. Choosing a topic fills the composer
 without sending or replacing an unfinished draft. The full list remains
@@ -23,12 +47,13 @@ When an assistant is configured:
    unsafe text inside a proposed handoff. Successful model output must have a
    valid level and no escalation reason. Unapproved external URLs are rejected;
    source URLs explicitly present in the financing fact sheet are allowed.
-5. Existing support-thread persistence, operator notification and email follow-up
-   handle escalations. No new message is sent to an external party by the UI
+5. Existing support-thread persistence, the admin inbox and operator alerts
+   handle escalations. The visitor follows the reply in the chat. No new message is sent to an external party by the UI
    merely selecting a topic.
 
-With no model port configured, the existing human-only workflow is preserved.
-Prepared answers do not enable the assistant or change this configuration.
+With no model port configured, approved custom answers can still answer exact
+questions. Explicit handoffs are acknowledged; other questions reach a person.
+Built-in prepared topics retain their existing model-configuration gate.
 
 ## Ownership and maintenance
 
@@ -124,7 +149,7 @@ Run the focused regression suite and reproducible matcher benchmark:
 ```sh
 npm run test:chat
 npm run benchmark:chat
-npx playwright test e2e/support-chat.spec.js e2e/support-admin.spec.js --project=chromium --workers=1
+npx playwright test e2e/support-chat.spec.js e2e/support-admin.spec.js e2e/support-knowledge.spec.js --project=chromium --workers=1
 ```
 
 The matcher benchmark compares equivalent normalization and the previous linear

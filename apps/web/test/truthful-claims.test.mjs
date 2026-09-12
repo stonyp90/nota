@@ -380,7 +380,7 @@ test('P2-11: the auth dialog’s comment no longer narrates a social-login plan 
 // c'est « gratuit pour le client » qui a été rétracté.
 const FREE_LIE = /Gratuit pour (vous|le client)|gratuit pour (vous|le client)|It is free for the client|free for the client\.|Free for (you|the client)|se rémunère auprès du notaire|paid by the notary/;
 
-const OG_SVG_SHA256 = 'fb84738554025f94d9d551ff1b94dd7a11e1d21cb981685fecf3559859d5eb72';
+const OG_SVG_SHA256 = 'd81c205aa824aa0cebe71f64efeff3a3e293a4a25b4c875396cac4ee725e7e86';
 
 test('l’image sociale ne vend pas des services retirés, ni une gratuité rétractée', () => {
   const hit = OG_SVG_SRC.match(FREE_LIE);
@@ -516,7 +516,9 @@ const AXES = [
     // partage d'honoraires, aucune convention sur vos honoraires » est la
     // promesse faite au notaire, et la charte cite l'interdiction elle-même.
     // Seule l'AFFIRMATION est proscrite, d'où l'exception au niveau de la phrase.
-    sauf: /\b(?:aucun|aucune|sans|jamais|ni|interdit\w*|interdiction|no|never|prohibit\w*)\b/i,
+    // The explicit professional-rules notice describes restrictions, not a
+    // product fee-sharing arrangement. Keep this exception sentence-specific.
+    sauf: /\b(?:aucun|aucune|sans|jamais|ni|interdit\w*|interdiction|no|never|prohibit\w*)\b|^(?:Les restrictions sur le partage d[’']honoraires et les conventions compromettant votre indépendance s[’']appliquent|Restrictions on fee sharing and agreements compromising your independence apply)\.?$/i,
   },
   {
     id: 'prix fixe',
@@ -637,6 +639,17 @@ test('le garde a des dents : chaque formulation retirée est bien reconnue par s
   const partage = AXES.find((a) => a.id === 'partage');
   assert.ok(partage.motifs.some((re) => re.test(denegation)), 'la phrase est bien attrapée par le motif…');
   assert.ok(partage.sauf.test(phraseAutour(denegation, denegation.indexOf('partage'))), '…et rendue par l’exception de dénégation');
+  for (const notice of [
+    'Les restrictions sur le partage d’honoraires et les conventions compromettant votre indépendance s’appliquent.',
+    'Restrictions on fee sharing and agreements compromising your independence apply.',
+  ]) assert.ok(partage.sauf.test(notice), 'the professional-rules notice is not an affirmative claim');
+  for (const claim of [
+    'Malgré les restrictions, Nota partage les honoraires.',
+    'Despite restrictions, Nota uses fee sharing.',
+  ]) {
+    assert.ok(partage.motifs.some(re => re.test(claim)));
+    assert.ok(!partage.sauf.test(claim), 'mentioning restrictions does not excuse an affirmative claim');
+  }
 });
 
 test('et les surfaces disent la vérité à la place — les deux directions, toujours', () => {

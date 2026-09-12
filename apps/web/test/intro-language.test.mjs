@@ -27,7 +27,7 @@ for (const scenario of scenarios) {
       const doc = window.document;
       assert.equal(doc.documentElement.lang, scenario.expected + '-CA');
       assert.equal(doc.querySelector('.ig-c1 .ig-h').textContent, scenario.expected === 'en'
-        ? 'Find your notary with Nota.' : 'Trouvez votre notaire avec Nota.');
+        ? 'Choose your date.' : 'Choisissez votre date.');
       assert.equal(doc.querySelector('.ig-n1 .ig-h').textContent, scenario.expected === 'en'
         ? 'Find your next client.' : 'Trouvez votre prochain dossier.');
       for (const group of doc.querySelectorAll('#intro-gate [data-lang-seg]')) {

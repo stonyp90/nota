@@ -491,9 +491,10 @@ function createApp(repo, opts = {}) {
   }
   async function supportAssistant() {
     const { createSupportAssistant } = require('./support-assistant');
-    const [grille, annulation] = await Promise.all([
+    const [grille, annulation, knowledge] = await Promise.all([
       prixConfig.resolveGrille(repo, env).catch(() => undefined),
       annulationConfig().catch(() => null),
+      typeof repo.getSupportKnowledge === 'function' ? repo.getSupportKnowledge().catch(() => null) : null,
     ]);
     let port;
     try {
@@ -507,6 +508,7 @@ function createApp(repo, opts = {}) {
     }
     return createSupportAssistant({
       port,
+      knowledge: knowledge && knowledge.entries,
       operator: {
         // Le prénom de la personne qui reprend la main est une donnée
         // d'exploitation, jamais un littéral : sans lui, c'est la maison qui
@@ -1215,6 +1217,7 @@ function createApp(repo, opts = {}) {
       // The case-complexity signal (easy/hard) + the factors that drive it, so a
       // notary can judge whether the posted price fits the file before retaining.
       complexity: domain.complexity(b.serviceId, b.pricing || null),
+      details: domain.notaryOfferDetails(b.serviceId, b.pricing),
       // ADR 0035 — l'état de la garantie de paiement, DIT au notaire avant
       // qu'il retienne : la somme est déjà réservée, elle le sera à telle date,
       // ou la carte a été refusée. Une garantie qu'on ne peut pas voir n'en est
@@ -1783,9 +1786,28 @@ function createApp(repo, opts = {}) {
     if (route === '/notary/ai-beta/enroll' && method === 'POST') {
       const notaryId = requireScope(bearer(request), SCOPES.SESSION);
       if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
-      const result = await aiAccess.enroll(notaryId);
+      // ADR 0052 : la bêta est la voie gratuite, et la voie gratuite est payée
+      // en révisions. L'écran présente les deux dans un seul geste ; le corps
+      // de la requête porte l'acceptation, qui reste explicite.
+      let enrollBody = {};
+      try { enrollBody = typeof request.body === 'string' ? JSON.parse(request.body || '{}') : request.body || {}; }
+      catch { return json(400, { errors: [{ code: 'json_invalide' }] }); }
+      const result = await aiAccess.enroll(notaryId, { contribue: enrollBody.contribue === true });
       if (!result.ok) return json(result.code === 'notaire_introuvable' ? 404 : 409, { errors: [{ code: result.code }] });
       return json(200, { ok: true, access: result.access });
+    }
+    // Consentir à la contribution, ou la retirer. Le retrait referme la voie
+    // gratuite de la préparation assistée et ne touche à RIEN d'autre : les
+    // demandes, l'agenda, la console et les versements restent au notaire.
+    if (route === '/notary/ai-contribution' && method === 'POST') {
+      const notaryId = requireScope(bearer(request), SCOPES.SESSION);
+      if (!notaryId) return json(401, { errors: [{ code: 'non_autorise', message: 'Session invalide ou expirée.' }] });
+      const parsed = parseBody(request);
+      if (parsed.error) return parsed.error;
+      if (typeof parsed.payload?.contribue !== 'boolean') return json(422, { errors: [{ code: 'requete_invalide' }] });
+      const access = await aiAccess.setContribution(notaryId, parsed.payload.contribue);
+      if (!access) return json(404, { errors: [{ code: 'introuvable' }] });
+      return json(200, { ok: true, access });
     }
     if (route === '/notary/ai/checkout' && method === 'POST') {
       const notaryId = requireScope(bearer(request), SCOPES.SESSION);
@@ -4740,7 +4762,7 @@ function createApp(repo, opts = {}) {
           messages: [...(current.messages || []), { ...message, notifyOperator, ...(answer ? { assistantReplyId: answer.id } : {}) }, ...(answer ? [answer] : [])],
           ...(requestClaim ? { pendingMessages: (current.pendingMessages || []).filter(item => item.id !== message.id) } : {}),
         };
-        if (answer && reponse.escalade && assistant && assistant.enabled) {
+        if (answer && reponse.escalade) {
           next.escaladeLe = answer.createdAt;
           next.escaladeMotif = reponse.motif;
         }

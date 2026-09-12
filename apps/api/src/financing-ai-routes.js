@@ -17,6 +17,9 @@ function createFinancingAIRoutes({ repo, env, authenticate, json, parseBody, get
     ai_access_required: 'Activez la bêta IA ou choisissez une formule pour continuer.',
     quota_epuise: 'Votre quota de préparation IA est épuisé. Choisissez une formule ou achetez des unités.',
     paiement_requis: 'Votre abonnement IA nécessite une mise à jour du paiement.',
+    // ADR 0052 — le refus est honnête sur ce qui manque : le quota EXISTE,
+    // c'est l'échange de la voie gratuite qui n'a pas été accepté.
+    contribution_requise: 'La voie gratuite est payée en révisions : acceptez de partager vos corrections, ou choisissez une formule.',
   }[code] || undefined }] });
   // ADR 0049: a refusal names the notary's real situation. `reason` is the
   // entitlement view's word; the closed states with their own door are mapped,

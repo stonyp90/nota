@@ -15,6 +15,10 @@ function emptyAccess() {
     subscription: { status: 'none', planId: null, customerId: null, subscriptionId: null,
       periodStart: null, periodEnd: null, used: 0 },
     paidUses: 0,
+    // ADR 0052 — la voie gratuite est payée en révisions. Le consentement du
+    // notaire est un état de son compte, pas une case cochée dans un
+    // navigateur : l'API reste l'autorité si l'onglet est vieux.
+    contribution: { consentiLe: null, refuseLe: null },
     revision: 0,
   };
 }
@@ -27,6 +31,7 @@ function normalizeAccess(value) {
       used: Math.max(0, Number(source.beta?.used) || 0) },
     subscription: { ...base.subscription, ...(source.subscription || {}), used: Math.max(0, Number(source.subscription?.used) || 0) },
     paidUses: Math.max(0, Number(source.paidUses) || 0),
+    contribution: { ...base.contribution, ...(source.contribution || {}) },
     revision: Math.max(0, Number(source.revision) || 0),
   };
 }
@@ -54,6 +59,15 @@ function createNotaryAIAccess({ repo, env = process.env, nowMs = Date.now } = {}
     const trialRemaining = access.beta.enrolledAt
       ? Math.max(0, access.beta.granted - access.beta.used) : 0;
     const paidUses = access.paidUses;
+    // Le domaine décide du mode ; l'adaptateur ne fait que traduire sa propre
+    // forme dans celle qu'attend la règle (ADR 0052). `abonnementActif` suit la
+    // PÉRIODE, pas le quota : un abonné qui a épuisé son mois a payé.
+    const contributionRule = D.notaryAIContribution({
+      abonnementActif: periodActive && !!plan,
+      unitesPayees: paidUses,
+    });
+    const consentie = !!access.contribution.consentiLe && !access.contribution.refuseLe;
+    const contributionRequise = contributionRule.mode === 'requise' && !consentie;
     const allowed = !monetized() || trialRemaining > 0 || includedRemaining > 0 || paidUses > 0;
     let reason = 'beta_non_inscrite';
     if (!monetized()) reason = 'legacy_open';
@@ -71,6 +85,20 @@ function createNotaryAIAccess({ repo, env = process.env, nowMs = Date.now } = {}
         periodEnd: sub.periodEnd, used: sub.used, included: plan ? plan.includedUses : 0,
         remaining: includedRemaining },
       paidUses,
+      contribution: {
+        mode: contributionRule.mode,
+        requise: contributionRule.mode === 'requise',
+        consentie,
+        consentiLe: consentie ? access.contribution.consentiLe : null,
+        refuseLe: access.contribution.refuseLe || null,
+        donne: contributionRule.donne,
+        jamais: contributionRule.jamais,
+        sortie: contributionRule.sortie,
+        refusConserve: contributionRule.refusConserve,
+      },
+      // Le blocage est dit séparément d'`enabled` : le quota EXISTE, c'est le
+      // consentement qui manque, et l'écran doit pouvoir dire lequel des deux.
+      contributionBloquante: monetized() && contributionRequise,
     };
   }
 
@@ -85,12 +113,20 @@ function createNotaryAIAccess({ repo, env = process.env, nowMs = Date.now } = {}
     return view(access);
   }
 
-  async function enroll(notaryId) {
+  // S'inscrire à la bêta et accepter l'échange de l'ADR 0052 sont UN geste à
+  // l'écran — « activer mes essais » est l'acceptation — mais deux états ici,
+  // pour qu'un retrait de consentement n'ait pas à défaire l'inscription.
+  async function enroll(notaryId, { contribue = false } = {}) {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const { notary, access } = await raw(notaryId);
       if (!notary) return { ok: false, code: 'notaire_introuvable' };
-      if (access.beta.enrolledAt) return { ok: true, access: view(access) };
-      const next = { ...access, beta: { ...access.beta, enrolledAt: new Date(nowMs()).toISOString() }, revision: access.revision + 1 };
+      const at = new Date(nowMs()).toISOString();
+      const contribution = contribue
+        ? { consentiLe: access.contribution.consentiLe || at, refuseLe: null }
+        : { ...access.contribution };
+      if (access.beta.enrolledAt && !contribue) return { ok: true, access: view(access) };
+      const next = { ...access, beta: { ...access.beta, enrolledAt: access.beta.enrolledAt || at },
+        contribution, revision: access.revision + 1 };
       if (await save(notaryId, next, access.revision)) return { ok: true, access: view(next) };
     }
     return { ok: false, code: 'conflit' };
@@ -102,6 +138,9 @@ function createNotaryAIAccess({ repo, env = process.env, nowMs = Date.now } = {}
       const { notary, access } = await raw(notaryId);
       if (!notary) return { ok: false, code: 'notaire_introuvable' };
       const before = view(access);
+      // ADR 0052 : la voie gratuite ne sert rien avant le consentement. Le
+      // refus ne retire que ce produit — le marché, lui, reste entier.
+      if (before.contributionBloquante) return { ok: false, code: 'contribution_requise', access: before };
       let source = null;
       const next = { ...access, beta: { ...access.beta }, subscription: { ...access.subscription } };
       if (before.beta.remaining > 0) { source = 'trial'; next.beta.used += 1; }
@@ -112,6 +151,24 @@ function createNotaryAIAccess({ repo, env = process.env, nowMs = Date.now } = {}
       if (await save(notaryId, next, access.revision)) return { ok: true, source, access: view(next) };
     }
     return { ok: false, code: 'conflit', access: await get(notaryId) };
+  }
+
+  // Consentir, ou le retirer. Le retrait est immédiat et n'efface pas ce qui a
+  // déjà été appris : le journal d'apprentissage est écrit une fois et l'ADR
+  // 0047 fait passer toute contribution par une quarantaine avant usage.
+  async function setContribution(notaryId, accepte) {
+    const at = new Date(nowMs()).toISOString();
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const { notary, access } = await raw(notaryId);
+      if (!notary) return null;
+      const contribution = accepte
+        ? { consentiLe: access.contribution.consentiLe || at, refuseLe: null }
+        : { consentiLe: access.contribution.consentiLe, refuseLe: at };
+      const next = { ...access, beta: { ...access.beta }, subscription: { ...access.subscription },
+        contribution, revision: access.revision + 1 };
+      if (await save(notaryId, next, access.revision)) return view(next);
+    }
+    return null;
   }
 
   async function refund(notaryId, source) {
@@ -170,7 +227,7 @@ function createNotaryAIAccess({ repo, env = process.env, nowMs = Date.now } = {}
     return null;
   }
 
-  return { monetized, get, enroll, consume, refund, updateSubscription, addCredits, addCreditsOnce,
+  return { monetized, get, enroll, consume, refund, setContribution, updateSubscription, addCredits, addCreditsOnce,
     plan: cleanPlan, maxPieceQuantity: MAX_PIECE_QUANTITY,
     plans: () => D.NOTARY_AI_PLANS.map(D.notaryAIPlanPublic) };
 }

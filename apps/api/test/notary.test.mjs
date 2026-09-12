@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
+const domain = require('@nota/domain');
 const { createApp } = require('../src/handler.js');
 const { createMemoryRepo } = require('../src/repo-memory.js');
 const { signToken, notaryIdForEmail } = require('../src/notary-auth.js');
@@ -137,6 +138,9 @@ test('GET /notary/bids reads the token from the Authorization header (no query t
   // refinancement answers weigh nothing = simple).
   assert.ok(bids[0].complexity && bids[0].complexity.level, 'complexity exposed to notary');
   assert.equal(bids[0].complexity.level, 'simple');
+  assert.equal(bids[0].details.find((d) => d.id === 'valeur_pret').value, domain.money(250000));
+  assert.ok(bids[0].details.some((d) => d.id === 'approbation_bancaire' && d.value), 'zero-complexity answers are included');
+  assert.ok(bids[0].details.every((d) => Object.keys(d).sort().join() === 'id,label,value'), 'only the catalogue projection leaves the API');
 });
 
 test('GET /notary/bids labels a hard file "complexe" with its factors', async () => {

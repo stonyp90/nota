@@ -1,53 +1,153 @@
-# Nota — Sommaire exécutif du plan d’affaires
+# Nota — Plan d’affaires
 
-Contact : **info@gonota.ca**
+**Mise en relation. Automatisation. Signature électronique.**
 
-Le plan complet en anglais est dans [`docs/business-plan.md`](business-plan.md). Le modèle financier reproductible est dans [`docs/planning/business-plan-model.json`](planning/business-plan-model.json) et la revue des corrections dans [`docs/planning/business-plan-review-2026-09-09.md`](planning/business-plan-review-2026-09-09.md).
+Contact : **info@gonota.ca** · Données de marché revues le **12 septembre 2026** · Montants en dollars canadiens.
 
-## Proposition
+## 1. La thèse : partir de l’urgence, devenir le parcours de l’étude
 
-Nota met en relation un client qui doit signer un acte notarié à une date donnée avec un notaire qui dispose d’une capacité adaptée. Le client décrit le service, la date, les faits utiles et les honoraires professionnels proposés. Le notaire peut retenir la demande, contre-proposer, demander des renseignements ou passer sans publier son agenda privé.
+Nota met en relation un client qui doit signer à une date donnée avec un notaire dont la capacité et l’expertise conviennent au dossier. Cette première rencontre ouvre une ambition plus large : suivre le dossier, en automatiser la préparation répétitive et intégrer la signature électronique.
 
-**Nota est une infrastructure de capacité pour les notaires, pas un remplacement des notaires.** Notre promesse est explicite : Nota ne cherche pas à briser la profession ni à supprimer des emplois de notaire. Nous réparons un marché déséquilibré où des clients avec une échéance trouvent difficilement un professionnel disponible, pendant que des notaires perdent de la capacité dans la découverte fragmentée, les plages vides et la préparation répétitive. Nota structure la demande qualifiée, rend la capacité disponible plus utile et laisse au notaire le jugement professionnel, le conseil au client et l’acte. Les causes précises du manque d’offre et la taille de la demande additionnelle restent des questions de validation, mesurées cohorte par cohorte.
+La valeur se construit en trois étapes :
 
-La future couche dotée de modèles propriétaires suit la même limite. Sa cible est d’automatiser jusqu’à 80 % de l’accueil, des vérifications et de l’assemblage répétitifs validés, sous la revue du notaire, afin qu’une étude puisse accepter davantage de demandes qualifiées, augmenter son potentiel de revenu et contribuer à rétablir l’offre. Il s’agit d’un outil entre les mains du notaire, jamais d’un substitut à son jugement juridique indépendant. La cible sera mesurée par type d’acte, revue par des notaires et déployée seulement avec les contrôles juridiques, de sécurité et de qualité requis.
+| Étape | Valeur pour le client et le notaire | Preuve à obtenir |
+| --- | --- | --- |
+| **1. Mettre en relation** | Une demande urgente structurée, un notaire disponible, un prix et une prochaine étape clairs | Réponses, demandes retenues et actes réellement terminés à temps |
+| **2. Automatiser** | Réduire le travail répétitif afin que l’étude puisse traiter davantage de dossiers | Temps humain économisé, corrections incluses, avec une qualité maintenue |
+| **3. Faire signer électroniquement** | Conserver le fil du dossier jusqu’à l’acte signé et à sa preuve | Intégrations autorisées, identité, consentement, conservation et validation professionnelle |
 
-**Boucle d’amélioration et participation notariale.** Pour les actes notariaux simples pris en charge, les modèles de Nota peuvent s’améliorer dynamiquement à partir de signaux d’utilisation permis et agrégés, ainsi que des commentaires structurés des notaires. Les questions des utilisateurs, les corrections, les abandons et les étapes acceptées ou rejetées alimentent des versions évaluées par type d’acte. Il ne s’agit pas d’un apprentissage en direct qui modifierait silencieusement un dossier ou un modèle pendant son utilisation. Chaque évolution doit franchir des contrôles de confidentialité, de sécurité, de qualité, de revue notariale et de retour arrière. Aucun dossier client identifiable ne devient par défaut une donnée d’entraînement et aucun modèle ne remplace le jugement professionnel.
+Le lancement vise le **financement et le refinancement dans la région métropolitaine de Québec**. Le catalogue codé contient également le testament et la procuration; leur commercialisation exige une validation propre. La géographie s’élargit selon les preuves locales, à chacune des trois étapes.
 
-Les signaux de comportement servent à améliorer l’ordre des questions, la clarté et le guidage. Ils ne servent pas à tirer une conclusion juridique ni à étiqueter un fait légal. Les changements de modèle sont préparés hors ligne, testés sur des cas réservés et approuvés avant toute mise en production.
+Le notaire conserve son jugement indépendant, le conseil au client et sa responsabilité professionnelle. Le gain recherché est de dégager sa capacité pour les tâches où son expertise compte le plus.
 
-Un notaire qui contribue des commentaires, des cas limites ou du temps d’évaluation peut recevoir un **instrument potentiel d’equity**, selon des modalités écrites et sous réserve des avis juridiques, professionnels et financiers requis. Un notaire qui préfère ne pas contribuer directement peut utiliser la couche de modèles avec un **abonnement logiciel mensuel**. L’objectif est partagé : le client obtient des prochaines étapes plus claires, le notaire dispose d’un outil qui augmente sa capacité potentielle et Nota améliore le produit avec des preuves réelles. La participation demeure volontaire et ne transfère jamais la responsabilité juridique du notaire à Nota.
+## 2. Un marché local mesurable, une ambition nationale
 
-Le lancement commercial proposé demeure concentré sur le **financement et le refinancement hypothécaires dans la région de Québec**. Le code actuel comprend aussi le testament et la procuration; leur demande, leur tarification et leur validation professionnelle sont traitées séparément et ne financent pas le scénario de lancement.
+| Territoire | Ventes résidentielles enregistrées en 2025 | Source |
+| --- | ---: | --- |
+| **Québec — région métropolitaine de recensement** | **10 271** | APCIQ, système Centris |
+| **Québec — province** | **97 214** | APCIQ, système Centris |
+| **Canada** | **470 314** | CREA, systèmes MLS |
 
-Nota facture au client ses propres frais de service et de date, affichés séparément des honoraires professionnels. Le notaire doit recevoir les honoraires convenus en entier selon la structure de règlement actuelle. Cette structure n’est pas un avis juridique : l’avis professionnel, les taxes, les contrats, les paiements en production et les contrôles d’exploitation restent des conditions de lancement.
+Sources : [APCIQ, bilan 2025 publié le 13 janvier 2026](https://apciq.ca/ventes-residentielles-le-quebec-enregistre-sa-troisieme-meilleure-annee-en-2025/) et [CREA, bilan publié le 15 janvier 2026](https://www.crea.ca/media-hub/news/home-sales-in-canada-end-2025-quietly/).
 
-**Monétisation future des modèles propriétaires.** Après une validation par des notaires sur des cas réservés par type d’acte et la fermeture des conditions commerciales et professionnelles, Nota pourra offrir une version dotée de ses modèles propriétaires contre un abonnement logiciel ou des frais d’utilisation distincts. Un notaire collaborateur pourra aussi être admissible à un instrument potentiel d’equity en échange d’une contribution structurée, sans garantie de valeur et sous réserve des modalités écrites et des avis requis. Cette couche ne vise pas à enlever les notaires. La cible est d’automatiser jusqu’à 80 % de l’accueil répétitif, des vérifications et de l’assemblage du dossier, tout en laissant au notaire son jugement juridique indépendant. Un notaire pourra ainsi traiter davantage de demandes qualifiées, augmenter sa capacité de revenu potentiel et contribuer à réparer le manque d’offre actuel. Le revenu réel dépendra toutefois de la demande, des actes acceptés et complétés, des coûts et des contrats finaux.
+Ces territoires sont **imbriqués et non additionnables**. « Québec » désigne ici la région métropolitaine, puis la province, et non la seule municipalité. Les ventes constituent un bassin de référence observé. Elles ne représentent pas toutes des demandes urgentes, sans notaire, financées ou admissibles à Nota. Les refinancements sans vente, les constructions neuves hors de ces systèmes, les testaments et les procurations sont exclus de cette base.
 
-## Ce que les preuves permettent de dire
+### Du marché observé aux dossiers accessibles
 
-- Le produit public, l’API, les tests, l’administration, les flux Stripe de test et une répétition de salle de signature sont documentés.
-- Les paiements réels en production ne sont pas encore établis : les secrets sont préparés, mais l’activation, les versements bancaires, les reprises d’erreur et la marque du marchand restent à vérifier.
-- Les inscriptions fiscales de l’opérateur sont documentées, mais le calcul et la perception ne sont pas encore implémentés et la responsabilité fiscale des honoraires du notaire doit être tranchée.
-- L’évaluation IA en direct est bloquée par l’accès et la facturation du fournisseur; les cas des quatre services sont synthétiques et non révisés par un notaire.
-- Les demandes de recherche et de sitemap ne sont pas de la traction commerciale. Le plan ne présente aucun acte client vérifié comme traction.
+Le marché accessible dépend de quatre filtres : service pris en charge, territoire servi, besoin encore non comblé et capacité professionnelle adaptée. Nous supposons, à titre d’exemple, que **10 % des ventes locales franchissent ces filtres**. Ce taux regroupe plusieurs conditions; il ne mesure pas la proportion réelle de clients urgents.
 
-## Économie et financement
+**10 271 ventes × 10 % qualifiables × 25 % captées × 80 % complétées = environ 205 actes par année.**
 
-Les valeurs par défaut actuelles du domaine sont : 229 $ pour le service de financement, 279 $ pour le refinancement, puis 0 / 149 / 299 / 449 / 549 $ pour le service de date selon le palier. Les frais de carte et de Connect sont calculés sur la somme encaissée, y compris les honoraires transférés au notaire. Le modèle ajoute 30 $ de coût de service et une provision de pertes de 0,5 % comme hypothèses à mesurer; elles ne sont pas des résultats observés.
+| Part qualifiable supposée | Actes terminés par année, aux autres taux constants |
+| --- | ---: |
+| 5 % | 103 |
+| 10 % | 205 |
+| 20 % | 411 |
 
-Le scénario de base vise 534 demandes publiées, 307 retenues et 244 actes complétés en année 1, pour environ **80 813 $** de revenu Nota. Après paiements, coûts de service, pertes et budget d’exploitation de 250 000 $, le résultat opérationnel modélisé est d’environ **−204 623 $**. Le modèle annuel suggère environ **430 119 $** de capital incluant une réserve de 25 000 $; le financement proposé de 250 000 $ ne couvre donc pas automatiquement l’horizon des trois ans.
+Les trois taux sont des hypothèses à remplacer par des cohortes réelles. Le taux de complétion de 80 % et la cible d’automatisation de 80 % mesurent deux choses différentes. Cet exemple annuel de financement lié à une vente est **distinct du scénario financier de 244 actes en première année**, qui comprend financement et refinancement et suit une montée mensuelle progressive. On ne les additionne pas.
 
-Les récompenses de référence du domaine sont de 50 $ pour un client et de 250 $ pour un notaire activé. Le registre actuel comptabilise la récompense client à la retenue et la récompense notaire lorsque `premierActe` est présent. Les conditions de règlement, d’annulation, de divulgation et de remboursement doivent être alignées avant le programme partenaire.
+L’ancienne hypothèse de 110 000 actes provinciaux et la justification de « 10 % de marché » en troisième année sont retirées : le dénominateur n’était pas vérifié. Les 11 000 actes du scénario de troisième année demeurent une ambition exigeante, dépendante d’une expansion provinciale et d’une capacité suffisante.
 
-Le scénario financier de base n’inclut aucun revenu d’abonnement ou d’utilisation des modèles propriétaires. Ce revenu sera ajouté seulement après la validation de la performance, du coût par dossier, des droits sur les données, de la sécurité et de la conformité professionnelle.
+## 3. Canada et international : servir le travail récurrent
 
-## Séquence de décision
+Pour l’automatisation et la signature, le marché se mesure aussi en professionnels, organisations et dossiers récurrents, au-delà des urgences.
 
-1. Fermer l’avis professionnel, la cartographie fiscale, l’identité des fournisseurs, la vérification du statut des notaires et l’assurance.
-2. Vérifier la capture, le transfert, le versement bancaire, le remboursement, le litige et la réconciliation en production contrôlée.
-3. Instrumenter le parcours : visite admissible → demande → retenue → dossier complet → acte payé, avec coûts et échecs par segment.
-4. Libérer l’acquisition par tranches après une cohorte locale mûre et un résultat positif par visite admissible.
-5. N’élargir le catalogue, la géographie, la signature à distance ou l’IA qu’avec les preuves et les contrats propres à chaque service.
+| Bassin professionnel | Donnée de référence | Ce qu’elle permet de comprendre |
+| --- | --- | --- |
+| Québec | **2 659 notaires en étude ou cabinet juridique**, sur 3 846 membres au 31 mars 2025 | Un bassin de professionnels pour une offre logicielle locale |
+| Union européenne | **Près de 50 000 notaires**, dans les 22 notariats membres du CNUE, rapport 2024 | Une profondeur internationale pour les outils notariaux |
+| Monde | **93 notariats membres de l’UINL**, consulté le 12 septembre 2026 | L’étendue géographique de la profession organisée |
 
-Les cibles ne sont pas des résultats acquis. Le plan complet expose les hypothèses, les scénarios défavorables et favorables, les responsabilités et les décisions qui restent à prendre.
+Sources : [Chambre des notaires, rapport 2024–2025, p. 11](https://www.cnq.org/wp-content/uploads/2025/11/610666-CDN_Rapport-annuel-2024-2025_Final.pdf#page=11), [CNUE, rapport 2024, p. 16](https://www.notariesofeurope.eu/wp-content/uploads/2025/02/CNUE-Annual-Report-2024.pdf#page=16), [UINL, présentation institutionnelle](https://uinl.org/fr/mission/a-propos-de-nous/).
+
+Il s’agit de **personnes, pas d’études clientes ni d’abonnements vendus**. Les périmètres se recoupent; ils ne forment pas un total à additionner. Aucun revenu mondial accessible n’est déduit de ces nombres. Hors Québec, le Canada possède aussi des rôles professionnels et des règles différents : ses ventes immobilières ne constituent pas un marché notarial uniforme.
+
+La méthode future pour le logiciel sera : **organisations admissibles × organisations adoptantes × sièges payants par organisation × prix annuel net**, avec attrition, soutien et coûts d’intégration. Aucun prix d’abonnement ni taux d’adoption n’étant validé, le plan ne revendique pas de revenu annuel récurrent ou de marché mondial en dollars.
+
+La France est une piste de recherche grâce à la langue et au notariat de droit civil. Chaque expansion nécessite néanmoins un partenaire local, un type d’acte défini, une revue professionnelle, les formats documentaires, la protection des données et les moyens de signature propres au territoire. Il ne s’agit pas d’une annonce de lancement international.
+
+## 4. Automatiser 80 % : une cible avec un protocole
+
+L’objectif est de **réduire de 80 % le temps humain consacré à un périmètre défini de préparation répétitive**, en incluant la revue et les corrections. Ce résultat n’est pas encore démontré. Il ne signifie pas que 80 % du métier, des responsabilités ou des emplois de notaire disparaissent.
+
+Le périmètre proposé comprend l’accueil structuré, l’extraction autorisée de données, la détection des pièces manquantes et des incohérences, puis l’assemblage d’un brouillon avec ses sources. Le conseil, le jugement juridique, l’approbation professionnelle finale et la signature restent hors du dénominateur de préparation.
+
+### Mesurer un gain réel
+
+1. Définir les tâches et les types d’actes avant l’essai; faire approuver le protocole par un notaire en exercice.
+2. Établir le temps manuel de référence et le comparer au temps humain assisté sur des dossiers comparables, avec les corrections, les échecs et les reprises.
+3. Commencer par une cohorte proposée d’au moins 30 dossiers appariés par type d’acte, incluant des exceptions. Ce nombre constitue un protocole pilote à valider, sans prétention de suffisance statistique.
+4. Calculer **1 − minutes humaines avec Nota / minutes humaines sans Nota**. Publier l’effectif, les dates, la médiane, la dispersion et le périmètre mesuré.
+5. Suivre également les erreurs non sourcées, les refus du modèle, les corrections et le temps humain du dossier complet. Déployer seulement si les critères de qualité préétablis sont respectés.
+
+Le graphique « base 100 → cible 20 » du pitch illustre cette ambition. Il ne représente ni des minutes observées ni un test réussi. Un résultat sur le financement ne s’étend pas automatiquement au testament ou à la procuration.
+
+### Construire un avantage avec les notaires
+
+Les corrections structurées permettent de préparer une nouvelle version, de l’évaluer sur des cas réservés, de la faire approuver et de prévoir un retour arrière. Les signaux d’usage servent au guidage; ils ne permettent pas de tirer une conclusion juridique. Aucun dossier identifiable n’entre par défaut dans l’entraînement.
+
+La participation demeure volontaire. Le notaire peut choisir un abonnement logiciel; un programme distinct de contribution pourrait prévoir un instrument potentiel de participation au capital, avec contrat et validations juridiques, fiscales, professionnelles et de confidentialité. Cette éventualité ne constitue ni une valeur garantie ni une récompense de référence et ne doit modifier aucun classement ni jugement professionnel.
+
+## 5. Signature électronique : la continuité comme plus-value
+
+La signature électronique notariale existe déjà au Québec, y compris au bureau du notaire. Nota vise à intégrer les moyens autorisés à un dossier déjà préparé : **identité vérifiée → consentement éclairé → signature autorisée → preuve conservée et copie authentique**.
+
+La [Chambre des notaires explique la signature électronique au bureau](https://www.cnq.org/votre-notaire/un-professionnel-numerique/signer-un-acte-notarie-technologique-au-bureau-du-notaire/). La [signature à distance demeure exceptionnelle et relève de l’appréciation du notaire](https://www.cnq.org/votre-notaire/un-professionnel-numerique/signer-un-acte-notarie-technologique/). Électronique et à distance ne sont pas synonymes.
+
+La salle actuelle de Nota sert à la répétition du parcours. Le fournisseur autorisé, l’intégration, les contrôles d’identité, le consentement, l’intégrité de la preuve, l’archivage et les copies doivent être validés avant une offre opérationnelle. Mesurer les transferts abandonnés, les ressaisies, le temps de conclusion et la reprise après erreur démontrera la valeur ajoutée.
+
+Le secteur innove déjà : le [CSN a annoncé son partenariat avec Mistral AI et Scaleway le 9 juillet 2026](https://www.csn.notaires.fr/fr/actualites/intelligence-artificielle-le-conseil-superieur-du-notariat-choisit-mistral-ai-et). Nota se différencie par le lien entre la date, la demande qualifiée, la préparation et la conclusion. Les annuaires, les logiciels d’étude, les outils d’IA et les fournisseurs de signature sont à la fois des solutions concurrentes et des partenaires possibles. La rétention et la qualité du service devront établir cet avantage.
+
+## 6. Pilote et preuves commerciales
+
+Les cibles initiales sont **30 notaires recrutés, 25 vérifiés et 244 actes terminés en première année**. Ce sont des objectifs de gestion. Aucun volume commercial ni revenu vérifié n’est fourni dans ce dossier; les exemples, données de démonstration et tests techniques ne comptent pas comme traction.
+
+Concentrer d’abord une capacité active dans la région de Québec. Tester ensuite la distribution auprès des courtiers hypothécaires, la recherche locale et les références conformes. Mesurer séparément la création d’une demande, sa qualification, son acceptation, sa complétion, le respect de la date et le paiement. Un professionnel inscrit ne constitue pas automatiquement une capacité disponible.
+
+Avant d’élargir l’acquisition, viser plus de 60 % d’acceptation et au moins 80 % de complétion après acceptation dans des cohortes arrivées à maturité, avec contribution positive et livraison à temps. Ces seuils sont proposés et non observés. Les conditions et la rémunération des références nécessitent leur propre validation.
+
+## 7. Modèle financier et utilisation du financement
+
+Le modèle courant du plan distingue les honoraires convenus du notaire des frais de service et de date de Nota. Il utilise le catalogue de l’application. Les honoraires du notaire ne sont pas du revenu Nota. **Une politique de dépôt fondée sur une commission reste en contradiction avec ce modèle documentaire** : le fondateur et les conseillers doivent résoudre cette divergence avant le lancement commercial concerné. La présente révision ne modifie pas la facturation du produit et ne constitue pas une validation juridique.
+
+Dans le scénario de première année, un acte terminé représente en moyenne **331 $ de revenu Nota**, **145 $ de coûts variables** et **186 $ de contribution**, avant coûts fixes et acquisition. Les chiffres sont arrondis; le calcul complet inclut paiement, comptes actifs, soutien et provision pour pertes. Le mix de services et de dates demeure supposé. Aucun revenu logiciel ou de signature n’est ajouté aux projections.
+
+<!-- MODEL:annual -->
+<!-- /MODEL:annual -->
+
+La levée recherchée de **250 000 $** finance l’enveloppe d’exploitation suivante :
+
+| Usage | Budget |
+| --- | ---: |
+| Équipe fondatrice | 96 000 $ |
+| Juridique, contrats et confidentialité | 20 000 $ |
+| Conseiller notaire en exercice | 25 000 $ |
+| Design et interface | 25 000 $ |
+| Acquisition de clients | 40 000 $ |
+| Acquisition de notaires | 15 000 $ |
+| Infrastructure, assurances et outils | 12 000 $ |
+| Imprévus | 17 000 $ |
+| **Total** | **250 000 $** |
+
+L’acquisition est déjà comprise dans les dépenses d’exploitation et n’est pas déduite une deuxième fois. Les frais variables sont supplémentaires. Les budgets de deuxième et troisième années exigent encore un plan d’embauche et des devis détaillés.
+
+### Trésorerie et besoins additionnels
+
+Le scénario de base prévoit **45 377 $ de trésorerie à la fin de la première année**, dont seulement **20 377 $ au-dessus d’une réserve proposée de 25 000 $**. Sans revenu, le budget complet consomme la levée en douze mois et franchit la réserve au onzième mois.
+
+Les déficits cumulés de fin d’année indiquent **au moins 180 119 $ supplémentaires à la levée proposée** dans le scénario de base. Ce calcul exclut les creux intra-annuels ultérieurs, les délais de règlement, les obligations initiales non vérifiées, certaines taxes et les coûts de financement. Le recrutement ultérieur doit dépendre du financement disponible ou d’un rythme de dépenses réduit.
+
+<!-- MODEL:scenarios -->
+<!-- /MODEL:scenarios -->
+
+Le scénario défavorable divise les complétions par deux, double le soutien à 60 $ par acte et porte les pertes à 1 % des sommes perçues. Le favorable augmente les complétions de 50 %, ramène le soutien à 20 $ et les pertes à 0,25 %. Ce sont des simulations mécaniques, sans probabilité attribuée. Maintenir une prévision de trésorerie glissante et agir lorsque le solde libre projeté passe sous six mois de dépenses.
+
+## 8. Équipe, validations et prochaine étape
+
+Anthony Paquet est le fondateur et le principal bâtisseur représenté dans le dépôt. La suite exige un notaire conseiller en exercice, un conseiller juridique québécois, un comptable et une relève opérationnelle documentée. Aucun curriculum vitæ, engagement d’investisseur ou statut de financement non vérifié n’est inventé ici.
+
+Les validations prioritaires concernent le modèle commercial et les références, la cartographie fiscale, les fournisseurs de paiement, l’assurance, la protection des renseignements et les limites de chaque service. Le dossier de financement doit inclure l’entité émettrice, la table de capitalisation, les cessions de propriété intellectuelle, les contrats, les soldes de trésorerie, les dettes et les devis. Les modalités d’un éventuel SAFE ou billet convertible restent à négocier.
+
+La proposition aux investisseurs est concrète : **financer un pilote local, vérifier l’économie des actes réellement terminés et démontrer un gain de préparation mesurable**, puis ouvrir les étapes suivantes avec ces preuves.
+
+La version anglaise détaillée complète ce plan avec les coûts de paiement, les scénarios de pertes, les risques et les responsabilités. Les données du pitch et les chiffres de marché proviennent du même [registre de sources](planning/business-plan-model.json); les tableaux financiers viennent du même [modèle reproductible](planning/business-plan-model.json).

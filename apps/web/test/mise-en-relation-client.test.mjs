@@ -763,12 +763,12 @@ test('the cancel dialog says Nota charges nothing on a cancelled demand', async 
 });
 
 // P2-13 — the pane is « Mes offres »; the deep-linked band takes the focus.
-test('#pane-profil is titled « Mes offres », its lede no longer claims « sur cet appareil », and the deep-linked band takes the focus', async () => {
+test('#pane-profil is titled « Mon profil », its lede no longer claims « sur cet appareil », and the deep-linked band takes the focus', async () => {
   const st = retainedStatus({ bid: { id: 'o9', serviceId: 'refinancement', dateISO: DATE, montant: 2600, status: 'retenue', etude: 'Étude Roy' } });
   const { doc } = await boot({ url: '#offre=o9&d=' + DATE + '&cle=tok-9', routes: [statusRoute(st), monthRoute()] });
   await wait(40);
   const pane = $(doc, 'pane-profil');
-  assert.equal(pane.querySelector('h1').textContent.trim(), 'Mes offres');
+  assert.equal(pane.querySelector('h1').textContent.trim(), 'Mon profil');
   assert.ok(!/sur cet appareil/.test(pane.querySelector('.intro p').textContent), 'the device note leaves the lede');
   const band = doc.querySelector('.my-offer-detail[data-for="o9"]');
   assert.equal(doc.activeElement, band, 'the band is focused');

@@ -1,6 +1,6 @@
 {
-  "version": "1.6",
-  "date": "2026-09-09",
+  "version": "1.7",
+  "date": "2026-09-12",
   "scope": "financing-only planning scenarios; four-service code catalogue",
   "assumptions": {
     "serviceMix": {
@@ -319,11 +319,103 @@
     "paymentBeforeAccount": 233.04679999999996
   },
   "market": {
-    "financingActs": 60000,
-    "refinancingActs": 50000,
-    "baseFeeOpportunity": 27690000,
-    "withAssumedDateMix": 35632000,
-    "startingHonoraires": 208000000
+    "reviewed": "2026-09-12",
+    "observed": {
+      "quebecCmaSales": 10271,
+      "quebecProvinceSales": 97214,
+      "canadaMlsSales": 470314,
+      "quebecTraditionalNotaries": 2659,
+      "euNotariesApprox": 50000,
+      "uinlMemberNotariats": 93
+    },
+    "localScenario": {
+      "qualifiableShare": 0.1,
+      "capturedShare": 0.25,
+      "completionRate": 0.8,
+      "completed": 205.42000000000004
+    },
+    "sources": {
+      "apciq": {
+        "label": "APCIQ · bilan 2025 · 13 janvier 2026",
+        "url": "https://apciq.ca/ventes-residentielles-le-quebec-enregistre-sa-troisieme-meilleure-annee-en-2025/",
+        "period": "2025",
+        "facts": {
+          "quebecCmaSales": 10271,
+          "quebecProvinceSales": 97214
+        },
+        "scope": "Residential resales recorded through Centris; Québec CMA is not the municipality. Québec is included in Canada; do not add the totals."
+      },
+      "crea": {
+        "label": "CREA · bilan 2025 · 15 janvier 2026",
+        "url": "https://www.crea.ca/media-hub/news/home-sales-in-canada-end-2025-quietly/",
+        "period": "2025",
+        "facts": {
+          "canadaMlsSales": 470314
+        },
+        "scope": "Annual residential transactions recorded over Canadian MLS systems, not all transactions or eligible notarial acts."
+      },
+      "cnq": {
+        "label": "Chambre des notaires · rapport 2024–2025 · p. 11",
+        "url": "https://www.cnq.org/wp-content/uploads/2025/11/610666-CDN_Rapport-annuel-2024-2025_Final.pdf#page=11",
+        "period": "2025-03-31",
+        "facts": {
+          "members": 3846,
+          "traditionalPracticeNotaries": 2659
+        },
+        "scope": "2,659 individual notaries in a traditional practice, not 2,659 firms, customers or subscriptions."
+      },
+      "cnue": {
+        "label": "CNUE · rapport 2024 · p. 16",
+        "url": "https://www.notariesofeurope.eu/wp-content/uploads/2025/02/CNUE-Annual-Report-2024.pdf#page=16",
+        "period": "2024",
+        "facts": {
+          "euNotariesApprox": 50000,
+          "memberNotariats": 22
+        },
+        "scope": "Nearly 50,000 notaries across 22 member notariats. An international reference pool, not a validated serviceable market."
+      },
+      "uinl": {
+        "label": "UINL · organismes membres · consulté le 12 septembre 2026",
+        "url": "https://uinl.org/fr/mission/a-propos-de-nous/",
+        "period": "2026-09-12",
+        "facts": {
+          "memberNotariats": 93
+        },
+        "scope": "Member notariats; do not equate membership with launch authorization or sum with the CNUE."
+      },
+      "signing": {
+        "label": "Chambre des notaires · signature électronique au bureau",
+        "url": "https://www.cnq.org/votre-notaire/un-professionnel-numerique/signer-un-acte-notarie-technologique-au-bureau-du-notaire/",
+        "period": "consulted 2026-09-12",
+        "scope": "Electronic notarial signing already exists. Electronic signing does not imply remote signing."
+      },
+      "remote": {
+        "label": "Chambre des notaires · signature à distance sur exception",
+        "url": "https://www.cnq.org/votre-notaire/un-professionnel-numerique/signer-un-acte-notarie-technologique/",
+        "period": "consulted 2026-09-12",
+        "scope": "Remote notarial signing is exceptional and evaluated by the responsible notary."
+      },
+      "csn": {
+        "label": "CSN · Mistral AI et Scaleway · 9 juillet 2026",
+        "url": "https://www.csn.notaires.fr/fr/actualites/intelligence-artificielle-le-conseil-superieur-du-notariat-choisit-mistral-ai-et",
+        "period": "2026-07-09",
+        "scope": "An announced 18-month partnership for notarial AI experimentation. Evidence of an active competitive ecosystem; no measured productivity result for Nota."
+      }
+    },
+    "localSensitivity": [
+      {
+        "qualifiableShare": 0.05,
+        "completed": 102.71000000000002
+      },
+      {
+        "qualifiableShare": 0.1,
+        "completed": 205.42000000000004
+      },
+      {
+        "qualifiableShare": 0.2,
+        "completed": 410.8400000000001
+      }
+    ]
   },
   "months": [
     {

@@ -1,8 +1,15 @@
 // Rasterize the deck's SVG frames in a headless Chromium that loads Sora and
-// Inter from Google Fonts — the faces the brand asks for (ADR 0050) without
-// requiring them on the machine. ImageMagick draws a silent fallback face when
-// a family is missing; a browser can be asked whether the face is loaded, and
-// this script refuses to write a frame until it is.
+// Inter FROM THE REPOSITORY — the very woff2 the site serves under
+// apps/web/public/fonts (ADR 0050). ImageMagick draws a silent fallback face
+// when a family is missing; a browser can be asked whether the face is loaded,
+// and this script refuses to write a frame until it is.
+//
+// The faces used to come from fonts.googleapis.com. Nothing about that was
+// private — this runs at build time, not in front of a visitor — but it made the
+// deck's own slides unreproducible offline and left them depending on whichever
+// cut Google served that day, while the same bytes sat in the tree. Reading the
+// repository's files makes the frames byte-reproducible and keeps the slides on
+// exactly the faces the product ships.
 //
 //   python3 docs/pitch-deck/render-slides.py --svg-out /tmp/slides
 //   node docs/pitch-deck/rasterize-slides.mjs /tmp/slides
@@ -28,14 +35,25 @@ if (!src) { console.error('usage: node rasterize-slides.mjs <dir with the SVG fr
 const frames = readdirSync(src).filter((f) => /^dark-slide-(fr-)?\d+\.svg$/.test(f)).sort();
 if (frames.length !== 32) { console.error(`expected 32 frames in ${src}, found ${frames.length}`); process.exit(2); }
 
-const FONTS = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@700;800&display=block';
+// Les quatre tranches variables servies par Nota, embarquées en base64 : une
+// page `setContent` n'a pas d'origine, donc une URL file:// y serait refusée.
+const FONT_DIR = join(here, '..', '..', 'apps', 'web', 'public', 'fonts');
+const face = (famille, fichier) => {
+  const octets = readFileSync(join(FONT_DIR, fichier)).toString('base64');
+  return `@font-face{font-family:'${famille}';font-style:normal;font-weight:100 900;font-display:block;`
+    + `src:url(data:font/woff2;base64,${octets}) format('woff2')}`;
+};
+const FONT_CSS = [
+  face('Inter', 'inter-latin.woff2'), face('Inter', 'inter-latin-ext.woff2'),
+  face('Sora', 'sora-latin.woff2'), face('Sora', 'sora-latin-ext.woff2'),
+].join('');
 
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 1 });
 let written = 0;
 for (const f of frames) {
   const svg = readFileSync(join(src, f), 'utf8');
-  await page.setContent(`<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="${FONTS}"><style>html,body{margin:0;background:transparent}svg{display:block;width:1600px;height:900px}</style></head><body>${svg}</body></html>`, { waitUntil: 'networkidle' });
+  await page.setContent(`<!doctype html><html><head><meta charset="utf-8"><style>${FONT_CSS}html,body{margin:0;background:transparent}svg{display:block;width:1600px;height:900px}</style></head><body>${svg}</body></html>`, { waitUntil: 'networkidle' });
   const ok = await page.evaluate(async () => {
     await document.fonts.load('800 40px Sora'); await document.fonts.load('700 40px Sora');
     await document.fonts.load('400 20px Inter'); await document.fonts.load('700 20px Inter');

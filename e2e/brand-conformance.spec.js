@@ -48,6 +48,7 @@ const WEB = process.env.BRAND_WEB || `http://localhost:${process.env.E2E_WEB_POR
 const ADMIN = process.env.BRAND_ADMIN || `http://localhost:${process.env.E2E_ADMIN_PORT || 4312}`;
 const DOCS = process.env.BRAND_DOCS || `http://localhost:${process.env.E2E_DOCS_PORT || 4313}`;
 const BRAND_HOST = process.env.BRAND_BRAND_HOST || '';
+const PITCH_HOST = process.env.BRAND_PITCH_HOST || '';
 const PLAN_HOST = process.env.BRAND_PLAN_HOST || '';
 
 // ADR 0048, amendments of 2026-09-11 (01 → layout 02 → size 16 → details
@@ -55,11 +56,11 @@ const PLAN_HOST = process.env.BRAND_PLAN_HOST || '';
 // text of the surface — the rendered DOM or an SVG asset it points at.
 const DECIDED = {
   'the tile is a square with a soft corner (rx 7)': 'width="64" height="64" rx="7"',
-  'the N stems are square (rx 1)': 'x="16" y="15" width="7.5" height="34" rx="1"',
+  'the N stems are square (rx 1)': 'x="16" y="15" width="9.5" height="34" rx="1"',
   'the signal is a square': 'x="40" y="8" width="16" height="16" rx="3"',
   'the O is a square portal': 'M0 8.5a5 5 0 0 1 5-5H22',
-  'the T is bevelled': 'V27.3L38.05 31.5V10.8H28.4Z',
-  'the A is the decided one': 'M66.5 3.5H72.5L84.1 31.5H76.3',
+  'the T is bevelled': 'V27.02L40.4 31.5V11.3H31Z',
+  'the A wears the cut apex': 'M65.17 6.7L70.74 3.5H72.5L84.1 31.5H75.77',
   'the word ends on the signal period': 'x="87.4" y="27.1" width="4.4" height="4.4"',
 };
 
@@ -68,7 +69,7 @@ const RETIRED = {
   'the round signal dot': '<circle cx="48"',
   'the rx-12 tile': 'width="64" height="64" rx="12"',
   'the rounded O': 'M11 3.5H16a11',
-  'the straight T': 'H45.35V31.5H38.05',
+  'the straight T': 'H44.95V31.5H38.45',
   'the outline stroke word': 'stroke-width="5.2"',
   'the signature rule under the word': 'M0.5 36.5h86',
 };
@@ -77,7 +78,7 @@ const RETIRED = {
 // not a brand »): no served stylesheet may still speak it.
 const RETIRED_COLOURS = ['--nota-teal', '--nota-midnight', '--nota-coral', '--nota-saffron'];
 
-const TYPE_H1 = 'clamp(30px, 2.6vw, 44px)';
+const TYPE_H1 = 'clamp(26px, 2.25vw, 36px)';
 const RAMP = { '--nota-blue-900': 'rgb(38, 73, 97)', '--nota-blue-500': 'rgb(64, 117, 152)' };
 
 /**
@@ -186,9 +187,21 @@ async function audit(page, surface) {
   // The carnet greets a fresh browser with its intro film and then the guide,
   // both of which cover the header. Every other spec boots past them; the
   // brand lives behind them, not in them.
-  await page.addInitScript(() => {
-    try { localStorage.setItem('nota.introSeen', '1'); localStorage.setItem('nota.onboarded.v1', '1'); } catch (e) { /* storage blocked */ }
-  });
+  //
+  // `account: true` seeds the client profile that opens a door closed to an
+  // anonymous visitor (app.js `GATED_PANES`, the owner's 2026-09-12 rule that
+  // the signing surfaces need an account). Without it a deep link to such a
+  // pane lands on the carnet with the sign-in sheet in front of the header, so
+  // the surface is never measured and the sheet swallows the theme switch.
+  // The seed opens the door; it relaxes nothing this file asserts.
+  const account = surface.account === true;
+  await page.addInitScript((withAccount) => {
+    try {
+      localStorage.setItem('nota.introSeen', '1');
+      localStorage.setItem('nota.onboarded.v1', '1');
+      if (withAccount) localStorage.setItem('nota.profile.v1', JSON.stringify({ courriel: 'marque@exemple.ca' }));
+    } catch (e) { /* storage blocked */ }
+  }, account);
   await page.goto(surface.url);
   if (surface.wait) await page.waitForSelector(surface.wait, { timeout: 20_000 }).catch(() => {
     failures.push(`never showed ${surface.wait}`);
@@ -252,7 +265,7 @@ const SURFACES = [
   { key: 'carnet', url: `${WEB}/?lang=fr`, wait: 'header' },
   { key: 'espace notaire', url: `${WEB}/?lang=fr#t=notaires`, wait: '#pane-notaires' },
   { key: 'partenaires', url: `${WEB}/?lang=fr#t=partenaires`, wait: '#pane-partenaires' },
-  { key: 'signature bêta', url: `${WEB}/?lang=fr#t=beta`, wait: '#pane-beta' },
+  { key: 'signature bêta', url: `${WEB}/?lang=fr#t=beta`, wait: '#pane-beta', account: true },
   { key: 'salle de signature', url: `${WEB}/signature.html?lang=fr`, wait: '#welcome' },
   { key: 'guide de marque', url: `${WEB}/brand.html`, wait: 'h1' },
   { key: 'planche d’explorations', url: `${WEB}/brand-explorations.html`, wait: 'h1', showsAlternatives: true },
@@ -262,9 +275,10 @@ const SURFACES = [
   { key: 'acquisition · financing (en)', url: `${WEB}/mortgage-financing-notary-quebec-city.html`, wait: '.search-page h1' },
   { key: 'console d’administration', url: `${ADMIN}/?lang=fr`, wait: '#auth-email, .admin-rail' },
   { key: 'pitch deck', url: `${DOCS}/pitch-deck.html`, wait: '#slide' },
-  { key: 'plan d’affaires', url: `${DOCS}/business-plan.html`, wait: 'h1' },
+  { key: 'plan d’affaires', url: `${DOCS}/business-plan.html`, wait: 'h1:visible' },
   ...(BRAND_HOST ? [{ key: 'brand.gonota.ca', url: `${BRAND_HOST}/`, wait: 'h1' }] : []),
-  ...(PLAN_HOST ? [{ key: 'plan.gonota.ca', url: `${PLAN_HOST}/`, wait: 'h1' }] : []),
+  ...(PLAN_HOST ? [{ key: 'plan.gonota.ca', url: `${PLAN_HOST}/`, wait: 'h1:visible' }] : []),
+  ...(PITCH_HOST ? [{ key: 'pitch.gonota.ca', url: `${PITCH_HOST}/`, wait: '#slide' }] : []),
 ];
 
 test.describe('the brand, on every surface Nota serves', () => {

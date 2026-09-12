@@ -145,7 +145,7 @@ test('the contact prefill (a programmatic write + change) repaints the label', a
   assert.equal(wrapOf(sujet).querySelector('.nselect-value').textContent, 'Aide avec une offre');
 
   // And the real door: opening « Nous joindre » resets the subject + label.
-  $(doc, 'mnav-contact').click();
+  doc.defaultView.Nota.contact.openEmail();
   assert.equal(sujet.value, 'Question générale');
   assert.equal(wrapOf(sujet).querySelector('.nselect-value').textContent, 'Question générale');
 });

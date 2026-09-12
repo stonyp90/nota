@@ -1,0 +1,58 @@
+/* Finite, replayable sequences; every diagram remains complete at rest. */
+.slide [data-motion]{animation:reveal .55s both;animation-delay:var(--delay,0ms)}
+.slide [data-motion=route]{animation-name:route;animation-duration:.75s}
+.slide [data-motion=friction]{animation-name:friction;animation-duration:1.2s}
+.slide [data-motion=capacity]{animation-name:capacity;animation-duration:.7s}
+.slide [data-motion=match]{animation-name:match;animation-duration:.8s}
+.slide [data-motion=trace] path,.slide [data-motion=feedback] path{stroke-dasharray:1;animation:trace .8s both;animation-delay:var(--delay,0ms)}
+.slide [data-motion=trace],.slide [data-motion=feedback]{animation:none}
+.slide [data-motion=market] rect,.slide [data-motion=budget] rect{transform-box:fill-box;transform-origin:left center;animation:bar .95s both;animation-delay:var(--delay,0ms)}
+.slide [data-motion=qualify]{animation-name:qualify;animation-duration:.7s}
+.slide [data-motion=result]{animation-name:result;animation-duration:.8s}
+.slide [data-motion=expand]{animation-name:expand;animation-duration:.8s}
+.slide [data-motion=baseline] rect{transform-box:fill-box;transform-origin:left;animation:bar .75s both}
+.slide [data-motion=compress] rect{transform-box:fill-box;transform-origin:left;animation:compress 1.65s both;animation-delay:var(--delay,0ms)}
+.slide [data-motion=sign-step]{animation-name:signStep;animation-duration:.65s}
+.slide [data-motion=seal]{animation-name:seal;animation-duration:.75s}
+.slide [data-motion=compare]{animation-name:compare;animation-duration:.65s}
+.slide [data-motion=integrate]{animation-name:integrate;animation-duration:1s}
+.slide [data-motion=cohort]{animation-name:cohort;animation-duration:.85s}
+.slide [data-motion=evidence]{animation-name:evidence;animation-duration:.9s}
+.slide [data-motion=economics]{animation-name:economics;animation-duration:.8s}
+.slide [data-motion=projection]{animation-name:projection;animation-duration:.9s}
+.slide [data-motion=milestone]{animation-name:milestone;animation-duration:.75s}
+.slide [data-motion=invitation]{animation-name:invitation;animation-duration:.9s}
+.motion-paused .slide *{animation-play-state:paused!important}
+@keyframes reveal{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes route{from{opacity:0;transform:translateY(-28px)}to{opacity:1;transform:none}}
+@keyframes friction{0%{opacity:0;transform:translateX(-22px)}50%{opacity:1;transform:translateX(7px)}70%{transform:translateX(-3px)}100%{opacity:1;transform:none}}
+@keyframes capacity{from{opacity:.15}to{opacity:1}}
+@keyframes trace{from{stroke-dashoffset:1}to{stroke-dashoffset:0}}
+@keyframes match{from{opacity:0;transform:translateX(-30px)}to{opacity:1;transform:none}}
+@keyframes bar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes qualify{from{opacity:0;transform:translateX(-18px)}to{opacity:1;transform:none}}
+@keyframes result{0%{opacity:0}70%{opacity:1}100%{opacity:1}}
+@keyframes expand{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
+@keyframes compress{0%,15%{transform:scaleX(5)}100%{transform:scaleX(1)}}
+@keyframes signStep{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}
+@keyframes seal{from{opacity:0;transform:translateY(-16px)}to{opacity:1;transform:none}}
+@keyframes compare{from{opacity:0;transform:translateX(-24px)}to{opacity:1;transform:none}}
+@keyframes integrate{from{opacity:0;transform:translateX(30px)}to{opacity:1;transform:none}}
+@keyframes cohort{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:none}}
+@keyframes evidence{from{opacity:0}to{opacity:1}}
+@keyframes economics{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:none}}
+@keyframes projection{from{opacity:0;transform:translateY(35px)}to{opacity:1;transform:none}}
+@keyframes milestone{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:none}}
+@keyframes invitation{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+.plan-experience{display:grid;gap:18px}.plan-deck-head{display:flex;align-items:end;justify-content:space-between;gap:16px}.plan-deck-head h1{font-size:var(--type-h1);line-height:var(--type-h1-lh);letter-spacing:var(--type-h1-ls);margin:0}.plan-deck-head p{margin:.5rem 0 0;color:var(--ink-muted);font-size:var(--type-lead)}.plan-counter{font-size:13px;color:var(--ink-muted);white-space:nowrap}
+.plan-stage{width:100%;position:relative;display:grid;place-items:center;aspect-ratio:16/9;background:#101820;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden}.plan-stage .slide,.plan-stage svg{display:block;width:100%;height:100%;min-width:0;min-height:0}.plan-fullscreen-brand{display:none}.plan-stage:fullscreen{width:100vw;height:100vh;border:0;border-radius:0;padding:54px 0 64px}.plan-stage:fullscreen .plan-fullscreen-brand{display:flex;position:absolute;top:12px;left:28px;z-index:2}.plan-fullscreen-brand .plan-brand{display:flex;gap:3.36px;align-items:center;min-height:28px;--brand-word-ink:#f4f8fa;color:#f4f8fa}.plan-fullscreen-brand .plan-brand-mark{width:28px;height:28px}.plan-fullscreen-brand .plan-brand-word{height:13.44px;width:44.064px}.plan-fullscreen-brand .plan-brand-region{font:800 9px/1 var(--font-sans);color:#afc2cf;background:#132b3f;padding:.55em .7em;letter-spacing:.1em;margin-left:1.12px;border-radius:3px}
+.plan-controls,.plan-fullscreen-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.plan-controls button,.plan-chapters button,.plan-fullscreen-controls button{appearance:none;min-width:44px;min-height:44px;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--ink);background:var(--surface);font:600 13px var(--font-sans);cursor:pointer}.plan-controls button:disabled{opacity:.5;cursor:default}.plan-controls button:hover,.plan-chapters button:hover{border-color:var(--brand)}.plan-controls [aria-pressed=true],.plan-chapters [aria-current=true]{border-color:var(--brand);background:var(--surface-inset)}.plan-fullscreen-controls{display:none;position:absolute;bottom:12px;left:0;right:0;justify-content:center}.plan-stage:fullscreen .plan-fullscreen-controls{display:flex}.plan-fullscreen-controls button{background:#0f2030;color:#f4f8fa;border-color:#294353}
+.plan-chapters{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}.plan-chapters button{display:grid;gap:6px;align-content:start;text-align:left;overflow-wrap:anywhere}.plan-chapters small{font-size:11px;color:var(--ink-muted)}.plan-evidence{font-size:14px;color:var(--ink-muted);margin:0}.plan-source-links{display:flex;gap:8px 24px;flex-wrap:wrap}.plan-source-links a{font-size:12px;color:var(--brand);min-height:24px;overflow-wrap:anywhere}.plan-drilldown{border-top:1px solid var(--border);padding-top:8px}.plan-drilldown>summary{font-weight:600;min-height:44px;cursor:pointer;display:flex;align-items:center;gap:12px}.plan-drilldown>summary::before{content:'+';font-size:24px}.plan-drilldown[open]>summary::before{content:'−'}.plan-detail-content{padding-top:12px}.plan-detail-content> :is(p,ol,ul){max-width:76ch}.plan-detail-content .plan-section{display:block;margin-bottom:24px}.plan-detail-content .section-rail,.plan-detail-content .focus-summary{display:none}.plan-detail-content h2{font-size:var(--type-h2)}.plan-detail-content h3{font-size:var(--type-h3)}.plan-detail-content .section-content>*{display:revert!important}.plan-transcript{font-size:14px;color:var(--ink-muted)}.plan-transcript summary{min-height:44px;cursor:pointer}.plan-transcript p{max-width:90ch}.plan-interaction:empty{display:none}.plan-interaction .market-explorer{margin:0}.plan-cash-control{padding:16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}.plan-cash-control label{display:block;font-size:14px;font-weight:600}.plan-cash-control input{width:100%;min-height:44px;accent-color:var(--brand)}.plan-cash-control p{font-size:14px;color:var(--ink-muted);margin:4px 0}
+.plan-experience :focus-visible{outline:3px solid var(--accent-warm);outline-offset:3px}body:has(.plan-experience) main::before{display:none}body:has(.plan-experience){background:var(--bg)}.plan-experience .market-inputs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.plan-experience .market-inputs label{font-size:14px}.plan-experience .market-inputs input{display:block;width:100%;min-height:44px;accent-color:var(--brand)}.plan-experience .market-outcome{display:flex;align-items:baseline;gap:12px}.plan-experience .market-outcome strong{font-size:28px;color:var(--brand)}.plan-experience .market-explorer{padding:16px;border:1px solid var(--border);border-radius:var(--radius);background:var(--surface)}.plan-experience .market-explorer p{font-size:14px;color:var(--ink-muted)}
+@media(max-width:900px){.plan-chapters{grid-template-columns:repeat(4,minmax(0,1fr))}}@media(max-width:600px){.plan-chapters{grid-template-columns:repeat(2,minmax(0,1fr))}.plan-chapters button{display:flex;align-items:center;gap:8px}.plan-controls button{font-size:12px;padding:8px}.plan-deck-head{align-items:start}.plan-experience .market-inputs{grid-template-columns:1fr;gap:2px}.plan-cash-control{padding:12px}.plan-fullscreen-controls button{font-size:12px}}
+@media(prefers-reduced-motion:reduce){.plan-stage *{animation:none!important;transition:none!important}}
+@media print{.plan-stage,.plan-controls,.plan-chapters,.plan-source-links,.plan-transcript,.plan-interaction{display:none}.plan-drilldown>.plan-detail-content{display:block!important}.plan-drilldown>summary{display:none}}
+
+@media(min-width:700px){.plan-stage{max-height:calc(100svh - 250px)}.plan-stage:fullscreen{max-height:none}}
+
+.plan-print-only{display:none}@media print{header,.plan-experience{display:none!important}.plan-print-only{display:block}main{max-width:none;padding:0!important}.plan-print-only h2{break-after:avoid}.plan-print-only table{font-size:10pt}.plan-print-only .table-scroll{overflow:visible}}

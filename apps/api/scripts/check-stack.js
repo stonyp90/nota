@@ -116,12 +116,23 @@ function freshness(label, res) {
       currentPlan ? 'document bilingue prêt à partager' : 'le document bilingue est incomplet');
     record(/#386888/i.test(planText), 'Plan d’affaires — marque',
       /#386888/i.test(planText) ? 'palette Nota actuelle' : 'couleur primaire Nota absente');
-    // Keep this probe resilient to the bilingual viewer's explicit
-    // `titlesEn`/`titlesFr` arrays while still requiring the thumbnail rail and
-    // slide navigation shell.
-    const pitchDeckHome = /Pitch deck/i.test(plan.text) && /id="thumbs"/.test(plan.text) && /const titles(?:En)? = \[/.test(plan.text) && /The notary remains the decision-maker/i.test(plan.text);
+    // Validate the bilingual slide payload and navigation independently of
+    // the presentation's wording or its current number of slides.
+    let slideCount = 0;
+    try {
+      const payload = plan.text.match(/<script\b[^>]*\bid="deck-data"[^>]*>([\s\S]*?)<\/script>/i);
+      const editions = JSON.parse(payload?.[1] || '{}').editions;
+      const complete = slides => Array.isArray(slides) && slides.length > 0 && slides.every(slide =>
+        typeof slide.title === 'string' && slide.title.trim() &&
+        typeof slide.transcript === 'string' && slide.transcript.trim() &&
+        typeof slide.svg === 'string' && /<svg\b/.test(slide.svg));
+      if (complete(editions?.fr) && complete(editions?.en) && editions.fr.length === editions.en.length) {
+        slideCount = editions.fr.length;
+      }
+    } catch { /* invalid or incomplete slide data stays an unhealthy result */ }
+    const pitchDeckHome = slideCount > 0 && ['thumbs', 'slide', 'prevControl', 'nextControl'].every(id => plan.text.includes(`id="${id}"`));
     record(pitchDeckHome, 'Pitch deck — contenu',
-      pitchDeckHome ? '16 slides, avec la slide légale' : 'le pitch deck complet est absent');
+      pitchDeckHome ? `${slideCount} diapositives bilingues, navigation disponible` : 'le pitch deck complet est absent');
   }
 
   // Unauthenticated: 401 is the healthy answer, and it carries the header.

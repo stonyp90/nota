@@ -9,12 +9,33 @@
  * Add a public YouTube URL only after publication:
  *   --video customer-fr-CA=https://youtu.be/example
  */
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const manifestPath = resolve(here, '../../../output/youtube-nota-v2/youtube-manifest.json');
+const outputDir = resolve(here, '../../../output');
+
+// The video build is dated, and a rebrand makes a new one: pinning a single
+// folder name is how the kit came to advertise a build recorded before the
+// brand shipped. The newest manifest wins, and --manifest overrides it.
+function newestManifest() {
+  const flag = process.argv.indexOf('--manifest');
+  if (flag !== -1) {
+    const given = process.argv[flag + 1];
+    if (!given) throw new Error('--manifest requires a path');
+    return resolve(given);
+  }
+  const found = readdirSync(outputDir, { withFileTypes: true })
+    .filter(entry => entry.isDirectory())
+    .map(entry => resolve(outputDir, entry.name, 'youtube-manifest.json'))
+    .filter(existsSync)
+    .sort();
+  if (!found.length) throw new Error(`No youtube-manifest.json under ${outputDir}`);
+  return found[found.length - 1];
+}
+
+const manifestPath = newestManifest();
 const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
 const base = 'https://gonota.ca';
 const campaign = 'lancement_quebec_202609';

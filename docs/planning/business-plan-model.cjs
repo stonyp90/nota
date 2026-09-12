@@ -82,11 +82,26 @@ const scenarios=[
   return {...s,years:outputs,peakYearEndDeficit:peak,capitalWithReserve:peak+assumptions.protectedCash,
     extraBeyondRaise:Math.max(0,peak+assumptions.protectedCash-assumptions.openingCapital)};
 });
-const market={financingActs:60000,refinancingActs:50000};
-market.baseFeeOpportunity=market.financingActs*d.prixNota('financement','standard').totalCents/100+market.refinancingActs*d.prixNota('refinancement','standard').totalCents/100;
-market.withAssumedDateMix=market.baseFeeOpportunity+110000*(baseline.nota-Object.entries(serviceMix).reduce((s,[id,w])=>s+w*d.prixNota(id,'standard').totalCents/100,0));
-market.startingHonoraires=60000*d.serviceById('financement').prixDepart+50000*d.serviceById('refinancement').prixDepart;
-const output={version:'1.6',date:'2026-09-09',scope:'financing-only planning scenarios; four-service code catalogue',assumptions,catalogue,rows,baseline,market,months,years,scenarios};
+// Primary observed counts and explicit scenario inputs; none is product pricing.
+const evidence = require('../pitch-deck/investor-sources.json');
+const facts = evidence.sources;
+const market = {
+  reviewed: evidence.reviewed,
+  observed: {
+    quebecCmaSales: facts.apciq.facts.quebecCmaSales,
+    quebecProvinceSales: facts.apciq.facts.quebecProvinceSales,
+    canadaMlsSales: facts.crea.facts.canadaMlsSales,
+    quebecTraditionalNotaries: facts.cnq.facts.traditionalPracticeNotaries,
+    euNotariesApprox: facts.cnue.facts.euNotariesApprox,
+    uinlMemberNotariats: facts.uinl.facts.memberNotariats
+  },
+  localScenario: {qualifiableShare:0.10,capturedShare:0.25,completionRate:0.80},
+  sources: evidence.sources
+};
+market.localScenario.completed = market.observed.quebecCmaSales * market.localScenario.qualifiableShare * market.localScenario.capturedShare * market.localScenario.completionRate;
+market.localSensitivity = [0.05,0.10,0.20].map(qualifiableShare=>({qualifiableShare,completed:market.observed.quebecCmaSales*qualifiableShare*market.localScenario.capturedShare*market.localScenario.completionRate}));
+assert.ok(Math.abs(market.localScenario.completed-205.42)<1e-8);
+const output={version:'1.7',date:'2026-09-12',scope:'financing-only planning scenarios; four-service code catalogue',assumptions,catalogue,rows,baseline,market,months,years,scenarios};
 function finite(obj){for(const v of Object.values(obj)){if(typeof v==='number')assert.ok(Number.isFinite(v));else if(v&&typeof v==='object')finite(v);}}
 finite(output);
 for(const y of years){assert.ok(Math.abs(y.charges-y.honoraires-y.revenue)<1e-7);assert.ok(Math.abs(y.revenue-y.card-y.payout-y.account-y.service-y.losses-y.contribution)<1e-7);}

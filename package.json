@@ -38,9 +38,14 @@
     "local:seed": "node apps/api/scripts/seed.js",
     "local:check": "node apps/api/scripts/check-stack.js",
     "test:e2e": "playwright test",
+    "test:e2e:all": "npm run test:e2e && npm run test:e2e:signing",
+    "test:e2e:signing": "node --test --test-concurrency=1 e2e/signing-beta.test.mjs e2e/signing-entry.test.mjs",
     "test:chat": "node --test packages/domain/test/support-assistant.test.mjs apps/api/test/assistant-port.test.mjs apps/api/test/assistant-secret.test.mjs apps/api/test/support*.test.mjs apps/api/test/admin-support.test.mjs apps/admin/test/support.test.mjs apps/web/test/support-chat.test.mjs apps/web/test/support-assistant-ui.test.mjs",
     "benchmark:chat": "node apps/api/scripts/benchmark-support-matcher.js",
-    "demo:salle": "playwright test --config=demo/playwright.demo.config.js"
+    "demo:salle": "playwright test --config=demo/playwright.demo.config.js",
+    "test:all": "npm test && npm run test:web && npm run test:admin && npm test --prefix features && npm run build && npm run build:admin && npm run test:e2e:all",
+    "brand:generate": "node apps/web/scripts/brand-kit.mjs && node apps/web/scripts/sync-brand-foundations.mjs",
+    "test:brand": "node --test apps/web/test/brand-foundations.test.mjs apps/web/test/brand-kit.test.mjs apps/web/test/brand-compose.test.mjs apps/web/test/icones-marque.test.mjs apps/web/test/marque-une-seule.test.mjs apps/web/test/registre-encre.test.mjs apps/web/test/registre-carre.test.mjs apps/web/test/contraste-etats.test.mjs apps/web/test/polices-hebergees.test.mjs apps/web/test/typographie.test.mjs apps/api/test/emails-brand.test.mjs apps/api/test/email-signature.test.mjs"
   },
   "engines": {
     "node": ">=20"

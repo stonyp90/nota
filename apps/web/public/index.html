@@ -61,13 +61,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Nota" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <link rel="preconnect" href="https://rsms.me/" crossorigin />
-    <link rel="stylesheet" href="https://rsms.me/inter/inter.css" />
     <!-- Wordmark only: a geometric display face (--font-display) that pairs
          with the logomark, loaded separately from the Inter UI type above. -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@700;800&display=swap" />
     <link rel="stylesheet" href="styles.css" />
 
     <!-- Structured data: helps Google rich results and gives LLMs clean facts.
@@ -179,8 +174,223 @@
         "availableLanguage": ["fr-CA", "en-CA"]
       }
     </script>
-  </head>
-  <body>
+  <style data-nota-foundations>
+:root {
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  --font-display: 'Sora', var(--font-sans);
+  --weight-display: 700;
+  --type-h1: clamp(26px, 2.25vw, 36px);
+  --type-h1-lh: 1.12;
+  --type-h1-ls: -.04em;
+  --type-h1-compact: clamp(26px, 6vw, 32px);
+  --type-h2: clamp(19px, 1.5vw, 24px);
+  --type-h2-lh: 1.2;
+  --type-h2-ls: -.035em;
+  --type-h3: 17px;
+  --type-h3-lh: 1.3;
+  --type-h3-ls: -.02em;
+  --type-h4: 15px;
+  --type-h4-lh: 1.3;
+  --type-h4-ls: -.01em;
+  --type-lead: 16px;
+  --type-lead-lh: 1.6;
+  --type-eyebrow: 12px;
+  --type-eyebrow-ls: .1em;
+  --type-body: 16px;
+  --type-body-lh: 1.5;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 14px;
+  --space-8: 16px;
+  --space-9: 18px;
+  --space-10: 20px;
+  --space-12: 24px;
+  --space-14: 28px;
+  --space-16: 32px;
+  --logo-word-ratio: .48;
+  --logo-gap-ratio: .12;
+  --logo-badge-gap-ratio: .16;
+  --logo-tile: 28px;
+  --logo-badge-bg: light-dark(#eef0f2, #2b3035);
+}
+/* Shared application chrome. Embedded by sync-brand-foundations.mjs so the
+   plan and presentation remain usable as standalone documents. */
+:root {
+  --layout-width: 1600px;
+  --layout-gutter: clamp(16px, 4vw, 28px);
+  --layout-header-height: 52px;
+  --layout-section-gap: 32px;
+  --layout-content-top: clamp(16px, 1.8vw, 24px);
+  --logo-badge-min: 9px;
+  --control-gap: 8px;
+  --control-height: 44px;
+  --type-control: 13px;
+  --header-h: var(--layout-header-height);
+  --admin-topbar-h: var(--layout-header-height);
+  --brand-word-ink: var(--ink);
+}
+
+/* The outer bar spans the viewport. Its contents align with the page rail. */
+.nota-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--surface);
+  border: 0;
+  box-shadow: var(--shadow);
+  backdrop-filter: none;
+}
+.nota-header-inner {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--control-gap);
+  width: 100%;
+  min-height: var(--layout-header-height);
+  height: auto;
+  padding: 0 max(var(--layout-gutter), calc((100% - var(--layout-width)) / 2 + var(--layout-gutter)));
+  margin: 0;
+}
+.site-header.nota-header .nota-header-inner {
+  max-width: var(--layout-width);
+  margin-inline: auto;
+  padding-inline: var(--layout-gutter);
+  height: var(--layout-header-height);
+}
+.nota-header :is(.brand, .admin-brand, .lockup, .plan-brand) {
+  --lockup-tile: var(--logo-tile);
+  color: var(--ink);
+  margin-block: 0;
+  text-decoration: none;
+  flex-shrink: 0;
+  min-height: var(--control-height);
+}
+.nota-header :is(.brand, .admin-brand) {
+  --lockup-word: calc(var(--lockup-tile) * var(--logo-word-ratio));
+  --lockup-gap: calc(var(--lockup-tile) * var(--logo-gap-ratio));
+  --lockup-badge-gap: calc(var(--lockup-tile) * var(--logo-badge-gap-ratio));
+}
+.nota-header :is(.lockup, .plan-brand),
+[data-nota-surface="pitch"] .nota-header .brand {
+  --lockup-word: var(--logo-word-ratio);
+  --lockup-gap: var(--logo-gap-ratio);
+  --lockup-badge-gap: var(--logo-badge-gap-ratio);
+}
+.nota-header :is(.brand-word, .admin-brand-word, .plan-brand-word) { color: var(--ink); }
+.nota-header :is(.brand-sub, .admin-brand-sub, .brand-region, .plan-brand-region) {
+  font-size: max(var(--logo-badge-min), calc(var(--logo-tile) * .16));
+  font-family: var(--font-sans);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: .55em .7em;
+  color: var(--ink-muted);
+  background: var(--logo-badge-bg);
+  border-radius: var(--radius-xs, 3px);
+}
+.nota-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--control-gap);
+  margin-left: auto;
+  min-width: 0;
+}
+.nota-menu { margin-left: auto; }
+.nota-menu > summary { display: none; }
+.nota-menu > .nota-header-actions { display: flex; }
+.nota-header .nota-header-actions :is(a, button):not(.tswitch) {
+  min-height: var(--control-height);
+  font-family: var(--font-sans);
+  font-size: var(--type-control);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+.nota-header .nota-header-actions :is(a, button):hover { color: var(--brand); }
+.nota-header .nota-header-actions [aria-pressed="true"] { color: var(--brand); }
+
+/* Content rails share their outer margins; long prose retains its own measure. */
+[data-nota-surface="brand"] .page,
+[data-nota-surface="plan"] > main,
+[data-nota-surface="pitch"] > main {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--layout-width);
+  margin-inline: auto;
+  padding: var(--layout-content-top) var(--layout-gutter) calc(var(--layout-section-gap) * 2);
+}
+[data-nota-surface="brand"] .hero { padding-top: 0; }
+[data-nota-surface="brand"] .section { margin-top: var(--layout-section-gap); padding-top: var(--layout-section-gap); }
+[data-nota-surface="brand"] .section-head { margin-bottom: 16px; gap: 24px; }
+[data-nota-surface="brand"] .section-head p { font-size: var(--type-body); line-height: var(--type-body-lh); }
+[data-nota-surface="brand"] .lede { max-width: 47ch; }
+[data-nota-surface="pitch"] .deck-head h1 { font-size: var(--type-h1); line-height: var(--type-h1-lh); letter-spacing: var(--type-h1-ls); }
+[data-nota-surface="pitch"] .deck-head p:not(.deck-kicker) { font-size: var(--type-lead); line-height: var(--type-lead-lh); }
+[data-nota-surface="plan"] .language-bar {
+  position: static;
+  padding: 0;
+  margin-block: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+[data-nota-surface="plan"] .language-bar .deck-link,
+[data-nota-surface="plan"] .language-bar [data-plan-focus] { margin-inline: 0; }
+[data-nota-surface="plan"] .language-bar > span { display: none; }
+[data-nota-surface="plan"] :is(.section-body, .french-summary) > :is(p, ul, ol) { max-width: 76ch; }
+
+@media (max-width: 700px) {
+  .nota-header.nota-header-inner { flex-wrap: wrap; }
+  .nota-menu > summary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--control-gap);
+    min-height: var(--control-height);
+    min-width: var(--control-height);
+    padding-inline: 8px;
+    color: var(--ink);
+    cursor: pointer;
+    font: 600 var(--type-control)/1 var(--font-sans);
+    list-style: none;
+  }
+  .nota-menu > summary::-webkit-details-marker { display: none; }
+  .nota-menu:not([open]) > .nota-header-actions { display: none; }
+  .nota-menu > .nota-header-actions {
+    position: absolute;
+    top: 100%;
+    inset-inline: var(--layout-gutter);
+    padding: 16px;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  [data-nota-surface="plan"] .nota-menu > .language-bar { position: absolute; padding: 16px; background: var(--surface); }
+  .nota-header .top-links { flex-direction: row; align-items: center; }
+}
+@media print {
+  .nota-header { position: static; box-shadow: none; }
+  .nota-header-actions { display: none; }
+}
+
+[data-nota-surface="acquisition"] .search-page { max-width: var(--layout-width); padding: var(--layout-content-top) var(--layout-gutter) 64px; }
+[data-nota-surface="acquisition"] .search-page :is(p, ol, ul) { max-width: 76ch; }
+.nota-header > .lang-link { display: inline-flex; align-items: center; min-height: var(--control-height); padding-inline: 12px; color: var(--ink); }
+</style>
+</head>
+  <body data-nota-surface="web">
     <a class="skip" href="#main">Aller au contenu</a>
 
     <!-- The Nota mark and wordmark are drawn ONCE: every inline copy below is a
@@ -192,16 +402,16 @@
       <symbol id="nota-logomark" viewBox="0 0 64 64">
         <rect width="64" height="64" rx="7" fill="#264961"/>
         <g fill="#ffffff">
-          <rect x="16" y="15" width="7.5" height="34" rx="1"/>
-          <rect x="40.5" y="15" width="7.5" height="34" rx="1"/>
-          <polygon points="16,15 24,15 48,49 40,49"/>
+          <rect x="16" y="15" width="9.5" height="34" rx="1"/>
+          <rect x="38.5" y="15" width="9.5" height="34" rx="1"/>
+          <polygon points="16,15 26.2,15 48,49 37.8,49"/>
         </g>
         <rect x="40" y="8" width="16" height="16" rx="3" fill="#407598" stroke="#264961" stroke-width="3"/>
       </symbol>
       <symbol id="nota-wordmark" viewBox="0 3.5 91.8 28">
         <!-- Exploration 01 « Monogramme lié » (brand-explorations.html, first
-             tile): O T A in SOLID, heavy letterforms carrying the same visual
-             weight as the tile's N, on tight tracking, and NO rule under the
+             tile): O T A in solid, bold letterforms with the same relative
+             stem weight as the tile's N, on optical spacing, and NO rule under the
              word. Filled paths, not <text>: this drawing must be identical in
              Chromium, Firefox and WebKit and must survive favicon.svg / og.svg,
              which are opened without the page's web fonts. The cap band is
@@ -210,12 +420,17 @@
              renders the caps exactly that tall (ADR 0048, variant C). -->
         <g fill="currentColor" fill-rule="evenodd">
           <!-- O: a square portal, echoing the square corners of the N tile (variant C). -->
-          <path d="M0 8.5a5 5 0 0 1 5-5H22a5 5 0 0 1 5 5V26.5a5 5 0 0 1-5 5H5a5 5 0 0 1-5-5ZM7.3 12.3v10.4a1.5 1.5 0 0 0 1.5 1.5h9.4a1.5 1.5 0 0 0 1.5-1.5V12.3a1.5 1.5 0 0 0-1.5-1.5H8.8a1.5 1.5 0 0 0-1.5 1.5Z"/>
+          <path d="M0 8.5a5 5 0 0 1 5-5H22a5 5 0 0 1 5 5V26.5a5 5 0 0 1-5 5H5a5 5 0 0 1-5-5ZM7.8 12.8v9.4a1.5 1.5 0 0 0 1.5 1.5h8.4a1.5 1.5 0 0 0 1.5-1.5V12.8a1.5 1.5 0 0 0-1.5-1.5H9.3a1.5 1.5 0 0 0-1.5 1.5Z"/>
           <!-- T: a flat bar over a centred stem, same stem weight as the O; the
                stem ends in a bevel that echoes the N's diagonal (« 22 · Le T signé »). -->
-          <path d="M28.4 3.5H55V10.8H45.35V27.3L38.05 31.5V10.8H28.4Z"/>
-          <!-- A: splayed legs, a solid apex and a counter closed by the bar. -->
-          <path d="M66.5 3.5H72.5L84.1 31.5H76.3L74.68 26.25H64.32L62.7 31.5H54.9ZM69.5 9.5L72.73 19.95H66.27Z"/>
+          <path d="M31 3.5H57.6V11.3H48.2V27.02L40.4 31.5V11.3H31Z"/>
+          <!-- A: splayed legs and a counter closed by the bar, with the apex CUT on
+               its left at the T's bevel angle (owner, 2026-09-12: « the OTA, add
+               something, a little detail that will differentiate »). The mark now
+               carries one cut, repeated: the N's diagonal, the T's stem, the A's
+               apex — and it lives in the form, so it survives one ink, a favicon
+               and 16px. -->
+          <path d="M65.17 6.7L70.74 3.5H72.5L84.1 31.5H75.77L73.93 25.89H64.95L63.23 31.5H54.9ZM69.5 10L73 20.3H66Z"/>
           <!-- The period (« 27 · Le point final »): a signal square closes the word.
                The ONE colour literal inside the wordmark — the signal token's value,
                the same as the tile's signal; ux-nav.test.mjs allows exactly this one. -->
@@ -240,53 +455,85 @@
               <button type="button" class="mini-seg-btn" data-set-lang="fr">FR</button>
               <button type="button" class="mini-seg-btn" data-set-lang="en">EN</button>
             </div>
-          <div class="ig-wordmark ig-lockup ig-signature" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
-          <h2 class="ig-title" id="ig-title">Votre projet. Votre notaire.</h2>
-          <p class="ig-lede">Nota met en relation clients et notaires.</p>
-          <div class="ig-doors">
-            <button type="button" class="ig-door" id="ig-door-client">
-              <span class="ig-door-t">Je cherche un notaire</span>
-              <span class="ig-door-s">Faire avancer mon projet</span>
-              <span class="ig-door-arrow" aria-hidden="true">→</span>
-            </button>
-            <button type="button" class="ig-door" id="ig-door-notaire">
-              <span class="ig-door-t">Je suis notaire</span>
-              <span class="ig-door-s">Trouver mon prochain dossier</span>
-              <span class="ig-door-arrow" aria-hidden="true">→</span>
-            </button>
+          <!-- L'identité et le parcours à gauche; les dates réelles à droite. -->
+          <div class="ig-arrival-copy">
+            <div class="ig-arrival-top">
+            <div class="ig-wordmark ig-lockup" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
+            </div>
+            <h2 class="ig-title" id="ig-title">Votre date. Votre prix.</h2>
+            <p class="ig-lede">Le carnet public des actes notariés au Québec.</p>
+            <div class="ig-doors" role="group" aria-label="Vous êtes">
+              <button type="button" class="ig-door" id="ig-door-client">
+                <span class="ig-door-t">Je cherche un notaire</span>
+                <span class="ig-door-sub">Choisir ma date et mon prix</span>
+              </button>
+              <button type="button" class="ig-door" id="ig-door-notaire">
+                <span class="ig-door-t">Je suis notaire</span>
+                <span class="ig-door-sub">Consulter les demandes</span>
+              </button>
+              <button type="button" class="ig-door" id="ig-door-partner">
+                <span class="ig-door-t">Je suis partenaire</span>
+                <span class="ig-door-sub" id="ig-partner-action">Créer et partager mon code</span>
+              </button>
+            </div>
           </div>
-          <button type="button" class="ig-enter" id="ig-enter">Explorer le carnet →</button>
+          <!-- Rempli par igRenderCarnet() : une date par palier d'avis, au prix
+               total que la case du calendrier affiche pour le même jour. Aucun
+               montant n'est écrit ici — la vitrine suit l'échelle du domaine. -->
+          <div class="ig-arrival-market">
+          <div class="ig-cal" id="ig-carnet">
+            <div class="ig-cal-head">
+              <span class="ig-cal-lbl">La date décide du prix</span>
+            </div>
+            <div class="ig-cal-row" id="ig-carnet-row"></div>
+          </div>
+          <button type="button" class="ig-enter" id="ig-enter">Ouvrir le carnet →</button>
+          </div>
         </div>
 
         <div class="ig-frame" id="ig-frame" hidden>
           <div class="ig-stage" id="ig-stage-client">
-            <div class="ig-masthead">
-              <div class="ig-wordmark ig-lockup" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
-              <span class="ig-audience">Pour votre projet</span>
+            <div class="ig-client-calendar" aria-hidden="true">
+              <div class="ig-client-calendar-head">
+                <div class="ig-wordmark ig-lockup ig-client-brand" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
+                <p class="ig-client-month" id="ig-client-month"></p>
+              </div>
+              <div class="ig-client-dates" id="ig-client-dates"></div>
+              <div class="ig-client-market-offer"><span>✓ Offre publiée</span><strong>Refinancement</strong></div>
             </div>
             <section class="ig-scene ig-c1">
-              <div class="ig-wordmark ig-lockup ig-signature" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
-              <p class="ig-h">Trouvez votre notaire avec Nota.</p>
-              <p class="ig-sub">Pour faire avancer votre projet.</p>
+              <p class="ig-h">Choisissez votre date.</p>
+              <p class="ig-sub">Dans le carnet, cliquez sur le jour qui vous convient.</p>
             </section>
 
             <section class="ig-scene ig-c2">
-              <div class="ig-story-symbol"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M6 7h20v21H6zM10 3v8M22 3v8M6 14h20"/><path pathLength="1" d="m11 21 3 3 7-7"/></svg></div>
-              <p class="ig-h">Votre date. Votre prix.</p>
-              <p class="ig-sub">Publiez votre demande sur Nota.</p>
+              <div class="ig-client-example" aria-hidden="true">
+                <span class="ig-client-choice">✓ Refinancement</span>
+                <span class="ig-client-field">Montant du nouveau prêt <span>✓</span></span>
+                <span class="ig-client-field">Prêteur <span>✓</span></span>
+              </div>
+              <p class="ig-h">Décrivez votre refinancement.</p>
+              <p class="ig-sub">Choisissez l’acte, puis répondez aux questions.</p>
             </section>
 
             <section class="ig-scene ig-c3">
-              <div class="ig-story-symbol"><svg class="ig-story-icon" viewBox="0 0 32 32" fill="none" aria-hidden="true" focusable="false"><path pathLength="1" d="M27 14a11 11 0 1 1-7-9"/><path pathLength="1" d="m10 15 5 5L28 6"/></svg></div>
-              <p class="ig-h">Votre notaire, en contact direct.</p>
-              <p class="ig-sub">Dès qu’un notaire accepte, préparez la signature ensemble.</p>
+              <div class="ig-client-example" aria-hidden="true">
+                <span class="ig-client-field">Votre offre <span>✓</span></span>
+                <span class="ig-client-field">Service Nota <span>✓</span></span>
+                <strong class="ig-client-field">Prix total <span>✓</span></strong>
+              </div>
+              <p class="ig-h">Vérifiez le prix total avant de publier.</p>
+              <p class="ig-sub">Votre offre et le service Nota sont présentés séparément.</p>
             </section>
 
             <section class="ig-scene ig-c4">
-              <div class="ig-wordmark ig-lockup ig-signature" aria-label="Nota" data-i18n-skip><svg class="ig-mark" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><use href="#nota-logomark"/></svg><span class="ig-word" aria-hidden="true"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span></div>
-              <p class="ig-h">Votre projet commence ici.</p>
-              <p class="ig-sub">Vérifiez le prix total avant de publier.</p>
-              <button type="button" class="ig-cta" data-ig-goto="carnet">Choisir ma date →</button>
+              <div class="ig-client-example ig-client-publish" aria-hidden="true">
+                <span class="ig-client-choice">Publier mon offre →</span>
+                <span class="ig-client-posted">✓ Offre publiée</span>
+              </div>
+              <p class="ig-h">Publiez votre offre.</p>
+              <p class="ig-sub">Un notaire peut alors retenir votre demande.</p>
+              <button type="button" class="ig-cta" data-ig-goto="carnet">Essayer avec le guide →</button>
               <p class="ig-note">Le service Nota se paie seulement à la signature.</p>
             </section>
             <div class="ig-progress-track">
@@ -342,18 +589,14 @@
       </div>
     </div>
 
-    <header class="site-header">
-      <div class="wrap">
+    <header class="site-header nota-header">
+      <div class="wrap nota-header-inner">
         <a class="brand goto-link" href="#t=carnet" data-goto="carnet" aria-label="Nota, accueil — retour au menu">
           <span class="brand-lockup" aria-hidden="true" data-i18n-skip>
             <svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg><span class="visually-hidden">OTA</span></span>
           </span>
           <span class="brand-sub">Québec</span>
         </a>
-        <div class="mobile-history" role="group" aria-label="Historique">
-          <button type="button" class="icon-btn mnav-history-btn" data-history="back" aria-label="Précédent" title="Précédent">←</button>
-          <button type="button" class="icon-btn mnav-history-btn" data-history="forward" aria-label="Suivant" title="Suivant">→</button>
-        </div>
         <span class="header-spacer"></span>
         <!-- Marketplace doors plus the owner-requested Beta section. No chevron submenus — every inner destination is
              reached from inside its pane, never from a nested menu. The
@@ -564,8 +807,8 @@
       <!-- ================= CARNET ================= -->
       <section class="tab-pane is-active" id="pane-carnet" role="tabpanel" aria-labelledby="tab-carnet">
         <div class="wrap">
-          <div class="intro intro--hero">
-            <div class="intro-main">
+          <div class="intro intro--hero landing-hero">
+            <div class="intro-main landing-copy">
               <span class="eyebrow">Place de marché des services notariaux · Québec</span>
               <h1>Un notaire, à la date qu’il vous faut.</h1>
               <!-- ONE pitch line at every width. The three steps live in the
@@ -573,7 +816,7 @@
               <!-- The price line is the two-line truth of ADR 0031, rendered by
                    renderHeroPrice() from the tarif the API serves: the static
                    text below is the no-amount fallback, never a literal price. -->
-              <p class="hero-tagline">Proposez votre date et votre prix. Un notaire de Québec retient votre demande. <strong id="hero-price-line">Le notaire reçoit 100 % de votre offre. Le service Nota, à un prix publié d’avance, se paie seulement à la signature.</strong></p>
+              <p class="hero-tagline landing-lede">Proposez votre date et votre prix. Un notaire de Québec retient votre demande. <strong id="hero-price-line">Le notaire reçoit 100 % de votre offre. Le service Nota, à un prix publié d’avance, se paie seulement à la signature.</strong></p>
               <!-- Two date CTAs only (owner's ask, 2026-08-25): the guide left
                    the hero for the fixed « ? » bubble (.guide-fab on desktop;
                    phones keep the footer link and the first-visit guide) —
@@ -582,6 +825,14 @@
                 <button class="btn btn-primary btn-lg" id="cta-reserver">Réserver votre date →</button>
                 <button class="btn btn-lg" id="cta-voir">Voir les dates</button>
               </div>
+              <!-- Propriétaire, 2026-09-12 : le client doit savoir qu'il peut
+                   poser SA date et SON prix sans rien payer, et que c'est la
+                   date qui commande le départ du prix. Les deux faits vivaient
+                   dans les conditions et dans le film ; ici, ils sont sous la
+                   décision. Toute promesse de gratuité totale reste interdite (le client
+                   paie le service de Nota à la signature) : ce qui ne coûte
+                   rien, c'est PUBLIER. -->
+              <p class="help hero-free">Publier votre date et votre prix ne coûte rien. Plus la date est rapprochée, plus le prix de départ monte.</p>
             </div>
             <!-- Live market pulse: what the carnet is actually paying, per act.
                  Answers "combien j'offre ?" with real medians instead of copy;
@@ -695,78 +946,30 @@
       <section class="tab-pane" id="pane-notaires" role="tabpanel" aria-labelledby="tab-notaires" hidden>
         <div class="wrap">
           <div class="notary-landing-left">
-          <div class="intro intro--hero">
-            <div class="intro-main">
-              <h1>Pour les notaires, remplissez votre semaine.</h1>
-              <!-- ONE line of pitch at every width — the inventory below is the
-                   real argument; anything longer is in the way of it. The fee
-                   facts are the value grid's job, said once there. -->
-              <p class="nc-lede">Des clients de Québec ont fixé leur date et leur prix. Retenez ce qui vous convient.</p>
+          <div class="intro intro--hero landing-hero">
+            <div class="intro-main landing-copy">
+              <h1 id="notary-page-title">Ajoutez Nota à votre agenda.</h1>
+              <!-- Lead with the calendar-to-offer journey; provider sync limits appear beside subscription controls. -->
+              <p class="nc-lede landing-lede">Le calendrier des demandes notariales, à ajouter à Google&nbsp;Agenda, Outlook ou Apple&nbsp;Calendrier.</p>
             </div>
           </div>
 
-          <!-- Kept in the DOM for the dedicated Beta tab flow; the landing
-               hides this secondary announcement so the access path stays
-               focused. -->
-          <aside class="notary-ai-beta-note beta-teaser" id="notary-ai-beta-note" role="note" hidden>
-            <div class="beta-teaser-trigger">
-              <span class="beta-teaser-copy">
-                <span class="sub-card-kicker">Outil Nota · bêta gratuite</span>
-                <span class="sub-card-title">Préparation assistée pour les notaires</span>
-              </span>
-              <span class="beta-teaser-hint">Bientôt</span>
-              <button class="beta-teaser-info" id="notary-ai-beta-toggle" type="button" aria-expanded="false" aria-haspopup="dialog" aria-controls="notary-ai-beta-details" aria-describedby="notary-ai-beta-details" aria-label="En savoir plus sur la bêta" title="En savoir plus sur la bêta">i</button>
-            </div>
-            <div class="beta-teaser-details" id="notary-ai-beta-details" role="dialog" aria-label="À propos de la bêta" aria-hidden="true" hidden>
-              <p class="sub-card-sub">La préparation assistée est gratuite pendant la bêta. Nota améliore actuellement un système spécialisé — modèle, instructions et algorithmes propriétaires — à partir de données contrôlées et de révisions professionnelles.</p>
-              <p class="help">La bêta pourra évoluer vers un abonnement pour notaires; aucun prix ni échéance n’est fixé. Les documents transmis pour votre dossier ne servent pas à entraîner les modèles.</p>
-              <p class="beta-teaser-ask">Souhaitez-vous recevoir une invitation à la bêta ?</p>
-              <button class="btn btn-sm btn-primary" id="notary-ai-beta-subscribe" type="button">Oui, m’inscrire à la bêta →</button>
-            </div>
-          </aside>
-
-          <!-- The requests heading and inventory share the left rail. The « En
-               jeu ce mois » totals are retired — the cards ARE the money. -->
-          <div class="nc-live-head nc-landing-head">
-            <h2 class="nc-live-h" id="notary-live-h">Ouvertes en ce moment</h2>
-          </div>
-
-          <!-- THE CENTREPIECE — the live open inventory (signed-out only):
-               real demands, soonest first, every card funnelling into the
-               sign-in gate. Filled by renderNotaryLive(); hidden signed-in —
-               the console's own open list takes over. -->
-          <section class="nc-live" id="notary-live" aria-labelledby="notary-live-h" hidden>
-            <!-- Slot for the « démonstration » mark: these cards quote the
-                 month's real dates and amounts, which are invented whenever
-                 the carnet fell back to fixtures. Empty otherwise. -->
-            <div class="nc-live-head"></div>
-            <div class="nc-live-grid" id="notary-live-grid"></div>
-          </section>
-
-          </div>
-
-          <!-- Prospecting feed for notaries: subscribe the whole carnet of open
-               demands into a personal agenda (Google / Outlook / Apple / iCal).
-               The feed is public, so the card shows on the signed-out landing
-               too — a notary can prospect before ever creating an account. -->
-          <div class="notary-landing-right">
           <aside class="notary-carnet" id="notary-carnet">
             <div class="sub-card" role="group" aria-label="Ajouter le carnet des demandes à votre agenda">
+                <div class="nc-calendar-guide">
+                <div class="sub-card-kicker">Gratuit · Aucun compte Nota requis</div>
+                <div class="nc-calendar-connect">
                 <div class="sub-card-head">
-                  <span class="sub-card-logo" aria-hidden="true">
-                    <img src="favicon.svg" width="30" height="30" alt="" />
-                  </span>
                   <div>
-                    <div class="sub-card-kicker">Votre outil de prospection</div>
-                    <div class="sub-card-title">Le carnet dans votre agenda</div>
-                    <div class="sub-card-sub">Toutes les demandes ouvertes à Québec, à jour automatiquement dans Google, Outlook ou Apple.</div>
+                    <h2 class="nc-calendar-title">Choisissez votre calendrier</h2>
+                    <div class="sub-card-sub">Sélectionnez votre application, puis confirmez l’ajout.</div>
                   </div>
                 </div>
                 <div class="sub-card-actions">
                   <a class="btn btn-sm sub-btn" id="sub-google" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="var(--logo-google-blue)" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5a5.6 5.6 0 0 1-2.4 3.6v3h3.9c2.3-2.1 3.5-5.2 3.5-8.8z"/><path fill="var(--logo-google-green)" d="M12 24c3.2 0 6-1.1 8-2.9l-3.9-3c-1.1.7-2.5 1.2-4.1 1.2-3.1 0-5.8-2.1-6.7-5H1.3v3.1A12 12 0 0 0 12 24z"/><path fill="var(--logo-google-yellow)" d="M5.3 14.3a7.2 7.2 0 0 1 0-4.6V6.6H1.3a12 12 0 0 0 0 10.8l4-3.1z"/><path fill="var(--logo-google-red)" d="M12 4.8c1.8 0 3.3.6 4.6 1.8l3.4-3.4A12 12 0 0 0 12 0 12 12 0 0 0 1.3 6.6l4 3.1C6.2 6.9 8.9 4.8 12 4.8z"/></svg>Google</a>
                   <a class="btn btn-sm sub-btn" id="sub-outlook" target="_blank" rel="noopener"><svg class="brand-ic" viewBox="0 0 24 24" width="15" height="15" aria-hidden="true"><path fill="var(--logo-outlook-blue)" d="M2 6.2 9 4.9v14.2L2 17.8z"/><path fill="var(--logo-on-brand)" d="M5.5 9.2c-1 0-1.7.9-1.7 2.3s.7 2.3 1.7 2.3 1.7-.9 1.7-2.3-.7-2.3-1.7-2.3zm0 1c.4 0 .7.5.7 1.3s-.3 1.3-.7 1.3-.7-.5-.7-1.3.3-1.3.7-1.3z"/><rect x="9.5" y="5.5" width="12.5" height="13" rx="1.5" fill="var(--logo-outlook-blue)"/><path fill="var(--logo-on-brand)" d="M15.7 8.6a3 3 0 1 0 0 6 3 3 0 0 0 0-6zm0 1.6a1.4 1.4 0 1 1 0 2.8 1.4 1.4 0 0 1 0-2.8z"/></svg>Outlook</a>
                   <a class="btn btn-sm sub-btn" id="sub-apple"><svg class="brand-ic" viewBox="0 0 384 512" width="13" height="13" aria-hidden="true" fill="currentColor"><path d="M318.7 268c-.3-36 16.4-63 50-83-18.8-27-47-42-84-45-35-3-73 20-87 20s-52-19-79-19c-56 1-114 43-114 130 0 26 5 53 15 81 13 37 60 128 109 126 26-1 44-19 78-19s50 18 78 18c50-1 92-83 105-120-67-32-64-93-64-95zM256 84c17-20 15-49 14-59-14 1-40 9-56 29-14 17-19 43-16 58 16 1 41-8 58-28z"/></svg>Apple</a>
-                  <a class="btn btn-sm sub-btn" id="sub-ics" download="nota-carnet.ics"><svg class="brand-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Télécharger .ics</a>
+
                 </div>
                 <button class="sub-link-toggle" id="sub-subscription-toggle" type="button" aria-expanded="false" aria-controls="sub-subscription-panel">
                   <span class="sub-link-toggle-main">
@@ -788,14 +991,77 @@
                       <button id="sub-subscription-copy" class="btn btn-sm" type="button">Copier le lien</button>
                     </div>
                   </div>
+                  <!-- Les trois clics, écrits (propriétaire, 2026-09-12 :
+                       « qu'il peut rapidement ajouter à son Google, à son
+                       Outlook »). Le lien seul suppose qu'on sait où le coller ;
+                       la plupart ne le savent pas, et cherchent dans un menu
+                       qu'ils ouvrent une fois par an. Deux agendas, un chemin
+                       chacun, dans l'ordre où les menus les présentent. -->
+                  <ul class="sub-howto">
+                    <li><span class="sub-howto-app">Google Agenda</span> Autres agendas <span class="sub-howto-sep" aria-hidden="true">›</span> + <span class="sub-howto-sep" aria-hidden="true">›</span> À partir de l’URL <span class="sub-howto-sep" aria-hidden="true">›</span> collez le lien.</li>
+                    <li><span class="sub-howto-app">Outlook</span> Ajouter un calendrier <span class="sub-howto-sep" aria-hidden="true">›</span> S’abonner à partir du web <span class="sub-howto-sep" aria-hidden="true">›</span> collez le lien.</li>
+                  </ul>
+                  <a class="btn btn-sm sub-btn" id="sub-ics" download="nota-carnet.ics"><svg class="brand-ic" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>Télécharger le calendrier (.ics)</a>
+                  <p class="help">Un fichier .ics téléchargé est une copie ponctuelle, sans mises à jour.</p>
                 </div>
-                <p class="help sub-card-footnote">Un fichier .ics téléchargé est une copie ponctuelle. Ouvrez le lien d’une demande pour la consulter et la retenir dans Nota.</p>
+                </div>
+                <div class="nc-calendar-note">
+                  <h3>Les demandes à la bonne date</h3>
+                  <p>Chaque demande indique le service, la date de signature et le montant offert.</p>
+                </div>
+                <p class="help sub-card-footnote">Les mises à jour suivent la fréquence de synchronisation de votre agenda.</p>
+                </div>
+                <div class="nc-calendar-preview">
+                <div class="nc-calendar-note">
+                  <h3>Vous décidez quoi retenir</h3>
+                  <p>Consultez les détails dans Nota avant de retenir une demande.</p>
+                </div>
+                <figure class="nc-calendar-teaser" id="nc-calendar-teaser">
+                  <video class="nc-calendar-video" muted loop playsinline preload="none"
+                    poster="media/nota-agenda-fr.png?v=6629c9ac6d"
+                    data-film-fr="media/nota-agenda-fr.mp4?v=2223ec63ff" data-film-en="media/nota-agenda-en.mp4?v=7e1d47e9dd"
+                    data-poster-fr="media/nota-agenda-fr.png?v=6629c9ac6d" data-poster-en="media/nota-agenda-en.png?v=384afb85d1"
+                    aria-label="Un notaire ajoute Nota à son agenda, reçoit une nouvelle offre, l’ouvre dans Nota et confirme sa prise en charge. Démonstration avec l’application réelle."></video>
+                </figure>
+                </div>
               </div>
           </aside>
+          </div>
 
+          <!-- Real offers stay visible directly after the calendar. -->
+          <div class="nc-live-head nc-landing-head">
+            <h2 class="nc-live-h" id="notary-live-h">Demandes disponibles</h2>
+          </div>
+
+          <!-- Filled by renderNotaryLive(). Choosing a request expands and
+               focuses account access; the signed-in console owns its own list. -->
+          <section class="nc-live" id="notary-live" aria-labelledby="notary-live-h" hidden>
+            <!-- Slot for the « démonstration » mark: these cards quote the
+                 month's real dates and amounts, which are invented whenever
+                 the carnet fell back to fixtures. Empty otherwise. -->
+            <div class="nc-live-head"></div>
+            <div class="nc-live-grid" id="notary-live-grid"></div>
+            <!-- Zero state: an empty carnet must still lead somewhere. The grid
+                 stays pure inventory — nothing clickable at zero — so the two
+                 real next steps sit beside it, not inside it. Shown by
+                 renderNotaryLive() only when no demand is open. -->
+            <div class="nc-live-next" id="notary-live-next" hidden>
+              <p class="nc-live-next-lede">Les demandes de Québec arrivent ici dès qu’un client publie sa date et son prix. En attendant, gardez le carnet à l’œil sans revenir sur le site.</p>
+              <div class="nc-live-next-actions">
+                <button type="button" class="btn btn-primary" id="notary-live-next-agenda">Recevoir les demandes dans mon agenda</button>
+                <button type="button" class="btn" id="notary-live-next-account">Créer mon compte gratuit</button>
+              </div>
+            </div>
+          </section>
+
+
+          <!-- Account access is secondary to public calendar subscription. -->
+          <div class="notary-landing-right">
           <!-- ===== Console notaire — la porte d'entrée unique ===== -->
           <div class="panel panel-pad" id="notary-console">
             <!-- Auth gate -->
+            <details class="nc-calendar-secondary" id="notary-calendar-access">
+              <summary>Accéder à mon espace notaire</summary>
             <form id="notary-auth-form" class="nc-auth nc-gate">
               <div class="nc-gate-main">
               <!-- Step 1 — ONE neutral door for everyone. "Continuer" promises the
@@ -876,6 +1142,7 @@
 
               </div>
             </form>
+            </details>
 
             <!-- Authenticated view. No identity bar here: the header account
                  menu already says who is connected and carries Se déconnecter —
@@ -906,20 +1173,27 @@
                 <button type="button" class="btn btn-sm btn-primary" id="nc-profil-door">Compléter mon profil</button>
               </div>
               <h2 class="nc-h" id="notary-open-h">Demandes ouvertes</h2>
+              <div class="nc-offer-notice" id="nc-offer-notice" hidden>
+                <p id="nc-offer-notice-text" role="status"></p>
+                <button class="btn btn-sm" type="button" id="nc-offer-notice-dismiss">Voir les demandes disponibles</button>
+              </div>
               <!-- Client-side filter over the open agenda: one chip per act + a
                    "complete file only" toggle. Filled by the console (services
                    come from the domain, never hardcoded here). Beside it, the
                    disclosure seg: « L’essentiel » keeps every card folded to
                    its decision row, « Tout afficher » unfolds the whole feed. -->
               <div class="nc-open-tools">
-                <div class="chip-group nc-filter" id="notary-open-filter" role="group" aria-label="Filtrer les demandes"></div>
+                <button type="button" class="btn btn-sm nc-filters-toggle" id="notary-filters-toggle" aria-expanded="false" aria-controls="notary-open-filter notary-open-days"><span>Filtres</span><span id="notary-filters-count" class="nc-filter-count" hidden></span><span class="nc-filter-chevron" aria-hidden="true">⌄</span></button>
                 <div class="seg nc-view-seg" id="notary-open-view" role="group" aria-label="Niveau de détail" hidden>
                   <button type="button" class="seg-btn is-on" data-view="compact" aria-pressed="true">L’essentiel</button>
                   <button type="button" class="seg-btn" data-view="detail" aria-pressed="false">Tout afficher</button>
                 </div>
+                <button type="button" class="btn btn-sm btn-ghost" id="notary-open-reset" hidden>Effacer les filtres</button>
+                <div class="chip-group nc-filter" id="notary-open-filter" role="group" aria-label="Filtrer les demandes" hidden></div>
               </div>
               <div class="nc-list nc-agenda-list" id="notary-open-list"></div>
               <p class="help" id="notary-open-empty" hidden>Aucune demande ouverte pour l’instant.</p>
+              <button class="btn btn-sm" type="button" id="notary-open-prefs" hidden>Modifier les prêteurs</button>
 
               <!-- ncRenderRetained() appends the count and the unread badge. -->
               <h2 class="nc-h" id="notary-retained-h">Dossiers retenus</h2>
@@ -1130,6 +1404,16 @@
                       <button id="notary-subscription-copy" class="btn btn-sm" type="button">Copier le lien</button>
                     </div>
                   </div>
+                  <!-- Les trois clics, écrits (propriétaire, 2026-09-12 :
+                       « qu'il peut rapidement ajouter à son Google, à son
+                       Outlook »). Le lien seul suppose qu'on sait où le coller ;
+                       la plupart ne le savent pas, et cherchent dans un menu
+                       qu'ils ouvrent une fois par an. Deux agendas, un chemin
+                       chacun, dans l'ordre où les menus les présentent. -->
+                  <ul class="sub-howto">
+                    <li><span class="sub-howto-app">Google Agenda</span> Autres agendas <span class="sub-howto-sep" aria-hidden="true">›</span> + <span class="sub-howto-sep" aria-hidden="true">›</span> À partir de l’URL <span class="sub-howto-sep" aria-hidden="true">›</span> collez le lien.</li>
+                    <li><span class="sub-howto-app">Outlook</span> Ajouter un calendrier <span class="sub-howto-sep" aria-hidden="true">›</span> S’abonner à partir du web <span class="sub-howto-sep" aria-hidden="true">›</span> collez le lien.</li>
+                  </ul>
                 </div>
                 <p class="help sub-card-footnote">Un fichier .ics téléchargé est une copie ponctuelle. Ouvrez le lien d’une signature pour retrouver le dossier dans Nota.</p>
               </div>
@@ -1144,19 +1428,107 @@
                grid beside it. Folded away signed-in (styles.css keys off the
                [hidden] gate through the wrap). Wording checked against
                docs/legal/conformite-deontologique-notaires.md. -->
+          <details class="nc-calendar-secondary" id="notary-calendar-explore">
+            <summary>Comment ça marche</summary>
+          <!-- ADR 0052 §A — ce qu'un notaire doit comprendre avant de créer un
+               compte, dit en quatre tuiles et non laissé au film : son agenda,
+               les trous de sa semaine, ce que l'urgence paie, et le fait que la
+               fiche est complète avant qu'il décide. Chaque tuile a sa preuve
+               plus bas sur la même page (la carte d'abonnement, l'inventaire
+               ouvert, la fiche d'une demande) — le bloc annonce, il ne remplace
+               rien. Se replie avec la porte, comme la bande Conformité : signé,
+               la console est un plan de travail. -->
+          <section class="nc-promesses" id="nc-promesses" aria-labelledby="nc-promesses-h">
+            <div class="nc-promesses-kicker">Ce que vous obtenez</div>
+            <h2 class="nc-promesses-h" id="nc-promesses-h">Gratuit dans votre agenda. Des offres à consulter. Vous décidez.</h2>
+            <ul class="nc-promesses-tiles">
+              <li class="nc-promesse">
+                <span class="nc-promesse-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span>
+                <span class="nc-promesse-t">Dans l’agenda que vous regardez déjà</span>
+                <span class="nc-promesse-p">Google, Outlook ou Apple : un lien à coller, et les demandes ouvertes s’y tiennent à jour toutes seules. Rien à installer, aucun mot de passe à donner.</span>
+              </li>
+              <li class="nc-promesse">
+                <span class="nc-promesse-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5h7v7H4zM13 5h7v7h-7zM4 14h7v5H4z"/><path d="M16.5 14v5M14 16.5h5"/></svg></span>
+                <span class="nc-promesse-t">Les trous de votre semaine se comblent</span>
+                <span class="nc-promesse-p">Chaque demande porte une date précise, déjà choisie par le client. Vous ne prenez que celles qui tombent dans vos disponibilités.</span>
+              </li>
+              <li class="nc-promesse">
+                <span class="nc-promesse-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 7-7"/><path d="M14 8h6v6"/></svg></span>
+                <span class="nc-promesse-t">Des besoins urgents, des occasions à saisir</span>
+                <!-- Le chiffre n'est PAS écrit ici : app.js l'écrit à partir de
+                     l'échelle des délais du domaine (AGENTS.md règle 1), pour
+                     qu'un changement de TIERS ne puisse pas faire mentir la
+                     promesse sans qu'un test rougisse. -->
+                <span class="nc-promesse-p"><span class="nc-promesse-chiffre" id="nc-promesse-urgence"></span> Une échéance rapprochée peut rendre une offre avantageuse. La célérité exceptionnelle fait partie des facteurs d’honoraires reconnus; le montant doit rester juste et raisonnable (art. 49 du Code de déontologie).</span>
+              </li>
+              <li class="nc-promesse">
+                <span class="nc-promesse-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h11l3 3v13H5z"/><path d="M9 9h6M9 13h6M9 17h3"/></svg></span>
+                <span class="nc-promesse-t">De l’agenda à l’acceptation</span>
+                <span class="nc-promesse-p">Ouvrez le lien d’une offre dans votre agenda. Connectez-vous au besoin, vérifiez le montant et la date, puis confirmez avec Retenir. Le dossier du client s’ouvre dans Nota.</span>
+              </li>
+              <!-- Propriétaire, 2026-09-12 : « they don't have to decline,
+                   they just have nothing to do ». La phrase dit le mécanisme
+                   EXACT du domaine (coteDisponibilite) : décliner ne retire
+                   jamais de points, ne rien répondre en vaut zéro. Elle ne
+                   promet donc pas que l'inaction est sans conséquence — elle
+                   promet qu'elle ne coûte rien. -->
+              <li class="nc-promesse">
+                <span class="nc-promesse-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l7 7-7 7"/><path d="M16 5v14"/></svg></span>
+                <span class="nc-promesse-t">Rien à refuser</span>
+                <span class="nc-promesse-p">Une offre qui ne vous convient pas, vous la laissez passer : aucun refus à écrire, aucune pénalité, aucune relance. Répondre — oui ou non — compte pour votre disponibilité ; ne rien faire ne vous retire rien.</span>
+              </li>
+            </ul>
+          </section>
+
+          <!-- Kept in the DOM for the dedicated Beta tab flow; the landing
+               hides this secondary announcement so the access path stays
+               focused. -->
+          <aside class="notary-ai-beta-note beta-teaser" id="notary-ai-beta-note" role="note" hidden>
+            <div class="beta-teaser-trigger">
+              <span class="beta-teaser-copy">
+                <span class="sub-card-kicker">Outil Nota · bêta gratuite</span>
+                <span class="sub-card-title">Préparation assistée pour les notaires</span>
+              </span>
+              <span class="beta-teaser-hint">Bientôt</span>
+              <button class="beta-teaser-info" id="notary-ai-beta-toggle" type="button" aria-expanded="false" aria-haspopup="dialog" aria-controls="notary-ai-beta-details" aria-describedby="notary-ai-beta-details" aria-label="En savoir plus sur la bêta" title="En savoir plus sur la bêta">i</button>
+            </div>
+            <div class="beta-teaser-details" id="notary-ai-beta-details" role="dialog" aria-label="À propos de la bêta" aria-hidden="true" hidden>
+              <!-- ADR 0052 §B — l'échange est dit ICI, dans les mots de la
+                   décision, et pas en légalese sous un bouton. Les deux voies
+                   ont UNE différence, et la troisième phrase borne ce que
+                   « vos corrections » veut dire : le secret professionnel de
+                   l'art. 14 appartient au client, aucun consentement de
+                   notaire ne peut le lever. -->
+              <p class="sub-card-sub">Notre IA propriétaire prépare le dossier avec vous : elle trie les documents, relève ce qui manque et signale les contradictions. Vous vérifiez chaque proposition — elle ne décide rien.</p>
+              <p class="sub-card-sub">Deux voies, une seule différence. Si vous payez, vous ne devez rien à l’apprentissage. Si vous ne payez pas, vos corrections servent à améliorer le système.</p>
+              <p class="help">Vos corrections, c’est un champ accepté, un champ corrigé, une question escaladée. Jamais un document de votre client, jamais une valeur de son dossier : le secret professionnel ne vous appartient pas. Et refuser les deux ne vous retire rien du marché — les demandes, l’agenda et la console restent gratuits.</p>
+              <!-- La pastille dit « Bientôt » : rien n'est en vente. Cette ligne
+                   empêche le paragraphe au-dessus de se lire comme une offre
+                   ouverte — il décrit l'échange, il ne le propose pas encore. -->
+              <p class="help">La préparation assistée n’est pas encore ouverte : aucun prix ni échéance n’est fixé.</p>
+              <p class="beta-teaser-ask">Souhaitez-vous recevoir une invitation à la bêta ?</p>
+              <button class="btn btn-sm btn-primary" id="notary-ai-beta-subscribe" type="button">Oui, m’inscrire à la bêta →</button>
+            </div>
+          </aside>
+
+
+          </details>
+
+          <details class="nc-calendar-secondary" id="notary-calendar-obligations">
+            <summary>Vos obligations professionnelles</summary>
           <section class="nc-conformite" id="nc-conformite" aria-labelledby="nc-conformite-h">
             <div class="nc-conformite-kicker">Conformité</div>
-            <h2 class="nc-conformite-h" id="nc-conformite-h">Nota respecte les règles de votre profession.</h2>
+            <h2 class="nc-conformite-h" id="nc-conformite-h">Votre indépendance et vos obligations restent entières.</h2>
             <ul class="nc-conformite-tiles">
               <li class="nc-conformite-tile">
                 <span class="nc-conformite-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3 4 6v6c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg></span>
                 <span class="nc-conformite-art">Art. 32.1 — Loi sur le notariat</span>
-                <span class="nc-conformite-txt">Aucune réduction promise, aucune part abandonnée : vous recevez 100 % du montant offert.</span>
+                <span class="nc-conformite-txt">Nota verse au notaire 100 % du montant offert. Son prix distinct, facturé au client, reste à faire qualifier juridiquement au regard des règles sur les intermédiaires.</span>
               </li>
               <li class="nc-conformite-tile">
                 <span class="nc-conformite-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="8" height="14" rx="1"/><rect x="13" y="5" width="8" height="14" rx="1"/><path d="M5.5 9h3M5.5 12h3M15.5 9h3M15.5 12h3"/></svg></span>
                 <span class="nc-conformite-art">Art. 32 et 29.1 — Code de déontologie</span>
-                <span class="nc-conformite-txt">Nota facture son propre prix au client, à côté : aucun partage d’honoraires, aucune convention sur vos honoraires.</span>
+                <span class="nc-conformite-txt">Les restrictions sur le partage d’honoraires et les conventions compromettant votre indépendance s’appliquent. Vous conservez le contrôle de votre mandat et de vos actes professionnels.</span>
               </li>
               <li class="nc-conformite-tile">
                 <span class="nc-conformite-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M6 21h12M4 7h16"/><path d="m7 7-3 7h6zM17 7l-3 7h6z"/></svg></span>
@@ -1167,12 +1539,16 @@
                      conformite-deontologique-notaires.md). The tile states what
                      the notary keeps and does, and voices no compliance claim
                      on Nota's behalf — the same wording as the film's scene. -->
-                  <span class="nc-conformite-txt">Vos honoraires restent les vôtres : vous acceptez le montant offert, proposez le vôtre, ou passez. Rien n’est retranché.</span>
+                  <span class="nc-conformite-txt">Vous évaluez les honoraires selon les services à rendre, y compris la célérité exceptionnelle. Vous acceptez, proposez votre montant ou passez; l’urgence ne dispense jamais d’honoraires justes et raisonnables.</span>
               </li>
             </ul>
             <p class="nc-conformite-order">Une décision de l’Ordre s’applique toujours en premier.</p>
+            <p class="help">Avant d’accepter : évaluez votre compétence et vos moyens (art. 8), les conflits d’intérêts (art. 30) et la confidentialité (art. 35). Informez le client du coût approximatif (art. 51).</p>
+            <p class="help">L’utilisation de Nota ne certifie pas la conformité d’un notaire et ne constitue pas une approbation de la Chambre des notaires du Québec. La validation juridique du modèle de frais reste à obtenir.</p>
+            <p class="help"><a href="https://www.legisquebec.gouv.qc.ca/fr/document/rc/N-3,%20r.%202" target="_blank" rel="noopener">Consulter le Code de déontologie</a> · <a href="https://www.cnq.org/la-chambre-et-votre-protection/actualites-et-salle-de-presse/loi-23-mise-en-garde-du-bureau-du-syndic/" target="_blank" rel="noopener">Lire la mise en garde du Bureau du syndic</a></p>
             <a href="#" class="goto-link nc-conformite-link" data-goto="conditions">Lire nos engagements déontologiques →</a>
           </section>
+          </details>
           <p class="note nota-guarantee">
             <strong>Vous gardez la main.</strong> Vous fixez vos honoraires et vérifiez l’identité du client à la signature, comme l’exige la loi. Nota n’intervient jamais dans l’acte.
           </p>
@@ -1187,93 +1563,106 @@
            renderPartnerPane() — never a literal in this markup. -->
       <section class="tab-pane" id="pane-partenaires" role="tabpanel" aria-labelledby="tab-partenaires" hidden>
         <div class="wrap">
-          <!-- The hero band (2026-08-27 redesign): the pitch and the two flat
-               rewards share ONE washed panel, so the whole offer lands in a
-               single glance before anything scrolls. The « prix du client »
-               guarantee still lives ONCE, in the fine print below. -->
-          <header class="pr-hero">
-            <div class="pr-hero-copy">
+          <!-- Refonte du 2026-09-12 (propriétaire, devant la page : « beaucoup
+               trop de texte »). La page ne dit plus qu'une chose : UN code,
+               deux montants, puis le formulaire qui donne ce code. Le
+               sélecteur de métier du héros, l'estimateur annuel, la vignette
+               en trois temps, la bande « Comment ça marche » et la FAQ
+               répétaient tous cette même phrase — ils sont retirés, pas
+               déplacés. Le métier se choisit UNE fois, dans le formulaire.
+               Seules restent les deux mentions qu'on ne peut pas taire :
+               l'article 33 et le prix du client. -->
+          <header class="pr-hero landing-hero">
+            <div class="pr-hero-copy landing-copy">
               <span class="eyebrow">Partenaires</span>
-              <h1>Référez, et soyez récompensé.</h1>
-              <p>Courtiers immobiliers, courtiers hypothécaires, comptables et planificateurs : vos clients ont besoin d’un notaire à un moment précis. Référez-les à ce moment-là — chaque mise en relation qui aboutit est récompensée.</p>
-              <!-- « Vous êtes… » (2026-09-03): the claim form's first question,
-                   asked here so a courtier or an accountant recognises
-                   themself before anything scrolls. One button per
-                   D.REFERRAL.partners entry (partnerAudienceInit); picking one
-                   shows that profession's « moment » — domain data, the cue
-                   that turns a reader into a referrer — and pre-selects the
-                   form's chip. The two stay in sync both ways. -->
-              <div class="pr-audience" id="pr-audience">
-                <span class="pr-audience-lbl" id="pr-audience-lbl">Vous êtes…</span>
-                <div class="pr-audience-row" role="group" aria-labelledby="pr-audience-lbl"></div>
-                <p class="pr-moment" id="pr-moment" aria-live="polite">Le bon moment pour référer dépend de votre métier — choisissez le vôtre.</p>
-              </div>
-              <!-- The hero's own door to the action: on a phone the claim form
-                   sits below the steps and the FAQ — this lands the visitor in
-                   it, courriel focused (three-click rule). Named apart from the
-                   form's « Réclamer mon code → » submit, so two controls never
-                   share one accessible name. renderPartnerPane() relabels it
-                   « Voir mon code → » for a returning partner. -->
-              <button type="button" class="btn btn-primary btn-lg pr-hero-cta" id="pr-hero-cta">Obtenir mon code →</button>
-              <!-- Qui peut réclamer, dit sous le bouton qui le propose
-                   (art. 33 C. déont. : un notaire ne peut ni verser ni
-                   recevoir un tel avantage). Il vivait sous les cartes, à
-                   droite ; il est ici parce que c'est ICI qu'on décide de
-                   réclamer — et parce que la colonne de gauche s'arrêtait
-                   172 px avant la droite. -->
+              <h1>Un code. Deux récompenses.</h1>
+              <p class="landing-lede">Partagez votre lien Nota. Vous êtes récompensé une fois l’acte signé.</p>
+              <!-- Qui peut réclamer (art. 33 C. déont. : un notaire ne peut ni
+                   verser ni recevoir un tel avantage), sous la promesse. -->
               <p class="pr-eligibility">Réservé aux professionnels qui ne sont pas notaires : le Code de déontologie des notaires (art. 33) interdit à un notaire de verser ou de recevoir un tel avantage.</p>
             </div>
-            <!-- Two tracks, one stat card each: kicker, amount + cadence tag,
-                 when. The HOW lives in the steps below — never repeated per
-                 card — but the cadence (repeats forever vs once per notary)
-                 is what actually separates the two offers, so it rides the
-                 amount row instead of hiding in a collapsed FAQ answer.
-                 The notary track pays more, so it carries the highlight.
-                 Amounts come from renderPartnerPane() (domain). -->
-            <div class="pr-rewards" aria-label="Les récompenses">
-              <div class="pr-card" id="pr-card-client">
-                <div class="pr-kicker">Référez un client</div>
-                <div class="pr-amount" id="pr-amount-client"></div>
-                <span class="pr-freq">Sans limite</span>
-                <p class="pr-when">Acquise dès qu’un notaire retient la demande ; versée une fois l’acte signé.</p>
+            <div class="pr-offer">
+              <!-- Les deux montants, rien d'autre : un intitulé, le chiffre du
+                   domaine, la cadence. La règle d'acquisition est dite UNE fois
+                   sous la paire — elle vaut pour les deux voies. -->
+              <div class="pr-rewards" aria-label="Les récompenses">
+                <div class="pr-card" id="pr-card-client">
+                  <div class="pr-kicker">Référez un client</div>
+                  <div class="pr-amount" id="pr-amount-client"></div>
+                  <span class="pr-freq">Sans limite</span>
+                </div>
+                <div class="pr-card pr-card--notaire" id="pr-card-notaire">
+                  <div class="pr-kicker">Référez un notaire</div>
+                  <div class="pr-amount" id="pr-amount-notaire"></div>
+                  <span class="pr-freq">Une fois par notaire</span>
+                </div>
               </div>
-              <div class="pr-card pr-card--notaire" id="pr-card-notaire">
-                <div class="pr-kicker">Référez un notaire</div>
-                <div class="pr-amount" id="pr-amount-notaire"></div>
-                <span class="pr-freq">Une fois par notaire</span>
-                <p class="pr-when">Acquise à son premier acte retenu ; versée une fois cet acte signé.</p>
-              </div>
-            </div>
-            <!-- The estimator (2026-09-03): the one figure a courtier or an
-                 agent actually wants — a year of referrals. The slider's
-                 range and seat are domain data (D.REFERRAL.projection*), the
-                 figure is D.referralProjection — nothing numeric is written
-                 here. One row under the CTA, so the pane stays thin. -->
-            <div class="pr-estimate" id="pr-estimate">
-              <label class="pr-estimate-lbl" for="pr-estimate-n">Combien de clients référez-vous par mois ?</label>
-              <div class="pr-estimate-row">
-                <input type="range" id="pr-estimate-n" aria-describedby="pr-estimate-out" />
-                <output class="pr-estimate-out" id="pr-estimate-out" for="pr-estimate-n" aria-live="polite">
-                  <span class="pr-estimate-n"><b id="pr-estimate-n-val"></b> clients par mois</span>
-                  <span class="pr-estimate-arrow" aria-hidden="true">→</span>
-                  <span class="pr-estimate-year"><strong id="pr-estimate-year"></strong> par année</span>
-                </output>
-              </div>
-              <p class="pr-estimate-fine">Si chaque demande est retenue par un notaire — une récompense fixe par client, sans plafond.</p>
+              <p class="pr-earned">Acquise quand la demande est retenue ; versée une fois l’acte signé.</p>
             </div>
           </header>
-
-          <!-- The reorganisation (owner, 2026-08-27, evening pass): one grid
-               right under the hero. The STORY column (steps, then FAQ, then
-               the fine print) fills the left; the claim form docks top-right
-               like the notary gate, on screen from the first scroll. No
-               sticky, no CSS order swaps: phones read exactly as this markup
-               is written — story first, the hero CTA jumping to the form. -->
+          <!-- Le circuit du code (propriétaire, 2026-09-12 soir : « une animation
+               qui explique clairement comment la section partenaire
+               fonctionne »). La page dit UN code et deux montants ; ce circuit
+               muet dit comment le code voyage. Deux voies — le lien, qui
+               remplit le champ tout seul, et le code donné de vive voix, que le
+               client tape — puis une seule fin. Le champ montré est le même que
+               la feuille de réservation porte à l’écran 4 (« Code de
+               référence »), pour qu’on le reconnaisse une fois devant.
+               Aucun montant n’est écrit ici : partnerFlow les rend depuis le
+               domaine (D.REFERRAL.client, et D.money(0) pour le client). -->
+          <figure class="pr-flow" id="pr-flow" aria-labelledby="pr-flow-title">
+            <figcaption class="pr-flow-head">
+              <h2 class="h-sub" id="pr-flow-title">Comment votre code vous paie</h2>
+            </figcaption>
+            <div class="pr-flow-stage" id="pr-flow-stage">
+              <div class="pr-fl-seed" id="pr-fl-seed">
+                <span class="pr-fl-lbl">Votre code</span>
+                <code class="pr-fl-code" id="pr-fl-seed-code" data-i18n-skip></code>
+              </div>
+              <div class="pr-fl-ways">
+                <div class="pr-fl-way" id="pr-fl-way-lien">
+                  <span class="pr-fl-step" id="pr-fl-step-lien">Vous partagez votre lien</span>
+                  <code class="pr-fl-link" id="pr-fl-link" data-i18n-skip></code>
+                  <div class="pr-fl-card" id="pr-fl-card-lien">
+                    <span class="pr-fl-field-lbl">Code de référence</span>
+                    <span class="pr-fl-field" id="pr-fl-field-lien" data-i18n-skip></span>
+                    <span class="pr-fl-note">Déjà rempli par le lien</span>
+                  </div>
+                </div>
+                <div class="pr-fl-way" id="pr-fl-way-code">
+                  <span class="pr-fl-step" id="pr-fl-step-code">Ou vous donnez votre code</span>
+                  <code class="pr-fl-said" id="pr-fl-said" data-i18n-skip></code>
+                  <div class="pr-fl-card" id="pr-fl-card-code">
+                    <span class="pr-fl-field-lbl">Code de référence</span>
+                    <span class="pr-fl-field pr-fl-field--typed" id="pr-fl-field-code" data-i18n-skip></span>
+                    <span class="pr-fl-note">Tapé au moment de publier</span>
+                  </div>
+                </div>
+              </div>
+              <ol class="pr-fl-chain">
+                <li class="pr-fl-beat" id="pr-fl-beat-publiee">Offre publiée</li>
+                <li class="pr-fl-beat" id="pr-fl-beat-retenue">Demande retenue</li>
+                <li class="pr-fl-beat" id="pr-fl-beat-signe">Acte signé</li>
+              </ol>
+              <div class="pr-fl-ends">
+                <div class="pr-fl-end pr-fl-end--vous" id="pr-fl-end-vous">
+                  <span class="pr-fl-end-lbl">Vous recevez</span>
+                  <span class="pr-fl-end-amt" id="pr-fl-amount" data-i18n-skip></span>
+                </div>
+                <div class="pr-fl-end" id="pr-fl-end-client">
+                  <span class="pr-fl-end-lbl">Le client paie en plus</span>
+                  <span class="pr-fl-end-amt" id="pr-fl-client-amount" data-i18n-skip></span>
+                </div>
+              </div>
+            </div>
+          </figure>
           <div class="pr-grid">
                 <!-- aria-live: the link is revealed asynchronously (verify
                      round-trip, or the #pauth boot with no user gesture). -->
                 <div id="partner-success" class="partner-success partner-share-panel" hidden aria-live="polite" tabindex="-1">
                   <div class="partner-share-link">
+                    <span class="profil-status">Code actif</span>
+                    <p class="partner-active-code" id="partner-active-code" data-i18n-skip></p>
                   <p class="help"><strong>Code réclamé.</strong> Partagez ce lien — chaque demande publiée par lui vous est attribuée :</p>
                   <div class="partner-link-row">
                     <code id="partner-link" data-i18n-skip></code>
@@ -1296,86 +1685,16 @@
                   </div>
                 </div>
 
-            <div class="pr-pitch">
-              <section class="pr-steps-band">
-                <h2 class="h-sub pr-how-title">Comment ça marche</h2>
-                <!-- The three steps as a connected timeline — each one a
-                     glyph chip (its order tag on the shoulder), a bold verb
-                     line plus its single caveat, replacing the old one-line
-                     fine print. -->
-                <ol class="pr-steps">
-                  <li>
-                    <span class="pr-step-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7.5 9 6 9-6"/></svg></span>
-                    <strong>Réclamez votre code</strong>
-                    <span>Une minute, sans frais — activé par un lien envoyé à votre courriel.</span>
-                  </li>
-                  <li>
-                    <span class="pr-step-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
-                    <strong>Partagez votre lien</strong>
-                    <span>Le code voyage en privé — jamais affiché au carnet ni montré aux notaires.</span>
-                  </li>
-                  <li>
-                    <span class="pr-step-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8.5" r="5.5"/><path d="M15.4 12.9 17 22l-5-2.8L7 22l1.6-9.1"/></svg></span>
-                    <strong>Soyez récompensé quand ça aboutit</strong>
-                    <span>Une récompense fixe, jamais un pourcentage.</span>
-                  </li>
-                </ol>
-              </section>
-
-              <!-- The FAQ (2026-08-27): the pre-claim questions a courtier or
-                   agent actually asks, in the .disclosure idiom. The first
-                   TWO answers greet the reader open (owner, evening pass) —
-                   the column reads as content, not a wall of closed drawers —
-                   so NO shared name: the exclusive accordion would slam one
-                   shut as the other opens. The rest stay collapsed to keep
-                   the pane thin. Reward figures NEVER appear here — the hero
-                   cards render them from the domain. -->
-              <div class="pr-faq">
-                <h2 class="h-sub pr-faq-title">Questions fréquentes</h2>
-                <details class="disclosure" name="pr-faq">
-                  <summary>Comment mes références sont-elles suivies ?</summary>
-                  <div class="disclosure-body">
-                    <p>Par votre lien — ou par votre code, dit de vive voix : un champ « Code de référence » l’accepte quand le client publie sa demande, ou quand un notaire s’inscrit. Un code mal tapé ne bloque jamais la transaction.</p>
-                  </div>
-                </details>
-                <details class="disclosure" name="pr-faq">
-                  <summary>Quand suis-je récompensé ?</summary>
-                  <div class="disclosure-body">
-                    <p>Au moment visible où ça marche : la demande du client référé est retenue par un notaire, ou le notaire référé retient son premier acte. Vous êtes prévenu par courriel — rien à surveiller.</p>
-                    <p>Le versement suit la signature de l’acte — une demande annulée avant ne donne lieu à aucun versement.</p>
-                  </div>
-                </details>
-                <details class="disclosure" name="pr-faq">
-                  <summary>Y a-t-il une limite ?</summary>
-                  <div class="disclosure-body">
-                    <p>Pas pour les clients : chaque demande retenue est récompensée. La référence d’un notaire, elle, est versée une seule fois — à son premier acte retenu.</p>
-                  </div>
-                </details>
-                <details class="disclosure" name="pr-faq">
-                  <summary>Dois-je divulguer cette récompense à mon client ?</summary>
-                  <div class="disclosure-body">
-                    <p>Vous le pouvez — et si votre code de déontologie l’exige (OACIQ notamment), vous le devez. C’est pourquoi les montants sont fixes et publics : simples à divulguer, faciles à expliquer.</p>
-                  </div>
-                </details>
-                <details class="disclosure" name="pr-faq">
-                  <summary>Un notaire peut-il être partenaire ?</summary>
-                  <div class="disclosure-body">
-                    <p>Non. L’article 33 du Code de déontologie des notaires lui interdit, hors sa rémunération, de verser ou de recevoir tout autre avantage relatif à l’exercice de sa profession. Le programme s’adresse aux agents immobiliers, aux courtiers hypothécaires et aux autres professionnels qui ne sont pas notaires.</p>
-                  </div>
-                </details>
-              </div>
-
-              <!-- The fine print: the guarantee stays a quiet closing line. -->
-              <p class="note nota-guarantee">
-                <strong>Le prix du client n’y touche jamais.</strong> La récompense de référence est un coût de marketing de Nota, payée à même ses propres revenus — jamais ajoutée au prix du client, jamais retranchée des honoraires du notaire.
-              </p>
-            </div>
-
             <div class="panel pr-form-panel">
-              <!-- renderPartnerPane() retitles this « Votre code partenaire »
-                   for a returning partner whose claim is already confirmed. -->
-              <h2 class="h-sub" id="partner-form-title">Réclamez votre code</h2>
+              <!-- Le titre EST le dépliant (2026-09-12) : « Réclamez votre
+                   code » puis « Coordonnées et code » disaient deux fois la
+                   même chose. renderPartnerPane() le retitre « Votre code
+                   partenaire » pour un partenaire qui revient, et le referme
+                   une fois le code confirmé. -->
+              <details id="partner-details" class="partner-details" open>
+                <summary class="h-sub" id="partner-form-title">Réclamez votre code</summary>
               <form id="partner-form" novalidate>
+                <p class="partner-form-intro">Sans frais. Une minute.</p>
                 <div class="form-row">
                   <span class="lbl" id="partner-type-lbl">Vous êtes</span>
                   <!-- One chip per D.REFERRAL.partners entry — built by renderPartnerPane(). -->
@@ -1395,7 +1714,8 @@
                   <p class="prefix-preview" id="partner-code-preview" aria-live="polite"></p>
                 </div>
                 <ul class="errors" id="partner-errors" role="alert" aria-atomic="true" hidden></ul>
-                <button type="submit" class="btn btn-primary btn-lg" id="partner-submit" disabled>Réclamer mon code →</button>
+                <p class="help partner-next-step" id="partner-next-step" aria-live="polite">Choisissez votre métier pour commencer.</p>
+                <button type="submit" class="btn btn-primary btn-lg" id="partner-submit" aria-describedby="partner-next-step" disabled>Recevoir mon lien d’activation →</button>
                 <!-- Reprise (2026-09-05) : le code ne vivait que dans le
                      localStorage de CET appareil. Sans cette porte, un
                      partenaire qui vide son navigateur perdait son code pour
@@ -1407,7 +1727,8 @@
                 <!-- Email verification (ADR 0011): in production the claim only
                      PENDS until the emailed link is opened, so the code cannot be
                      squatted by someone who does not control the address. -->
-                <div id="partner-pending" class="partner-success" hidden aria-live="polite">
+                <div id="partner-pending" class="partner-success" hidden aria-live="polite" tabindex="-1">
+                  <p class="partner-pending-to"><span>Lien envoyé à</span> <strong id="partner-pending-email" data-i18n-skip></strong></p>
                   <!-- The link's lifetime: app.js fills #partner-pending-ttl from
                        the API's ttlMinutes when the answer carries it; this is
                        the no-figure fallback. -->
@@ -1416,26 +1737,34 @@
                        typo'd courriel — and editing a field is exactly what
                        re-arms the form, so the recovery line says so. -->
                   <p class="help">Rien reçu ? Vérifiez vos indésirables — ou corrigez votre courriel et soumettez à nouveau.</p>
+                  <button type="button" class="btn btn-sm" id="partner-email-edit">Corriger mon courriel</button>
                 </div>
               </form>
+              </details>
             </div>
+
+
+            <!-- Le prix du client : la seule autre chose que la page doit dire. -->
+            <p class="note nota-guarantee">
+              <strong>Le prix du client n’y touche jamais.</strong> La récompense de référence est un coût de marketing de Nota, payée à même ses propres revenus — jamais ajoutée au prix du client, jamais retranchée des honoraires du notaire.
+            </p>
           </div>
         </div>
       </section>
 
       <!-- ================= CONFIDENTIALITÉ (Loi 25) ================= -->
-      <!-- F7 (audit 2026-09-03): the pane IS « Mes offres » — the offers, the
-           conversation with the notary, the dossier. The « sur cet appareil »
-           fact belongs to the Coordonnées card (F3), not to the lede of the
-           whole pane: a deep-linked client reads their retained act here. -->
-      <section class="tab-pane" id="pane-profil" role="region" aria-label="Mes offres" hidden>
+      <!-- The profile keeps stable section IDs for offer links and the welcome tour. -->
+      <section class="tab-pane" id="pane-profil" role="region" aria-label="Mon profil" hidden>
         <div class="wrap">
-          <div class="intro">
+          <div class="intro profil-intro">
             <span class="eyebrow">Votre espace</span>
-            <h1>Mes offres</h1>
-            <p>Vos offres, la conversation avec votre notaire, votre dossier et vos coordonnées — tout ce que vous avez publié depuis Nota, au même endroit.</p>
+            <h1>Mon profil</h1>
+            <p>Vos démarches, vos préférences et votre parrainage, au même endroit.</p>
           </div>
-          <div id="profil-body" class="profil-stack"></div>
+          <div class="profil-layout">
+            <nav id="profil-nav" class="profil-nav" aria-label="Sections du profil"></nav>
+            <div id="profil-body" class="profil-stack"></div>
+          </div>
         </div>
       </section>
 
@@ -1455,7 +1784,7 @@
             </div>
             <div class="card">
               <h3>Hébergé au Canada</h3>
-              <p>Au repos, vos données sont conservées sur des serveurs canadiens (Amazon Web Services, région <strong>ca-central-1</strong>, Montréal). En transit, elles passent par un réseau de diffusion dont les points de présence sont aussi aux États-Unis et en Europe, et par des prestataires tiers : Stripe pour le paiement, rsms.me et Google Fonts pour les polices de caractères.</p>
+              <p>Au repos, vos données sont conservées sur des serveurs canadiens (Amazon Web Services, région <strong>ca-central-1</strong>, Montréal). En transit, elles passent par un réseau de diffusion dont les points de présence sont aussi aux États-Unis et en Europe, et par un prestataire tiers : Stripe pour le paiement. Les polices de caractères sont servies par Nota — aucune requête ne part vers un tiers avant que vous y consentiez.</p>
             </div>
             <div class="card">
               <h3>Anonyme par défaut</h3>
@@ -1633,22 +1962,39 @@
               <p class="beta-caption">L’aperçu est accessible sans compte. La caméra et le micro s’activent seulement à votre demande.</p>
             </div>
             <div class="beta-preview" aria-label="Aperçu du parcours de signature">
-              <div class="beta-preview-top"><span>Nota</span><span class="beta-preview-tag">Document d’essai</span></div>
-              <div class="beta-preview-scene" aria-hidden="true">
-                <div class="beta-preview-person"><svg viewBox="0 0 80 80" fill="none"><circle cx="40" cy="29" r="13"/><path d="M15 70v-8c0-17 50-17 50 0v8"/></svg></div>
-                <div class="beta-preview-paper"><span class="beta-paper-brand">Nota</span><i></i><i></i><i></i><i></i><svg viewBox="0 0 100 35" fill="none"><path d="M5 28C28 4 43 0 28 23S35 28 43 18s-1 16 16 6 7 6 35-3"/></svg></div>
+              <div class="beta-preview-top">
+                <span class="beta-room-title"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="3" y="10" width="18" height="11" rx="2"/><path d="M7 10V7a5 5 0 0 1 10 0v3"/></svg>Salle de signature</span>
+                <span class="beta-preview-tag">Aperçu</span>
               </div>
-              <ol class="beta-preview-steps"><li>Préparation</li><li>Lecture ensemble</li><li>Signature de test</li></ol>
+              <ol class="beta-preview-steps"><li><span aria-hidden="true">01</span>Préparation</li><li><span aria-hidden="true">02</span>Lecture ensemble</li><li><span aria-hidden="true">03</span>Signature de test</li></ol>
+              <div class="beta-preview-scene">
+                <div class="beta-document-stage">
+                  <div class="beta-preview-paper">
+                    <div class="beta-paper-heading"><span class="beta-paper-brand">Nota</span><span class="beta-paper-label">Document d’essai</span></div>
+                    <strong class="beta-document-title">Votre document, à lire ensemble.</strong>
+                    <div class="beta-document-lines" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+                    <div class="beta-signature-field"><span>Signature de test</span><svg viewBox="0 0 100 35" fill="none" aria-hidden="true"><path d="M5 28C28 4 43 0 28 23S35 28 43 18s-1 16 16 6 7 6 35-3"/></svg></div>
+                  </div>
+                </div>
+                <div class="beta-preview-video">
+                  <div class="beta-preview-person"><svg viewBox="0 0 80 80" fill="none" aria-hidden="true"><circle cx="40" cy="29" r="13"/><path d="M15 70v-8c0-17 50-17 50 0v8"/></svg><span>Votre notaire</span></div>
+                  <div class="beta-preview-person beta-preview-self"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m3 3 18 18M10 5h5a2 2 0 0 1 2 2v2l4-2v10l-4-2M17 17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 1-1.7"/></svg><span>Caméra désactivée</span></div>
+                </div>
+              </div>
+              <p class="beta-preview-footnote"><span class="beta-dot" aria-hidden="true"></span>Un aperçu pour vous familiariser, à votre rythme.</p>
             </div>
           </div>
-          <aside class="beta-security" aria-label="Sécurité de la bêta">
-            <strong>Une infrastructure canadienne</strong>
-            <p>La bêta s’appuie sur une infrastructure canadienne et un document fictif. Aucun acte réel n’est produit.</p>
-          </aside>
-          <aside class="beta-boundary" aria-label="Portée de la bêta">
-            <strong>Un essai, aucun acte réel.</strong>
-            <p>La bêta utilise un document fictif. Elle ne signe aucun acte notarié et ne déclenche aucun paiement. La signature électronique en conférence sera libérée après la lecture et votre consentement. La signature officielle reste à venir, après validation et intégration du fournisseur autorisé.</p>
-          </aside>
+          <div class="beta-trust-row">
+            <aside class="beta-security" aria-label="Sécurité de la bêta">
+              <strong>Une infrastructure canadienne</strong>
+              <p>La bêta s’appuie sur une infrastructure canadienne et un document fictif. Aucun acte réel n’est produit.</p>
+            </aside>
+            <aside class="beta-boundary" aria-label="Portée de la bêta">
+              <strong>Un essai, aucun acte réel.</strong>
+              <p>La bêta utilise un document fictif. Elle ne signe aucun acte notarié et ne déclenche aucun paiement.</p>
+              <details class="beta-scope-details"><summary>En savoir plus sur la bêta</summary><p>La signature électronique en conférence sera libérée après la lecture et votre consentement. La signature officielle reste à venir, après validation et intégration du fournisseur autorisé.</p></details>
+            </aside>
+          </div>
           <section class="beta-security" aria-labelledby="beta-security-title">
             <div class="beta-section-heading"><p class="beta-eyebrow">Confiance et hébergement</p><h2 id="beta-security-title">Une salle pensée pour vos échanges sensibles.</h2></div>
             <div class="beta-security-grid">
@@ -1723,8 +2069,19 @@
           <a href="#t=notaires" class="goto-link" data-goto="notaires">Espace notaire</a>
           <a href="#t=partenaires" class="goto-link" data-goto="partenaires">Partenaires</a>
           <a href="#t=beta" class="goto-link" data-goto="beta">Signature électronique · Bêta</a>
-          <a href="/notaire-refinancement-quebec.html">Notaire pour un refinancement hypothécaire à Québec</a>
-          <a href="/notaire-financement-quebec.html">Notaire pour un financement hypothécaire à Québec</a>
+          <!-- Les deux pages d'acquisition restent LIÉES sans s'AFFICHER
+               (propriétaire, 2026-09-12) : un client de Québec déjà sur le
+               carnet n'a rien à y faire, mais un lien interne reste ce qui fait
+               remonter une page dans un index et ce que suivent les lecteurs
+               LLM. Hors écran plutôt que `display: none` — un lien masqué est
+               dévalué par Google et sort de l'arbre d'accessibilité, alors
+               qu'ici il reste indexable et lisible au lecteur d'écran ;
+               `tabindex="-1"` évite au clavier un arrêt sur l'invisible.
+               sitemap.xml et llms.txt les portent aussi (pied-acquisition.test.mjs). -->
+          <span class="visually-hidden">
+            <a href="/notaire-refinancement-quebec.html" tabindex="-1">Notaire pour un refinancement hypothécaire à Québec</a>
+            <a href="/notaire-financement-quebec.html" tabindex="-1">Notaire pour un financement hypothécaire à Québec</a>
+          </span>
           <!-- Opens the guide dialog: an action, so a button — not a link to nowhere. -->
           <button type="button" class="footer-link" id="footer-guide">Comment ça marche</button>
           <a href="https://www.youtube.com/@gonotaca" target="_blank" rel="noopener">Vidéos Nota</a>
@@ -1757,19 +2114,23 @@
 </button>
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-    <dialog id="day-dialog" aria-label="Réserver cette date">
+    <dialog id="day-dialog" aria-labelledby="day-title">
       <form method="dialog" class="dlg-x-form"><button class="dlg-x" id="day-close" value="close" aria-label="Fermer">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button></form>
       <div class="day-head">
-        <div>
-          <div class="day-title" id="day-title"></div>
+        <div class="day-heading">
+          <div class="day-eyebrow">Date de signature</div>
+          <h2 class="day-title" id="day-title"></h2>
           <div class="day-sub" id="day-sub"></div>
         </div>
         <!-- The date can move without leaving the dialog: a native picker
              (min = today, set by wire()) that re-opens the chosen day in
              place — tier label, pre-filled amount and market line follow. -->
-        <label class="day-date-pick" for="day-date"><span class="day-date-lbl">Date de signature</span><input type="date" id="day-date" class="day-date-input" /></label>
+        <details class="day-date-edit" id="day-date-edit">
+          <summary>Modifier la date</summary>
+          <label class="day-date-pick" for="day-date"><span class="day-date-lbl">Date de signature</span><input type="date" id="day-date" class="day-date-input" /></label>
+        </details>
       </div>
       <form id="offer-form" class="day-book" novalidate data-at="1">
         <!-- Quatre écrans, un seul à la fois (ADR 0040). Le rail dit où l'on
@@ -2243,28 +2604,47 @@
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>
       </button></form>
       <div class="dialog-pad nc-retenir">
-        <h3 id="nc-retenir-title">Retenir cette demande ?</h3>
+        <h3 id="nc-retenir-title">Cette demande vous convient ?</h3>
         <div class="nc-retenir-act">
           <span class="nc-retenir-svc" id="nc-retenir-svc"></span>
           <span class="nc-retenir-date" id="nc-retenir-date"></span>
         </div>
+        <div id="nc-retenir-signals" class="nc-card-meta nc-retenir-signals"></div>
+        <div class="nc-retenir-columns">
+        <section class="nc-retenir-section" aria-labelledby="nc-retenir-payment-title">
+        <h4 id="nc-retenir-payment-title">Honoraires et paiement</h4>
         <dl class="nc-kv nc-retenir-kv">
           <dt>Vos honoraires</dt>
           <dd><strong id="nc-retenir-fee"></strong> <span class="nc-retenir-sub">versés en entier à la signature</span></dd>
-          <dt>Le client paie à Nota, en plus de vos honoraires, séparément</dt>
+          <dt>Frais Nota payés par le client<br><span class="nc-retenir-sub">en plus de vos honoraires</span></dt>
           <dd id="nc-retenir-nota"></dd>
-          <dt>Déplacement</dt>
-          <dd id="nc-retenir-dep"></dd>
-          <dt>Prêteur</dt>
-          <dd id="nc-retenir-lender"></dd>
-          <dt>Dossier</dt>
-          <dd id="nc-retenir-dossier"></dd>
           <!-- ADR 0035: la garantie de paiement, lue AVANT le clic — la somme
                est déjà réservée, elle le sera tel jour, ou la carte a été
                refusée. Une garantie qu'on ne peut pas voir n'en est pas une. -->
           <dt>Garantie de paiement</dt>
           <dd id="nc-retenir-caution"></dd>
         </dl>
+        </section>
+        <section class="nc-retenir-section" aria-labelledby="nc-retenir-signing-title">
+        <h4 id="nc-retenir-signing-title">Signature et déplacement</h4>
+        <dl class="nc-kv nc-retenir-kv">
+          <dt>Déplacement</dt><dd id="nc-retenir-dep"></dd>
+          <dt>Secteur du client</dt><dd id="nc-retenir-sector"></dd>
+          <dt>Distance de votre étude</dt><dd id="nc-retenir-distance"></dd>
+          <dt id="nc-retenir-lender-label">Prêteur</dt><dd id="nc-retenir-lender"></dd>
+          <dt id="nc-retenir-expiry-label">Offre valide jusqu’au</dt><dd id="nc-retenir-expiry"></dd>
+        </dl>
+        <p class="nc-retenir-p nc-retenir-appointment">L’heure de signature est à convenir avec le client.</p>
+        </section>
+        </div>
+        <section class="nc-retenir-section" aria-labelledby="nc-retenir-file-title">
+          <h4 id="nc-retenir-file-title">Dossier et documents</h4>
+          <div id="nc-retenir-dossier"></div>
+          <div id="nc-retenir-factors"></div>
+          <div id="nc-retenir-status"></div>
+        </section>
+        <section class="nc-retenir-section nc-retenir-terms" aria-labelledby="nc-retenir-terms-title">
+          <h4 id="nc-retenir-terms-title">Conditions d’annulation et de désistement</h4>
         <section class="nc-retenir-sec" id="nc-retenir-annulation">
           <div class="nc-retenir-h">Si le client annule</div>
           <ul class="nc-retenir-bareme" id="nc-retenir-bareme"></ul>
@@ -2278,12 +2658,16 @@
           <div class="nc-retenir-h">Vous pouvez vous désister</div>
           <p class="nc-retenir-p">Gratuit ; l’équipe Nota en est avisée. Le client garde sa date et son offre.</p>
         </section>
-        <p class="nc-retenir-p nc-retenir-contact">Une fois retenu, le client reçoit votre nom, téléphone, adresse et courriel ; vous recevez les siens ; vous vous parlez dans la conversation Nota.</p>
+        </section>
+        <p class="nc-retenir-p nc-retenir-contact">Confirmez pour échanger vos coordonnées avec le client et ouvrir la conversation Nota.</p>
+      </div>
+        <div class="nc-retenir-footer">
+        <p id="nc-retenir-error" class="nc-retenir-error" role="alert" hidden>La demande n’a pas été retenue. Réessayez.</p>
         <div class="dialog-actions">
           <button type="button" class="btn" id="nc-retenir-later">Pas maintenant</button>
           <button type="button" class="btn btn-primary" id="nc-retenir-go"><span>Retenir</span><span class="nc-retenir-sep"> — </span><span class="nc-retenir-go-amt" id="nc-retenir-go-amt"></span></button>
         </div>
-      </div>
+        </div>
     </dialog>
 
     <!-- Nous joindre: the direct line to a human. Reachable from the footer,
@@ -2392,7 +2776,7 @@
                  ne sont reprises nulle part, pas même ici : une phrase
                  retirée qui survit dans un commentaire ou dans une clé de
                  traduction morte finit par revenir à l'écran. -->
-            <p class="sup-sub">Explorez les sujets d’aide ou posez votre question. Une personne peut reprendre la conversation.</p>
+            <p class="sup-sub">Posez votre question ici, en tout temps. Un assistant IA peut vous guider; une personne peut prendre le relais dans cette conversation.</p>
           </div>
           <button type="button" class="sup-close" id="chat-close" aria-label="Fermer la messagerie">✕</button>
         </header>
@@ -2412,10 +2796,9 @@
         <!-- The server forgot the thread (expired token): said in place, the
              bubbles stay, the next message starts fresh. -->
         <p class="sup-ended" id="chat-ended" role="status" hidden>Cette conversation est terminée — écrivez-nous à nouveau.</p>
-        <!-- ADR 0046 — l'escalade, dite en clair. Le visiteur doit savoir
-             qu'une PERSONNE a désormais sa question, et pourquoi son courriel
-             compte à cet instant précis. -->
-        <p class="sup-escalade" id="chat-escalade" role="status" hidden>Cette question part à une personne — laissez votre courriel pour recevoir la réponse.</p>
+        <!-- The handoff stays in the same conversation, without requiring email. -->
+        <p class="sup-escalade" id="chat-escalade" role="status" hidden>Une personne prendra le relais ici. Vous pouvez revenir dans ce navigateur pour lire sa réponse.</p>
+        <button type="button" class="sup-mail-open" id="chat-human">Parler à une personne</button>
         <p class="sup-privacy" id="chat-privacy">Aide générale seulement, sans accès à votre dossier. Ne partagez pas de numéro de carte, de mot de passe ni de document personnel ici.</p>
         <form id="chat-form" class="sup-form" novalidate>
           <div class="sup-row">
@@ -2426,11 +2809,8 @@
           </div>
           <p class="sup-count" id="chat-count" aria-live="polite" hidden></p>
           <p class="sup-error" id="chat-error" role="alert" hidden></p>
-          <!-- The courriel is optional and lives UNDER the composer: the
-               widget is the reply channel; a courriel only adds a copy. So it
-               costs NO room until it earns one — a quiet door, and app.js
-               opens it by itself right after the first message, the moment
-               leaving the page would cost the visitor the answer. -->
+          <!-- Optional email copy: opened only by the visitor. The reply
+               remains available in this browser's conversation. -->
           <button type="button" class="sup-mail-open" id="chat-courriel-open" aria-expanded="false" aria-controls="chat-courriel-row">Recevoir aussi la réponse par courriel</button>
           <div class="sup-courriel-row" id="chat-courriel-row" hidden>
             <label class="sup-courriel-lbl" for="chat-courriel">Courriel <span class="sup-opt">(optionnel)</span></label>
@@ -2539,5 +2919,6 @@
 
     <script src="analytics.js"></script>
     <script src="app.js"></script>
+    <script src="agenda-demo.js"></script>
   </body>
 </html>

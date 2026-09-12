@@ -16,6 +16,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, statSync, 
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { syncBrandFoundations } from '../web/scripts/sync-brand-foundations.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const publicDir = join(here, 'public');
@@ -41,6 +42,7 @@ function copyTree(src, dst) {
   }
 }
 
+syncBrandFoundations();
 copyTree(publicDir, distDir);
 
 // --- Content-hash the cacheable assets ------------------------------------

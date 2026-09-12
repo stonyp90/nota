@@ -1,21 +1,239 @@
 <!doctype html>
-<html lang="fr-CA" data-theme="dark">
+<html lang="fr-CA">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <meta name="referrer" content="no-referrer">
-  <meta name="theme-color" content="#101820">
+  <meta name="theme-color" content="#101820" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#386888">
   <title>Nota — salle de signature · Bêta</title>
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@700;800&display=swap">
+  <!-- The viewer's theme, settled BEFORE the stylesheet paints. In a FILE, not
+       inline: this room's CSP takes executable script from 'self' only (ADR
+       0047). The page used to hard-stamp dark, so a light visitor crossed from
+       a light carnet into a dark room, and flashed on every load. -->
+  <script src="theme-boot.js"></script>
 <link rel="stylesheet" href="signature.css">
   <script defer src="signing-domain.js"></script>
   <script defer src="signature.js"></script>
+<style data-nota-foundations>
+:root {
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  --font-display: 'Sora', var(--font-sans);
+  --weight-display: 700;
+  --type-h1: clamp(26px, 2.25vw, 36px);
+  --type-h1-lh: 1.12;
+  --type-h1-ls: -.04em;
+  --type-h1-compact: clamp(26px, 6vw, 32px);
+  --type-h2: clamp(19px, 1.5vw, 24px);
+  --type-h2-lh: 1.2;
+  --type-h2-ls: -.035em;
+  --type-h3: 17px;
+  --type-h3-lh: 1.3;
+  --type-h3-ls: -.02em;
+  --type-h4: 15px;
+  --type-h4-lh: 1.3;
+  --type-h4-ls: -.01em;
+  --type-lead: 16px;
+  --type-lead-lh: 1.6;
+  --type-eyebrow: 12px;
+  --type-eyebrow-ls: .1em;
+  --type-body: 16px;
+  --type-body-lh: 1.5;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 14px;
+  --space-8: 16px;
+  --space-9: 18px;
+  --space-10: 20px;
+  --space-12: 24px;
+  --space-14: 28px;
+  --space-16: 32px;
+  --logo-word-ratio: .48;
+  --logo-gap-ratio: .12;
+  --logo-badge-gap-ratio: .16;
+  --logo-tile: 28px;
+  --logo-badge-bg: light-dark(#eef0f2, #2b3035);
+}
+/* Shared application chrome. Embedded by sync-brand-foundations.mjs so the
+   plan and presentation remain usable as standalone documents. */
+:root {
+  --layout-width: 1600px;
+  --layout-gutter: clamp(16px, 4vw, 28px);
+  --layout-header-height: 52px;
+  --layout-section-gap: 32px;
+  --layout-content-top: clamp(16px, 1.8vw, 24px);
+  --logo-badge-min: 9px;
+  --control-gap: 8px;
+  --control-height: 44px;
+  --type-control: 13px;
+  --header-h: var(--layout-header-height);
+  --admin-topbar-h: var(--layout-header-height);
+  --brand-word-ink: var(--ink);
+}
+
+/* The outer bar spans the viewport. Its contents align with the page rail. */
+.nota-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--surface);
+  border: 0;
+  box-shadow: var(--shadow);
+  backdrop-filter: none;
+}
+.nota-header-inner {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--control-gap);
+  width: 100%;
+  min-height: var(--layout-header-height);
+  height: auto;
+  padding: 0 max(var(--layout-gutter), calc((100% - var(--layout-width)) / 2 + var(--layout-gutter)));
+  margin: 0;
+}
+.site-header.nota-header .nota-header-inner {
+  max-width: var(--layout-width);
+  margin-inline: auto;
+  padding-inline: var(--layout-gutter);
+  height: var(--layout-header-height);
+}
+.nota-header :is(.brand, .admin-brand, .lockup, .plan-brand) {
+  --lockup-tile: var(--logo-tile);
+  color: var(--ink);
+  margin-block: 0;
+  text-decoration: none;
+  flex-shrink: 0;
+  min-height: var(--control-height);
+}
+.nota-header :is(.brand, .admin-brand) {
+  --lockup-word: calc(var(--lockup-tile) * var(--logo-word-ratio));
+  --lockup-gap: calc(var(--lockup-tile) * var(--logo-gap-ratio));
+  --lockup-badge-gap: calc(var(--lockup-tile) * var(--logo-badge-gap-ratio));
+}
+.nota-header :is(.lockup, .plan-brand),
+[data-nota-surface="pitch"] .nota-header .brand {
+  --lockup-word: var(--logo-word-ratio);
+  --lockup-gap: var(--logo-gap-ratio);
+  --lockup-badge-gap: var(--logo-badge-gap-ratio);
+}
+.nota-header :is(.brand-word, .admin-brand-word, .plan-brand-word) { color: var(--ink); }
+.nota-header :is(.brand-sub, .admin-brand-sub, .brand-region, .plan-brand-region) {
+  font-size: max(var(--logo-badge-min), calc(var(--logo-tile) * .16));
+  font-family: var(--font-sans);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: .55em .7em;
+  color: var(--ink-muted);
+  background: var(--logo-badge-bg);
+  border-radius: var(--radius-xs, 3px);
+}
+.nota-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--control-gap);
+  margin-left: auto;
+  min-width: 0;
+}
+.nota-menu { margin-left: auto; }
+.nota-menu > summary { display: none; }
+.nota-menu > .nota-header-actions { display: flex; }
+.nota-header .nota-header-actions :is(a, button):not(.tswitch) {
+  min-height: var(--control-height);
+  font-family: var(--font-sans);
+  font-size: var(--type-control);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+.nota-header .nota-header-actions :is(a, button):hover { color: var(--brand); }
+.nota-header .nota-header-actions [aria-pressed="true"] { color: var(--brand); }
+
+/* Content rails share their outer margins; long prose retains its own measure. */
+[data-nota-surface="brand"] .page,
+[data-nota-surface="plan"] > main,
+[data-nota-surface="pitch"] > main {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--layout-width);
+  margin-inline: auto;
+  padding: var(--layout-content-top) var(--layout-gutter) calc(var(--layout-section-gap) * 2);
+}
+[data-nota-surface="brand"] .hero { padding-top: 0; }
+[data-nota-surface="brand"] .section { margin-top: var(--layout-section-gap); padding-top: var(--layout-section-gap); }
+[data-nota-surface="brand"] .section-head { margin-bottom: 16px; gap: 24px; }
+[data-nota-surface="brand"] .section-head p { font-size: var(--type-body); line-height: var(--type-body-lh); }
+[data-nota-surface="brand"] .lede { max-width: 47ch; }
+[data-nota-surface="pitch"] .deck-head h1 { font-size: var(--type-h1); line-height: var(--type-h1-lh); letter-spacing: var(--type-h1-ls); }
+[data-nota-surface="pitch"] .deck-head p:not(.deck-kicker) { font-size: var(--type-lead); line-height: var(--type-lead-lh); }
+[data-nota-surface="plan"] .language-bar {
+  position: static;
+  padding: 0;
+  margin-block: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+[data-nota-surface="plan"] .language-bar .deck-link,
+[data-nota-surface="plan"] .language-bar [data-plan-focus] { margin-inline: 0; }
+[data-nota-surface="plan"] .language-bar > span { display: none; }
+[data-nota-surface="plan"] :is(.section-body, .french-summary) > :is(p, ul, ol) { max-width: 76ch; }
+
+@media (max-width: 700px) {
+  .nota-header.nota-header-inner { flex-wrap: wrap; }
+  .nota-menu > summary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--control-gap);
+    min-height: var(--control-height);
+    min-width: var(--control-height);
+    padding-inline: 8px;
+    color: var(--ink);
+    cursor: pointer;
+    font: 600 var(--type-control)/1 var(--font-sans);
+    list-style: none;
+  }
+  .nota-menu > summary::-webkit-details-marker { display: none; }
+  .nota-menu:not([open]) > .nota-header-actions { display: none; }
+  .nota-menu > .nota-header-actions {
+    position: absolute;
+    top: 100%;
+    inset-inline: var(--layout-gutter);
+    padding: 16px;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  [data-nota-surface="plan"] .nota-menu > .language-bar { position: absolute; padding: 16px; background: var(--surface); }
+  .nota-header .top-links { flex-direction: row; align-items: center; }
+}
+@media print {
+  .nota-header { position: static; box-shadow: none; }
+  .nota-header-actions { display: none; }
+}
+
+[data-nota-surface="acquisition"] .search-page { max-width: var(--layout-width); padding: var(--layout-content-top) var(--layout-gutter) 64px; }
+[data-nota-surface="acquisition"] .search-page :is(p, ol, ul) { max-width: 76ch; }
+.nota-header > .lang-link { display: inline-flex; align-items: center; min-height: var(--control-height); padding-inline: 12px; color: var(--ink); }
+</style>
 </head>
-<body>
+<body data-nota-surface="signature">
   <a class="skip-link" href="#main" data-i18n="Aller au contenu">Aller au contenu</a>
   <!-- The Nota lockup (exploration 01 « Monogramme lié ») is drawn ONCE, in
        index.html; this is the same drawing, byte for byte, so every mark on
@@ -25,25 +243,25 @@
     <symbol id="nota-logomark" viewBox="0 0 64 64">
       <rect width="64" height="64" rx="7" fill="#264961"/>
       <g fill="#ffffff">
-        <rect x="16" y="15" width="7.5" height="34" rx="1"/>
-        <rect x="40.5" y="15" width="7.5" height="34" rx="1"/>
-        <polygon points="16,15 24,15 48,49 40,49"/>
+        <rect x="16" y="15" width="9.5" height="34" rx="1"/>
+        <rect x="38.5" y="15" width="9.5" height="34" rx="1"/>
+        <polygon points="16,15 26.2,15 48,49 37.8,49"/>
       </g>
       <rect x="40" y="8" width="16" height="16" rx="3" fill="#407598" stroke="#264961" stroke-width="3"/>
     </symbol>
     <symbol id="nota-wordmark" viewBox="0 3.5 91.8 28">
       <g fill="currentColor" fill-rule="evenodd">
-        <path d="M0 8.5a5 5 0 0 1 5-5H22a5 5 0 0 1 5 5V26.5a5 5 0 0 1-5 5H5a5 5 0 0 1-5-5ZM7.3 12.3v10.4a1.5 1.5 0 0 0 1.5 1.5h9.4a1.5 1.5 0 0 0 1.5-1.5V12.3a1.5 1.5 0 0 0-1.5-1.5H8.8a1.5 1.5 0 0 0-1.5 1.5Z"/>
-        <path d="M28.4 3.5H55V10.8H45.35V27.3L38.05 31.5V10.8H28.4Z"/>
-        <path d="M66.5 3.5H72.5L84.1 31.5H76.3L74.68 26.25H64.32L62.7 31.5H54.9ZM69.5 9.5L72.73 19.95H66.27Z"/>
+        <path d="M0 8.5a5 5 0 0 1 5-5H22a5 5 0 0 1 5 5V26.5a5 5 0 0 1-5 5H5a5 5 0 0 1-5-5ZM7.8 12.8v9.4a1.5 1.5 0 0 0 1.5 1.5h8.4a1.5 1.5 0 0 0 1.5-1.5V12.8a1.5 1.5 0 0 0-1.5-1.5H9.3a1.5 1.5 0 0 0-1.5 1.5Z"/>
+        <path d="M31 3.5H57.6V11.3H48.2V27.02L40.4 31.5V11.3H31Z"/>
+        <path d="M65.17 6.7L70.74 3.5H72.5L84.1 31.5H75.77L73.93 25.89H64.95L63.23 31.5H54.9ZM69.5 10L73 20.3H66Z"/>
         <rect x="87.4" y="27.1" width="4.4" height="4.4" rx="1" fill="#407598"/>
       </g>
     </symbol>
   </svg>
-  <header class="topbar">
+  <header class="topbar nota-header nota-header-inner">
     <a class="brand" href="/" aria-label="Nota"><span class="brand-lockup" aria-hidden="true"><svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg></span></span><span class="brand-sub" aria-hidden="true">Québec</span></a>
     <div class="product-label"><span class="divider" aria-hidden="true"></span><span data-i18n="Salle de signature">Salle de signature</span><span class="beta-badge" data-i18n="BÊTA">BÊTA</span></div>
-    <div class="header-actions"><button class="text-button" id="theme-toggle" type="button" data-i18n="Thème clair">Thème clair</button><button class="language-toggle" id="language-toggle" type="button" aria-label="Switch to English">EN</button><a class="back-link" href="/" data-i18n="Mon espace Nota">Mon espace Nota</a></div>
+    <div class="header-actions"><button class="text-button" id="theme-toggle" type="button" data-i18n="Thème clair">Thème clair</button><span class="language-toggle mini-seg" id="language-toggle" role="group" aria-label="Langue / Language"><button class="mini-seg-btn" type="button" data-set-lang="fr" lang="fr">FR</button><button class="mini-seg-btn" type="button" data-set-lang="en" lang="en">EN</button></span><a class="back-link" href="/" data-i18n="Mon espace Nota">Mon espace Nota</a></div>
   </header>
   <main id="main">
     <section class="welcome" id="welcome">

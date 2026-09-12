@@ -7,10 +7,8 @@
  *      « Gratuit pour vous » was false, and it sat exactly where the form
  *      shows « Service Nota 400 $ ». The hero line now states the two-line
  *      truth and quotes the price the API serves — never a literal.
- *   2. A SENSIBLE DEFAULT DATE. The hero CTA opened TODAY (the ×4 tier): a
- *      first-time visitor met 7 400 $ + 400 $. With no date selected it now
- *      opens the first STANDARD date, and the day dialog carries a native
- *      date picker so the date can move without closing it.
+ *   2. DATE CHOICE. The hero CTA opens a standard date and the dialog carries
+ *      a native date picker so the date can move without closing it.
  *   4. POST-PUBLISH EXPECTATIONS. The success screen (and the Checkout
  *      return) say what happens next — visible to registered notaries,
  *      emailed the moment one retains it, withdrawable free of charge until
@@ -147,6 +145,21 @@ test('no client surface claims the client pays nothing', () => {
   }
 });
 
+test('the hero says what costs nothing, and what makes the price climb', async () => {
+  // Propriétaire, 2026-09-12 : le client doit savoir qu'il peut poser sa date
+  // et son prix sans rien payer, et que la date commande le départ du prix.
+  // La gratuité porte sur le GESTE de publier — jamais sur le service, que le
+  // client paie à la signature (FREE_LIE ci-dessus garde cette frontière).
+  const { doc, dom } = await boot();
+  const line = doc.querySelector('#pane-carnet .intro--hero .hero-free');
+  assert.ok(line, 'la ligne vit dans le héros du carnet, sous les deux actions');
+  const t = FLAT(line.textContent);
+  assert.match(t, /Publier .* ne coûte rien/, t);
+  assert.match(t, /plus le prix de départ monte/, t);
+  assert.ok(!FREE_LIE.test(t), 'elle ne dit jamais que le client, lui, ne paie rien : ' + t);
+  dom.window.close();
+});
+
 test('the hero states the two-line truth and quotes the price the API serves', async () => {
   const { doc, D, dom } = await boot({ routes: [monthRoute(52500)] });
   const tag = doc.querySelector('#pane-carnet .intro--hero .hero-tagline');
@@ -201,7 +214,7 @@ test('the new price copy is translated, amount included', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 2. The CTA opens a sensible date, and the date can move inside the dialog
+// 2. The client explicitly chooses a date, which can move inside the dialog
 // ---------------------------------------------------------------------------
 test('with no date selected, the hero CTA opens the first STANDARD date, never today', async () => {
   const { doc, D, Nota, dom } = await boot();
@@ -349,7 +362,7 @@ test('one « visite » per page load, as a credential-less keepalive POST to /ev
 
 test('opening a day, touching the form, the notary door and the Checkout return each beacon once', async () => {
   const { win, doc, beacons, calls, Nota, D, dom } = await boot();
-  $(doc, 'cta-reserver').click();
+  doc.querySelector('.cal-cell[data-date="' + addDays(todayISO(), firstStandardOffset(domain)) + '"]').click();
   await wait(60);
   let ev = (await sentEvents(win, beacons, calls)).map((e) => e.event);
   assert.deepEqual(ev, ['visite', 'jour_ouvert']);
@@ -396,7 +409,7 @@ test('the Checkout return beacons paiement_ok / paiement_annule', async () => {
 
 test('booking screen reach is deduplicated until reopening; blocked progress is observable without field values', async () => {
   const { win, doc, calls, beacons, dom } = await boot();
-  $(doc, 'cta-reserver').click();
+  doc.querySelector('.cal-cell[data-date="' + addDays(todayISO(), firstStandardOffset(domain)) + '"]').click();
   await wait(60);
   $(doc, 'book-next').click();
   assert.equal($(doc, 'offer-form').dataset.at, '2');
@@ -408,7 +421,7 @@ test('booking screen reach is deduplicated until reopening; blocked progress is 
   assert.equal(events.filter(e => e.event === 'formulaire_bloque').length, 1);
   assert.ok(!events.some(e => e.event === 'prix_vu'), 'a blocked next click is not a viewed price');
   $(doc, 'day-dialog').close();
-  $(doc, 'cta-reserver').click();
+  doc.querySelector('.cal-cell[data-date="' + addDays(todayISO(), firstStandardOffset(domain)) + '"]').click();
   await wait(40);
   $(doc, 'book-next').click();
   events = await sentEvents(win, beacons, calls);
@@ -423,7 +436,7 @@ test('a rejected publication counts an attempt and failure, never a published of
     { match: (u, i) => u.endsWith('/bids') && i.method === 'POST',
       reply: () => jsonRes(503, { errors: [{ code: 'indisponible', message: 'Réessayez.' }] }) },
   ] });
-  $(doc, 'cta-reserver').click();
+  doc.querySelector('.cal-cell[data-date="' + addDays(todayISO(), firstStandardOffset(domain)) + '"]').click();
   await wait(40);
   for (const [id, value, type] of [
     ['o-service', 'refinancement', 'change'],

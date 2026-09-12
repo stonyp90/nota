@@ -4,7 +4,7 @@
 
 info@gonota.ca
 
-**https://plan.gonata.ca/**
+**https://plan.gonota.ca/**
 
 **Proposed raise: 250 000 $ pre-seed.** Product development and public deployment are evidenced; repeatable paid demand, live settlement and professional launch clearance are not established by the reviewed records. The financing scenario targets 244 completed acts and approximately 80 813 $ of Nota revenue in Year 1. These are targets, not traction.
 
@@ -14,25 +14,21 @@ This revision reconciles the four-service code catalogue, published fee grid, re
 
 ## 1. Executive summary
 
-Nota connects a client who needs a notarial act by a particular date with a notary who has suitable capacity. The client supplies the service, date, location, relevant facts and offered professional fee. A notary can accept, counter-propose, request information or pass without publishing a private calendar. Joining and browsing are free for notaries.
+**Nota starts with an urgent need for a notary and aims to become the continuous workflow from request to signed act.** A dated, structured request helps an eligible notary identify work they can take on. The next layer reduces repeatable preparation; the third connects authorized electronic signing to the prepared file. Clients gain a clearer next step, practices gain usable capacity, and Nota can develop recurring software use beyond the initial match.
 
-**Nota is capacity infrastructure for notaries, not a replacement for notaries.** Our promise is explicit: Nota is not intended to break the profession or remove notary jobs. We are repairing a broken supply-and-demand market where time-sensitive clients struggle to find an available professional, while qualified notaries lose capacity to fragmented discovery, empty calendar slots and repetitive preparation work. Nota organizes qualified demand, makes available capacity easier to use and keeps the practising notary responsible for professional judgment, client advice and the act itself. The reasons for the shortage and the size of the incremental market remain validation questions, so each cohort must be measured rather than assumed.
+The strategy has three product stages, with geography advancing only when each local workflow is validated:
 
-The future model-enabled layer follows the same boundary. Its target is to automate up to 80% of validated, repeatable intake, checks and dossier assembly under a notary's review, so a practice can accept more qualified demand, increase its potential earning capacity and help restore supply. It is a tool in the notary's hands, not a substitute for independent legal judgment. The target will be measured by act type, reviewed by notaries and released only with the required legal, security and quality controls.
+1. **Connect urgent clients and available notaries.** Start with financing and refinancing in the Québec City metropolitan area. Qualify the need, make the date and complete price clear, and measure whether an eligible notary actually serves the file on time.
+2. **Automate repeatable preparation.** Target an 80% reduction in human time on a defined preparation scope, including review and corrections. This is an unproven product objective, not an observed reduction in 80% of the notary’s entire job. Legal advice, judgment and responsibility remain with the notary.
+3. **Offer an integrated electronic signing journey.** Carry a validated file through identity checks, consent, authorized signing and preservation. Electronic notarial signing already exists; Nota’s intended value is continuity and fewer handoffs. The current signing room is a rehearsal, with production integrations and approvals still to establish.
 
-**Learning loop and notary participation.** For supported simple notarial acts, Nota's models can improve over time from permitted, aggregated user signals and structured notary feedback. The loop measures where users need clarification, where a dossier is abandoned or corrected, and which preparation steps a notary accepts, changes or rejects. Nota then turns those observations into versioned model and workflow improvements, with privacy controls, act-specific evaluation, notary review, auditability and rollback before any production release. No identifiable client file becomes training material by default, and no live model update can change a professional conclusion without a new review gate.
+The observed starting pool is **10,271 residential resales in the Québec City CMA, 97,214 in Québec province and 470,314 across Canada in 2025**. These nested counts are not added and are not all eligible or urgent notarial files. Section 5 converts the local pool into an explicit, testable acquisition scenario. The longer-term software reference pool includes **2,659 Québec notaries in traditional practice** and **nearly 50,000 notaries across the CNUE’s EU membership**. This is professional-market context, not contracted seats or validated software revenue.
 
-User-behavior signals can tune question order, clarity and guidance. They cannot label legal facts or make a legal conclusion. Model changes are prepared offline, tested on a held-out set and approved before release.
+The proposed **250 000 $ operating envelope** funds a 12-month pilot. The existing base model targets 244 completed financing/refinancing acts in Year 1 and approximately 80 813 $ of Nota revenue. These are assumptions, not commercial traction. The illustrative 205-act local market calculation in §5 is a separate annual sale-linked financing example; it is not a second Year 1 forecast.
 
-The participation model is designed to let the whole network benefit. A practising notary who contributes workflow feedback, reviewed examples, edge cases or evaluation time may receive a potential equity instrument, subject to written terms, securities review, professional independence rules and the absence of any guaranteed value. A notary who prefers not to contribute directly can use the model-enabled layer through a monthly software subscription. The subscription provides access without requiring direct feedback contribution, while the equity path recognizes deeper collaboration. Neither path transfers legal responsibility from the notary to Nota. Users should receive clearer next steps and fewer preparation loops, participating notaries should gain a more useful capacity tool, and Nota should improve its product through evidence rather than assumptions.
+The base case ends Year 1 with about 45 377 $ cash. At least approximately 180 119 $ of additional capital is indicated by the modeled year-end deficits and reserve, before unmodeled obligations and within-year cash troughs. Later hiring remains conditional. No AI subscription or signing revenue is included in the financial forecast.
 
-The proposed initial commercial focus remains **financing and refinancing in Québec City and its surrounding service area**. The current repository also supports wills and powers of attorney. Those services need their own demand, pricing and professional validation; their revenue is excluded from the financing scenario rather than assumed to subsidize it. No catalogue change is made by this plan.
-
-Nota charges its own disclosed service and date fees to the client. The notary receives the agreed professional fee in full under the implemented settlement design. This structure is a product decision, **not a legal opinion**. Launch depends on the outstanding professional, tax, payment and operating conditions in §7.
-
-The investment thesis has three stages: establish reliable local matching; reduce the notary's preparation time with evidence-backed work packets; expand geographically and by service only after those results are measured. The longer-term opportunity is a reusable market for urgent demand and privately held provider capacity. International and adjacent-industry expansion are options, not funded promises in this round.
-
-The money collected for notaries is not Nota revenue. The operating result includes illustrative service and loss costs, and the stated operating budget; it is not audited net income. The 250 000 $ raise supports the first-year experiment under the assumptions in §12, with a follow-on financing decision needed before the second-year cost base is committed.
+The current documentation model distinguishes the notary’s agreed professional fee from Nota’s client service/date fees. A conflicting commission-only repository policy remains unresolved in §7. This revision changes the investor narrative and market evidence, not the legal status or production billing rules. The investable proof is a fulfilled local cohort, sound unit economics and measured preparation savings.
 
 ## 2. Customer problem and value proposition
 
@@ -95,24 +91,43 @@ Sources: [launch evidence](go-to-market/launch-evidence/2026-09-08-activation.md
 
 ## 5. Market and competition
 
-### 5.1 Addressable market and attainable volume
+### 5.1 Observed market: Québec City, Québec and Canada
 
-The legacy estimate of 60 000 new-financing acts plus 50 000 refinancings per year is retained **only as a planning hypothesis**. It is not a published Québec act count. Mortgage renewals, lender switches, residential transactions and notarial acts cannot be equated one-for-one. Validate the shares requiring each act, eliminate overlap and segment by geography and service before presenting an investor-grade SAM.
-
-At current starting values, that hypothetical 110 000-act financing market implies:
+Use a consistent annual transaction unit for the initial real-estate financing opportunity:
 
 <!-- MODEL:market -->
 <!-- /MODEL:market -->
 
-The fee opportunity assumes all eligible acts use Nota; it is a theoretical ceiling before competition, willingness to pay and execution constraints. The urgency extension assumes the same date mix as the financial model. It is not observed demand. These figures exclude wills, powers of attorney, sale acts and software subscriptions.
+The [APCIQ 2025 annual release, published January 13, 2026](https://apciq.ca/ventes-residentielles-le-quebec-enregistre-sa-troisieme-meilleure-annee-en-2025/) reports the Québec figures; the [CREA January 15, 2026 annual release](https://www.crea.ca/media-hub/news/home-sales-in-canada-end-2025-quietly/) reports the Canadian figure. Québec City means the **census metropolitan area**, not just the municipality. Québec data cover Centris residential resales; the Canadian figure covers MLS transactions. The province is included in Canada and the CMA is included in the province. Do not sum them.
 
-The proposed Year 3 volume of 11 000 financing acts would require **10% of this assumed provincial volume**, a substantial execution challenge. The plan needs to earn that expansion through local liquidity. At the 30-notary Year 1 target, 244 completions imply 8.1 acts per notary annually before adjusting for recruitment dates and inactive providers. At 700 notaries in Year 3, 11 000 acts imply 15.7 each. Aggregate provider counts alone cannot prove availability for a particular service, region or deadline.
+These transactions form an **observed demand reference pool**, not Nota’s revenue market or a count of urgent cases. A transaction may generate several legal steps, may not require a new mortgage, may already have a notary, or may fall outside Nota’s supported workflow. Refinancing outside a resale, new construction outside these listing systems, wills and powers of attorney are excluded from this transaction baseline. No public annual count of Nota-eligible urgent requests or refinancing acts has been verified in this revision.
 
-**Local bottom-up test.** Count verified participating notaries by service and service area; obtain a weekly estimate of eligible incremental cases they can actually accept; compare that capacity with qualified incoming requests. The model is `active notaries × available suitable cases × realization rate`, checked against demand-side conversion. Do not substitute the entire provincial profession for available launch supply.
+### 5.2 From a reference pool to a serviceable pilot
 
-CMHC's May 2026 report says renewal activity peaked in 2025 and is expected to ease during 2026. Deadline-driven needs remain relevant, but the previous plan's 2025 renewal-wave claim is not evidence of accelerating demand today. [CMHC, May 12, 2026](https://www.cmhc-schl.gc.ca/media-newsroom/news-releases/2026/renewal-wave-peaks-still-dominates-mortgage-market).
+Define the serviceable pool as observed transactions × the share requiring the supported service, within the serviced geography, with an unfilled need and realistic availability. The **10% qualifiable share is a hypothesis combining these filters**; it is not an observed urgency rate. Count a file once. Measure each filter in the pilot and replace the combined assumption with evidence.
 
-### 5.2 Competitive position
+An illustrative annual scenario is **10,271 × 10% qualifiable × 25% captured × 80% completed = 205 completed sale-linked financing files**. Holding the last two rates constant, a 5%, 10% or 20% qualifiable share gives approximately 103, 205 or 411 completions. All three rates are assumed. The 80% completion assumption is separate from the 80% preparation-automation target.
+
+The financial forecast’s 244 Year 1 completions include financing **and refinancing**, with a month-by-month ramp. They are not obtained by adding this 205-act illustration. Retain the forecast as a pilot planning case until the actual pipeline, qualifying share, timing and refinancing demand are measured. Year 3’s 11,000 completions demand substantial provincial distribution and capacity; the old “10% of 110,000 acts” justification is withdrawn because that denominator was unverified.
+
+### 5.3 International opportunity: software for the profession
+
+For stages 2 and 3, the unit becomes a supported practice workflow and its active users, rather than an urgent transaction. At March 31, 2025, Québec had **3,846 registered notaries, including 2,659 in traditional practice**. These are individual professionals, not firms or paid seats. [Chambre des notaires annual report 2024–2025, p. 11](https://www.cnq.org/wp-content/uploads/2025/11/610666-CDN_Rapport-annuel-2024-2025_Final.pdf#page=11).
+
+The **CNUE represents 22 member notariats and nearly 50,000 notaries across the EU**, providing a relevant international software reference pool. [CNUE annual report 2024, p. 16](https://www.notariesofeurope.eu/wp-content/uploads/2025/02/CNUE-Annual-Report-2024.pdf#page=16). The **UINL has 93 member notariats** globally. This establishes geographic breadth, not permission to launch or a global revenue estimate. [UINL institutional overview, accessed September 12, 2026](https://uinl.org/mission/about-us/).
+
+Do not add overlapping professional populations or multiply global membership by Québec fees. Canada outside Québec also has different legal roles, providers and rules; Canadian home sales are context, not a homogeneous notary market. For each expansion candidate, validate provider scope, language, data residency, document formats, signing and retention requirements, distribution, procurement and willingness to pay. Begin with one local professional partner and a defined act type. France is a possible research candidate because of its language and civil-law notariat, not a committed launch market.
+
+A future software revenue model must use **eligible organizations × adopted organizations × paid seats per organization × net annual price**, with explicit churn, support and integration costs. No validated subscription price or adoption rate is available, so no software ARR or global TAM in dollars is represented as fact. The opportunity is meaningful because the same practice handles repeatable work beyond urgent clients; the size of Nota’s accessible paid portion remains to be established.
+
+### 5.4 Competitive position
+
+The sector is already digitizing. Québec notaries can [sign electronic acts in the office](https://www.cnq.org/votre-notaire/un-professionnel-numerique/signer-un-acte-notarie-technologique-au-bureau-du-notaire/). In France, the CSN announced an [18-month Mistral AI and Scaleway partnership on July 9, 2026](https://www.csn.notaires.fr/fr/actualites/intelligence-artificielle-le-conseil-superieur-du-notariat-choisit-mistral-ai-et). Nota cannot claim to invent electronic signing or to be the only notarial AI initiative.
+
+The intended differentiation is the **connection between a deadline signal, qualified demand, reviewed preparation and file completion**. Directories compete for discovery, practice-management and AI tools for workflow, and signing providers for execution. Nota should integrate where appropriate and win on fulfillment, measurable time savings and retained usage. Distribution relationships and a permissioned, reviewed feedback process may become advantages; they are not established network effects or an uncopyable moat today.
+
+
+
 
 Notairo currently advertises online preparation, availability checking and in-person signing for property transactions. Its public starting price for refinancing is 949 $, excluding taxes and disbursements, with possible additional charges for urgency or complexity. That package is not directly comparable with Nota's platform fee alone. The previous 295 $ intake-fee comparison is removed because it was not substantiated by the current homepage. [Notairo, checked September 9](https://notairo.com/).
 
@@ -233,17 +248,35 @@ The founder owns the initial operating queue. The proposed practising notary adv
 
 Set response targets by supported business hours and urgency during the pilot; publish only targets the team can staff. Keep a daily financial exception queue, a weekly customer-outcome review and a monthly close. Money due to notaries or tax authorities is excluded from unrestricted runway. Confirm insurance coverage and limits for the actual platform activities; the budget is not proof of coverage.
 
-## 10. AI, signing and expansion roadmap
+## 10. Three-stage product roadmap
 
-**Immediate objective:** reduce whole-file preparation time while preserving professional control and evidence quality. Documents, answers and third-party instructions can produce a source-cited checklist and preparation inputs. Capacity, consent, legal conclusions and signing readiness remain decisions of the responsible notary.
+| Stage | Customer value | Evidence that permits expansion | Monetization status |
+| --- | --- | --- | --- |
+| 1. Urgent matching | A qualified request reaches a suitable available notary | Actual response times, completion and contribution by local cohort | Current service/date-fee planning model, subject to §7 review |
+| 2. Preparation automation | Less repeatable work per accepted file | Measured human-time reduction including corrections, stable quality and adoption | Subscription or usage model to validate; no revenue included in forecast |
+| 3. Electronic signing | A prepared file continues through a traceable conclusion | Authorized integrations, identity/consent, evidence preservation and professional approval | Integration/usage economics to validate; no revenue included in forecast |
 
-The current live financing extraction benchmark is blocked by provider access/payment prerequisites and has no accepted extraction output in the recorded runs. The four-service evaluation uses synthetic cases not reviewed by a notary. Neither demonstrates professional accuracy or time saved. [Bedrock verification](ai/bedrock-verification-2026-09-09.md), [evaluation](ai/notary-ai-evaluation-2026-09-09.md).
+These are product stages, not automatic calendar promises. Geographic expansion is a separate decision at every stage. The current signing room and AI implementation provide material to evaluate, not a claim of operational legal certification.
 
-Before promotion, obtain lawful data-use permissions and vendor/region approval; establish a notary-reviewed held-out set per act; measure omissions, unsupported facts, conflicts, abstentions, failures and review time. Measure **cost per accepted, reviewed file** including OCR, inference, retries and human correction. A 90% or 99% time-saving ambition is a hypothesis, not a forecast assumption. Cross-region model profiles can process outside Canada even through a Canadian endpoint.
+### 10.1 Measuring the 80% objective
 
-The gate sequence is qualified intake → evidence-backed preparation → notary review → authorized signing provider → publication/funds workflow → reconciliation and retention. Refer to [service coverage](ai/notary-service-coverage-2026-09-09.md), [cost/performance plan](ai/financing-cost-performance-2026-09-09.md) and [learning strategy](ai/notary-learning-strategy-2026-09-09.md).
+The target is an **80% reduction of human time on defined repeatable preparation**, compared with the same task performed manually. Include all human review and correction time in the assisted measurement. The denominator excludes legal advice, independent judgment, final professional approval and signature. This target does not mean that 80% of a notary’s entire role disappears.
 
-### 10.1 Controlled learning loop and notary participation
+Before evaluation, define the supported act types and task boundaries: intake, authorized document extraction, completeness and consistency checks, and assembly of a sourced draft. Record a manual baseline and assisted results on comparable cases. Start with a proposed sample of at least 30 matched files per supported act type, spanning simple and exception cases; this is an operational pilot design, not a claim of statistical sufficiency. A practising notary must review the measurement protocol.
+
+Use **1 − assisted human minutes / manual human minutes** on the full defined scope, counting failed or rejected outputs and rework. Report the sample size, date, task and act mix, median and spread, correction and abstention rates, and unsupported-field errors. A normalized 100-to-20 graphic in the pitch explains the target only; it is not measured time or a completed benchmark. Report both the preparation saving and whole-file human time so the denominator cannot conceal work shifted to the notary.
+
+Accept a version only when the target is measured and the pre-agreed quality and safety criteria remain satisfied. Do not extrapolate one act type’s result to other services. Use authorized de-identified or synthetic evaluation data, retain traceability, and require documented notary approval and rollback before production changes.
+
+### 10.2 Electronic signing and the integrated dossier
+
+The value is fewer handoffs: validated identity and file → informed consent → authorized signature → preserved evidence and authentic copy. Québec’s [office signing guidance](https://www.cnq.org/votre-notaire/un-professionnel-numerique/signer-un-acte-notarie-technologique-au-bureau-du-notaire/) confirms that electronic signing already exists. [Remote signing remains exceptional and subject to the notary’s assessment](https://www.cnq.org/votre-notaire/un-professionnel-numerique/signer-un-acte-notarie-technologique/).
+
+Confirm the permitted provider and integration path, professional identity controls, evidence integrity, archival and copy requirements before offering an operational signing service. The existing rehearsal must stay labeled as such until those prerequisites and end-to-end tests are satisfied. Measure abandoned handoffs, re-entry of information, completion time and error recovery; do not invent a signing time saving in advance.
+
+### 10.3 Controlled learning loop and notary participation
+
+
 
 Nota's model layer improves through a controlled learning loop. Aggregated user behavior shows where a client abandons intake, misunderstands a question or needs a clearer next step. Notary feedback supplies the high-confidence signal. A notary can accept, correct or reject a proposed field or preparation step and record the reason. Those signals improve the next qualified model version for simple financing, refinancing and other supported acts.
 

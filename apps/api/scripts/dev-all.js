@@ -63,6 +63,8 @@ const SERVICES = [
       NOTA_ADMIN_BASE_URL: `http://localhost:${PORTS.admin}`,
       NOTA_OAUTH_LOCAL: 'true',
       NOTA_OAUTH_ORIGIN: `http://localhost:${PORTS.web}`,
+      // The local stack includes the rehearsal room; an explicit opt-out wins.
+      NOTA_SIGNING_BETA_ENABLED: process.env.NOTA_SIGNING_BETA_ENABLED || 'true',
     },
   },
   {

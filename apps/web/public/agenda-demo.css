@@ -1,0 +1,5 @@
+.calendar-demo-page { max-width: var(--maxw); margin: 32px auto; padding: 0 20px; }
+.calendar-demo-page .nc-calendar-teaser { max-width: none; }
+.calendar-demo-page h1 { margin-top: 24px; }
+.calendar-demo-page [data-lang-seg] { float: right; }
+.calendar-demo-page [data-set-lang] { padding: 8px; color: var(--ink); background: var(--surface); border: 1px solid var(--border); cursor: pointer; }

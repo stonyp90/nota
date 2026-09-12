@@ -7,6 +7,39 @@ Fonctionnalité: L'accès payant à la préparation IA du notaire (ADR 0049)
   au modèle, et rien de tout cela ne se voit du côté du client : ce qu'il paie
   pour son acte ne dépend pas de l'outillage de son notaire.
 
+  # ADR 0052 — la voie gratuite est payée en révisions, la voie payante ne doit
+  # rien. Une seule différence entre les deux, et le refus des deux ne retire
+  # que ce produit : le marché reste entier, ce qui est la condition pour que
+  # le consentement soit LIBRE (art. 14, Loi 25).
+  Scénario: la voie gratuite ne sert rien avant que l'échange soit accepté
+    Étant donné l'accès IA payant est activé sur ce déploiement
+    Et un notaire actif "notaire@exemple.ca"
+    Et le notaire "notaire@exemple.ca" a retenu une demande de refinancement
+    Quand le notaire "notaire@exemple.ca" s'inscrit à la bêta IA sans accepter de contribuer
+    Alors il reste 5 essais de bêta
+    Et la contribution est requise
+    Et ce qui est donné se borne aux jugements du notaire
+    Quand le notaire "notaire@exemple.ca" prépare le dossier avec l'IA
+    Alors la réponse a le statut 402
+    Et le refus IA porte le motif "contribution_requise" et parle de révisions
+    Et le modèle n'a été appelé que 0 fois
+    Quand le notaire "notaire@exemple.ca" accepte de contribuer ses révisions
+    Et le notaire "notaire@exemple.ca" prépare le dossier avec l'IA
+    Alors la réponse a le statut 200
+    Et le modèle n'a été appelé que 1 fois
+
+  Scénario: le notaire qui paie ne doit rien à l'apprentissage
+    Étant donné l'accès IA payant est activé sur ce déploiement
+    Et un notaire actif "notaire@exemple.ca"
+    Et le notaire "notaire@exemple.ca" a retenu une demande de refinancement
+    Et le notaire "notaire@exemple.ca" s'inscrit à la bêta IA sans accepter de contribuer
+    Quand le notaire "notaire@exemple.ca" choisit la formule "essentiel"
+    Et Stripe confirme la formule "essentiel" pour "notaire@exemple.ca"
+    Et le notaire "notaire@exemple.ca" consulte son accès IA
+    Alors la contribution est facultative
+    Quand le notaire "notaire@exemple.ca" prépare le dossier avec l'IA
+    Alors la réponse a le statut 200
+
   Scénario: la bêta ne s'ouvre pas toute seule
     Étant donné l'accès IA payant est activé sur ce déploiement
     Et un notaire actif "notaire@exemple.ca"

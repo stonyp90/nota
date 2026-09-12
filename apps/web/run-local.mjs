@@ -30,12 +30,40 @@ function serveHtml(res, file) {
 
 const TYPES = {
   '.html': 'text/html; charset=utf-8',
+  '.pdf': 'application/pdf',
   '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.svg': 'image/svg+xml',
+  '.mp4': 'video/mp4',
+  '.png': 'image/png',
   '.ico': 'image/x-icon',
   '.json': 'application/json; charset=utf-8',
 };
+
+// Browsers can resume or seek the inline calendar video with a single byte
+// range. Unsupported/malformed ranges fall back to the complete representation.
+function serveVideo(req, res, file) {
+  const bytes = readFileSync(file);
+  const size = bytes.length;
+  const headers = { 'content-type': TYPES['.mp4'], 'content-length': size, 'accept-ranges': 'bytes' };
+  const range = req.method === 'GET' && typeof req.headers.range === 'string'
+    ? /^bytes=(\d*)-(\d*)$/i.exec(req.headers.range.trim()) : null;
+  if (range && (range[1] || range[2])) {
+    const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+    const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+    if (start >= size || end < start) {
+      res.writeHead(416, { ...headers, 'content-length': 0, 'content-range': `bytes */${size}` });
+      res.end();
+      return 416;
+    }
+    res.writeHead(206, { ...headers, 'content-length': end - start + 1, 'content-range': `bytes ${start}-${end}/${size}` });
+    res.end(bytes.subarray(start, end + 1));
+    return 206;
+  }
+  res.writeHead(200, headers);
+  res.end(req.method === 'HEAD' ? undefined : bytes);
+  return 200;
+}
 
 const server = createServer((req, res) => {
   const start = Date.now();
@@ -55,6 +83,8 @@ const server = createServer((req, res) => {
     });
     req.pipe(upstream); return;
   }
+  // Development serves mutable filenames, so reloading must see current files.
+  res.setHeader('cache-control', 'no-store');
   if (path === '/') path = '/index.html';
 
   for (const page of pages) {
@@ -86,6 +116,7 @@ const server = createServer((req, res) => {
 
   if (existsSync(file) && statSync(file).isFile()) {
     if (extname(file) === '.html') { serveHtml(res, file); return log(req, 200, start); }
+    if (extname(file) === '.mp4') return log(req, serveVideo(req, res, file), start);
     res.writeHead(200, { 'content-type': TYPES[extname(file)] || 'application/octet-stream' });
     res.end(readFileSync(file));
     return log(req, 200, start);
@@ -101,5 +132,5 @@ function log(req, code, start) {
 }
 
 server.listen(PORT, () => {
-  console.log(`Nota web on http://localhost:${PORT}`);
+  console.log(`Nota web on http://localhost:${server.address().port}`);
 });

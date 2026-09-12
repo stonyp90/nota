@@ -165,7 +165,7 @@ test('cancelling a retained offer warns that the notary will be notified', async
 
 test('the contact dialog validates inline (domain codes) before any network call', async () => {
   const { doc, calls } = await boot({ routes: [monthRoute()] });
-  $(doc, 'mnav-contact').click();
+  doc.defaultView.Nota.contact.openEmail();
   assert.equal($(doc, 'contact-dialog').open, true);
   $(doc, 'ct-courriel').value = 'pas-un-courriel';
   $(doc, 'ct-message').value = '';
@@ -183,7 +183,7 @@ test('a valid message POSTs /contact and shows the success state', async () => {
     seed: { 'nota.profile.v1': JSON.stringify({ nom: 'Anne Tremblay', courriel: 'anne@example.ca' }) },
     routes: [monthRoute(), { match: (u) => u.endsWith('/contact'), reply: () => jsonRes(202, { recu: true }) }],
   });
-  $(doc, 'mnav-contact').click();
+  doc.defaultView.Nota.contact.openEmail();
   assert.equal($(doc, 'ct-nom').value, 'Anne Tremblay', 'name must prefill from the profile');
   assert.equal($(doc, 'ct-courriel').value, 'anne@example.ca', 'email must prefill from the profile');
   $(doc, 'ct-message').value = 'Bonjour, une question.';
@@ -214,16 +214,13 @@ test('the per-offer help action is clear, prefills the subject and ties the bid 
   assert.equal(help.querySelector('.my-offer-help-icon').textContent, '?', 'the action has a visible help mark');
   assert.equal(help.getAttribute('aria-label'), 'Obtenir de l’aide sur cette demande');
   help.click();
-  assert.equal($(doc, 'contact-dialog').open, true);
-  assert.equal($(doc, 'ct-sujet').value, 'Aide avec une offre');
-  assert.equal($(doc, 'ct-context').hidden, false);
-  $(doc, 'ct-courriel').value = 'anne@example.ca';
-  $(doc, 'ct-message').value = 'J’aimerais changer la date.';
-  $(doc, 'ct-submit').click();
-  await wait(40);
-  const call = calls.find((c) => c.url.endsWith('/contact'));
-  assert.ok(call, 'POST /contact missing');
-  assert.equal(JSON.parse(call.init.body).bidId, 'o1');
+  assert.equal($(doc, 'chat-panel').hidden, false);
+  assert.match($(doc, 'chat-text').value, /o1/);
+  assert.equal(doc.activeElement, $(doc, 'chat-text'));
+  assert.ok(!calls.some(c => c.url.endsWith('/support/messages')), 'opening help does not send the context');
+  $(doc, 'chat-text').value = 'Brouillon en cours';
+  help.click();
+  assert.equal($(doc, 'chat-text').value, 'Brouillon en cours');
 });
 
 // --- 4. Evaluation (ADR 0015) ------------------------------------------------
@@ -388,7 +385,7 @@ test('P1-4: the contact success state is a live status and takes focus', async (
     routes: [monthRoute(), { match: (u) => u.endsWith('/contact'), reply: () => jsonRes(202, { recu: true }) }],
   });
   assert.equal($(doc, 'contact-success').getAttribute('role'), 'status', 'the confirmation is announced');
-  $(doc, 'mnav-contact').click();
+  doc.defaultView.Nota.contact.openEmail();
   $(doc, 'ct-courriel').value = 'eve@client.ca';
   $(doc, 'ct-message').value = 'Bonjour, une question.';
   $(doc, 'contact-form').dispatchEvent(new doc.defaultView.Event('submit', { bubbles: true, cancelable: true }));
@@ -399,14 +396,14 @@ test('P1-4: the contact success state is a live status and takes focus', async (
 
 test('P2-12: the dialog focuses the empty required courriel first, the message once the courriel is known', async () => {
   const anon = await boot({ routes: [monthRoute()] });
-  $(anon.doc, 'mnav-contact').click();
+  anon.Nota.contact.openEmail();
   await wait(10);
   assert.equal(anon.doc.activeElement, $(anon.doc, 'ct-courriel'), 'no courriel on file → the required field first');
   const known = await boot({
     routes: [monthRoute()],
     seed: { 'nota.profile.v1': JSON.stringify({ courriel: 'eve@client.ca', nom: 'Eve Roy' }) },
   });
-  $(known.doc, 'mnav-contact').click();
+  known.Nota.contact.openEmail();
   await wait(10);
   assert.equal(known.doc.activeElement, $(known.doc, 'ct-message'), 'courriel pre-filled → straight to the message');
 });
@@ -417,7 +414,7 @@ test('P2-13: the message cap is the domain’s, and a counter appears near it', 
   assert.equal(ta.getAttribute('maxlength'), String(D.CONTACT_MESSAGE_MAX), 'maxlength comes from D.CONTACT_MESSAGE_MAX');
   assert.ok(count, 'a counter element');
   assert.equal(count.getAttribute('aria-live'), 'polite');
-  $(doc, 'mnav-contact').click();
+  doc.defaultView.Nota.contact.openEmail();
   const fire = () => ta.dispatchEvent(new doc.defaultView.Event('input', { bubbles: true }));
   ta.value = 'Bonjour'; fire();
   assert.equal(count.hidden, true, 'quiet while far from the cap');

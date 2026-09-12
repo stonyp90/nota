@@ -19,11 +19,10 @@ for (const width of [320, 390, 768]) {
   test(`mobile menu keeps its layout, labels and keyboard focus at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     await gotoHome(page, { suppressOnboarding: true });
-    const back = await page.locator('.mnav-history-btn[data-history="back"]').boundingBox();
-    const forward = await page.locator('.mnav-history-btn[data-history="forward"]').boundingBox();
-    expect(Math.abs(back.y - forward.y)).toBeLessThan(2);
-    expect(back.width).toBeGreaterThanOrEqual(44);
-    expect(forward.x).toBeGreaterThanOrEqual(back.x + back.width);
+    // Plus de paire de flèches dans l'en-tête étroit (propriétaire, 2026-09-12 :
+    // « enlever les 2 flèches ») : le bouton du navigateur et le geste de retour
+    // du téléphone font déjà ce travail. L'en-tête étroit = marque, puis burger.
+    expect(await page.locator('[data-history]').count(), 'aucune flèche d’historique ne revient').toBe(0);
     await expect(page.locator('#cal-today')).toHaveText('Today');
     expect(await page.locator('#cal-today').evaluate(n => getComputedStyle(n, '::after').content)).not.toContain('Auj.');
     await page.locator('#nav-burger').click();

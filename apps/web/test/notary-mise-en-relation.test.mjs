@@ -25,7 +25,7 @@
  * Harness mirrors notary-focus.test.mjs (jsdom outside-only, URL-routing
  * fetch stub, real sign-in path).
  */
-import test, { after } from 'node:test';
+import test, { afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -39,9 +39,12 @@ const DOMAIN_SRC = readFileSync(fileURLToPath(new URL('../../../packages/domain/
 const APP_SRC = readFileSync(fileURLToPath(new URL('../public/app.js', import.meta.url)), 'utf8');
 const HTML_SRC = readFileSync(fileURLToPath(new URL('../public/index.html', import.meta.url)), 'utf8');
 const CSS_SRC = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
+const I18N_SRC = readFileSync(fileURLToPath(new URL('../public/i18n.js', import.meta.url)), 'utf8');
 
 const DOMS = [];
-after(() => { for (const d of DOMS) { try { d.window.close(); } catch {} } });
+// Each test owns its windows. In particular, the 30/40 ms polling fixtures
+// must stop before the next test, and closed windows must not stay retained.
+afterEach(() => { for (const d of DOMS.splice(0)) d.window.close(); });
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 // Attendre une CONDITION plutôt qu'une durée. Un `wait(220)` suppose que la
@@ -66,7 +69,7 @@ const input = (node, value) => { node.value = value; node.dispatchEvent(new node
 const submit = (form) => form.dispatchEvent(new form.ownerDocument.defaultView.Event('submit', { bubbles: true, cancelable: true }));
 const key = (node, k, opts = {}) => node.dispatchEvent(new node.ownerDocument.defaultView.KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true, ...opts }));
 
-async function boot({ url = 'https://nota.example/', seed = {}, pollMs = null, focusedMs = null } = {}) {
+async function boot({ url = 'https://nota.example/', seed = {}, pollMs = null, focusedMs = null, lang = null } = {}) {
   const dom = new JSDOM(HTML_SRC, {
     runScripts: 'outside-only',
     url,
@@ -87,6 +90,7 @@ async function boot({ url = 'https://nota.example/', seed = {}, pollMs = null, f
   });
   DOMS.push(dom);
   const win = dom.window;
+  if (lang) { win.localStorage.setItem('nota.lang', lang); win.eval(I18N_SRC); }
   win.eval(DOMAIN_SRC);
   const D = win.NotaDomain;
   const anchor = firstOfMonth(todayISO());
@@ -556,13 +560,205 @@ test('a calendar request link survives sign-in and retains only after confirmati
   assert.ok(card && card.classList.contains('is-flash'), 'the linked request is highlighted after sign-in');
   const accepts = () => calls.filter(c => c.path.includes('/notary/bids/accept'));
   assert.equal(accepts().length, 0, 'opening the calendar link never accepts');
-  click(card.querySelector('.nc-accept'));
-  assert.equal($(ctx.doc, 'nc-retenir-dialog').open, true);
+  assert.equal($(ctx.doc, 'nc-retenir-dialog').open, true, 'the calendar link opens the review directly after sign-in');
   assert.equal(accepts().length, 0, 'reviewing the terms never accepts');
   click($(ctx.doc, 'nc-retenir-go'));
   await waitUntil(() => ctx.Nota.notary.retainedFor('demo@etude.ca').some(b => b.id === bid.id));
   assert.equal(accepts().length, 1);
   assert.equal(accepts()[0].body.id, bid.id);
+});
+
+test('a linked offer opens even when a temporary filter hides its card', async () => {
+  const ctx = await bootSignedIn({ bids: [openBid()] });
+  ctx.Nota.notary.state.filter.service = 'testament';
+  ctx.Nota.notary.state.deepAct = 'b-1';
+  await ctx.Nota.notary.loadBids();
+  assert.equal(ctx.doc.querySelectorAll('#notary-open-list .nc-card').length, 0);
+  assert.equal($(ctx.doc, 'nc-retenir-dialog').open, true);
+  assert.match($(ctx.doc, 'nc-retenir-svc').textContent, /Refinancement/);
+  assert.equal(ctx.calls.filter(c => c.path.includes('/notary/bids/accept')).length, 0);
+});
+
+test('an unavailable calendar link has a visible way back, while a failed load preserves the link', async () => {
+  const ctx = await bootSignedIn({ bids: [openBid()] });
+  ctx.Nota.notary.state.deepAct = 'expired-offer';
+  const fetch = ctx.win.fetch;
+  ctx.win.fetch = () => Promise.reject(new Error('offline'));
+  await ctx.Nota.notary.loadBids();
+  assert.equal(ctx.Nota.notary.state.deepAct, 'expired-offer', 'offline is not evidence that the offer expired');
+  assert.equal($(ctx.doc, 'nc-offer-notice').hidden, true);
+  ctx.win.fetch = fetch;
+  await ctx.Nota.notary.loadBids();
+  assert.equal($(ctx.doc, 'nc-offer-notice').hidden, false);
+  assert.equal(ctx.Nota.notary.state.deepAct, null);
+  assert.notEqual($(ctx.doc, 'nc-retenir-dialog').open, true);
+  click($(ctx.doc, 'nc-offer-notice-dismiss'));
+  assert.equal($(ctx.doc, 'nc-offer-notice').hidden, true);
+  assert.equal(ctx.doc.querySelectorAll('#notary-open-list .nc-card').length, 1);
+});
+
+test('starting the client conversation prepares an editable draft without sending or overwriting text', async () => {
+  const ctx = await bootSignedIn({ retained: [retainedEntry()] });
+  const card = ctx.doc.querySelector('#notary-retained-list .nc-card');
+  const input = card.querySelector('.chat-input');
+  click(card.querySelector('.nc-contact-start'));
+  assert.match(input.value, /j’ai retenu votre demande/);
+  assert.equal(ctx.doc.activeElement, input);
+  assert.equal(ctx.calls.filter(c => c.path.includes('/notary/bids/message')).length, 0, 'preparing a draft never sends it');
+  input.value = 'Mon propre message';
+  click(card.querySelector('.nc-contact-start'));
+  assert.equal(input.value, 'Mon propre message');
+});
+
+for (const lang of ['fr', 'en']) {
+  test(`retained files offer an accessible simple and complete view for every service (${lang})`, async () => {
+    const ctx = await bootSignedIn({ retained: [
+      retainedEntry({ id: 'r-financement', serviceId: 'financement' }),
+      retainedEntry({ id: 'r-refinancement', serviceId: 'refinancement', caution: { statut: 'refusee' } }),
+      retainedEntry({ id: 'r-testament', serviceId: 'testament', client: {}, courriel: null, preteur: null }),
+      retainedEntry({ id: 'r-procuration', serviceId: 'procuration', completed: true, actAmount: 3000, messages: [
+        { id: 'm-1', de: 'client', texte: 'Merci.', createdAt: '2026-09-12T09:00:00Z' },
+      ] }),
+    ] }, { lang });
+    const tr = (s) => ctx.win.NotaI18N.t(s);
+    assert.ok(ctx.doc.querySelector('#notary-console').textContent.includes(tr('Vos honoraires vous sont virés à la signature, en entier.')));
+    for (const card of ctx.doc.querySelectorAll('#notary-retained-list .nc-card')) {
+      const body = card.querySelector('.nc-retained-workspace');
+      const toggle = card.querySelector('.nc-retained-toggle');
+      assert.equal(body.hidden, true, 'the list starts with a concise overview');
+      assert.equal(toggle.getAttribute('aria-controls'), body.id);
+      assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+      assert.equal(toggle.textContent, tr('Détails du dossier'));
+      assert.ok(!card.querySelector('.nc-client').closest('[hidden]'), 'client contact stays available');
+      assert.ok(card.querySelector('.nc-card-amount'));
+      assert.ok(card.querySelector('.nc-date'));
+      if (card.dataset.id === 'r-testament') {
+        assert.match(card.querySelector('.nc-client').textContent, /conversation/);
+        assert.equal(card.querySelector('.nc-client-mail, .nc-client-tel'), null);
+      }
+      click(toggle);
+      assert.equal(body.hidden, false);
+      assert.equal(toggle.getAttribute('aria-expanded'), 'true');
+      assert.equal(toggle.textContent, tr('Vue simple'));
+      for (const selector of ['.nc-chat', '.nc-dossier', '.nc-complete', '.nc-docs-btn', '.nc-agenda-menu']) {
+        assert.ok(card.querySelector(selector), `${card.dataset.id} keeps ${selector}`);
+      }
+      if (card.dataset.id === 'r-procuration') {
+        assert.equal(card.querySelector('.nc-release'), null, 'completed acts have no withdrawal');
+        assert.ok(card.querySelector('.nc-complete-done'));
+        assert.ok(card.querySelector('.nc-contact-open'), 'the completed conversation remains reachable');
+      } else assert.ok(card.querySelector('.nc-release'));
+      click(toggle);
+      assert.equal(body.hidden, true);
+    }
+    assert.equal(ctx.calls.filter(c => /\/(?:message|complete|release)$/.test(c.path)).length, 0, 'reading and changing views never submits an action');
+  });
+}
+
+test('retained detail and message drafts survive collapse, reopen and server refresh independently per file', async () => {
+  const ctx = await bootSignedIn({ retained: [retainedEntry(), retainedEntry({ id: 'r-2', messages: [
+    { id: 'm-2', de: 'client', texte: 'À bientôt.', createdAt: '2026-09-12T09:00:00Z' },
+  ] })] });
+  const card = () => ctx.doc.querySelector('#notary-retained-list [data-id="r-1"]');
+  const other = () => ctx.doc.querySelector('#notary-retained-list [data-id="r-2"]');
+  click(card().querySelector('.nc-retained-toggle'));
+  input(card().querySelector('.chat-input'), 'Mon brouillon à conserver');
+  click(card().querySelector('.nc-retained-toggle'));
+  assert.equal(card().querySelector('.chat-input').value, 'Mon brouillon à conserver');
+  await ctx.Nota.notary.loadBids();
+  assert.equal(card().querySelector('.nc-retained-workspace').hidden, true);
+  click(card().querySelector('.nc-contact-start'));
+  assert.equal(card().querySelector('.nc-retained-workspace').hidden, false);
+  assert.equal(card().querySelector('.chat-input').value, 'Mon brouillon à conserver');
+  await ctx.Nota.notary.loadBids();
+  assert.equal(card().querySelector('.nc-retained-workspace').hidden, false, 'expanded mode survives refresh');
+  assert.equal(other().querySelector('.nc-retained-workspace').hidden, true, 'another file stays simple');
+  click(other().querySelector('.nc-contact-open'));
+  assert.equal(other().querySelector('.nc-retained-workspace').hidden, false);
+  assert.equal(other().querySelector('.chat-input').value, '', 'an existing conversation gets no first-contact template');
+  assert.equal(ctx.doc.activeElement, other().querySelector('.chat-input'));
+  assert.equal(ctx.calls.filter(c => c.path.includes('/notary/bids/message')).length, 0);
+});
+
+test('lender preferences that hide all requests have an explicit recovery without resetting those preferences', async () => {
+  const ctx = await bootSignedIn({ bids: [openBid()] });
+  click(ctx.doc.querySelector('#pref-lenders [data-lender="desjardins"]'));
+  assert.equal(ctx.doc.querySelectorAll('#notary-open-list .nc-card').length, 0);
+  assert.equal($(ctx.doc, 'notary-open-prefs').hidden, false);
+  assert.match($(ctx.doc, 'notary-open-empty').textContent, /préférences de prêteurs/);
+  click($(ctx.doc, 'notary-open-prefs'));
+  assert.equal($(ctx.doc, 'notary-prefs').open, true);
+  assert.equal(ctx.doc.activeElement.closest('#pref-lenders')?.id, 'pref-lenders');
+  assert.equal(ctx.Nota.notary.prefsGet('demo@etude.ca').lenders.desjardins, false, 'opening settings does not change a professional preference');
+});
+
+test('profile completion returns to the selected offer for review, without accepting it', async () => {
+  const ctx = await bootSignedIn({ profil: PROFIL_INCOMPLET(), bids: [openBid()] });
+  const { doc, calls } = ctx;
+  click(doc.querySelector('#notary-open-list .nc-accept'));
+  for (const [id, value] of [['nc-nom', 'Me Anne Roy'], ['nc-telephone', '418 555 0100'], ['nc-adresse', '1 rue de la Démo, Québec G1R 1A1']]) input($(doc, id), value);
+  submit($(doc, 'nc-profil-form'));
+  await waitUntil(() => $(doc, 'nc-retenir-dialog').open);
+  assert.match($(doc, 'nc-retenir-svc').textContent, /Refinancement/);
+  assert.equal(calls.filter(c => c.path.includes('/notary/bids/accept')).length, 0);
+});
+
+test('a mailbox login in a new tab resumes only the recent offer selected for that account', async () => {
+  const bid = openBid({ id: 'mailbox-offer' });
+  const origin = await boot({ url: 'https://nota.example/#notaires&acte=mailbox-offer' });
+  origin.win.fetch = async () => ({ ok: true, status: 200, json: async () => ({ ok: true }) });
+  await origin.Nota.notary.signIn('demo@etude.ca');
+  const stored = origin.win.localStorage.getItem('nota.notary.offerIntent');
+  assert.equal(JSON.parse(stored).id, bid.id);
+
+  for (const [intent, resumes] of [
+    [stored, true],
+    [JSON.stringify({ ...JSON.parse(stored), email: 'another@etude.ca' }), false],
+    [JSON.stringify({ ...JSON.parse(stored), at: Date.now() - 31 * 60 * 1000 }), false],
+  ]) {
+    const tab = await boot({ seed: { 'nota.notary.offerIntent': intent } });
+    const calls = stubApi(tab.win, { bids: [bid] });
+    await tab.Nota.notary.verifyMagic('mailbox-challenge', 'demo@etude.ca');
+    assert.equal($(tab.doc, 'nc-retenir-dialog').open, resumes, 'only this account’s recent selection opens');
+    assert.equal(calls.filter(c => c.path.includes('/notary/bids/accept')).length, 0);
+    assert.equal(JSON.parse(tab.win.localStorage.getItem('nota.notary.offerIntent')), null, 'the handoff is consumed once');
+  }
+});
+
+test('an offer that disappears during profile setup is never reopened or accepted', async () => {
+  const ctx = await bootSignedIn({ profil: PROFIL_INCOMPLET(), bids: [openBid()] });
+  const { doc, state, calls } = ctx;
+  click(doc.querySelector('#notary-open-list .nc-accept'));
+  state.bids = [];
+  for (const [id, value] of [['nc-nom', 'Me Anne Roy'], ['nc-telephone', '418 555 0100'], ['nc-adresse', '1 rue de la Démo, Québec G1R 1A1']]) input($(doc, id), value);
+  submit($(doc, 'nc-profil-form'));
+  await waitUntil(() => calls.some(c => c.path.includes('/notary/profile')) && !ctx.Nota.notary.state.pendingRetain);
+  assert.notEqual($(doc, 'nc-retenir-dialog').open, true);
+  assert.equal(calls.filter(c => c.path.includes('/notary/bids/accept')).length, 0);
+});
+
+test('a temporary acceptance failure keeps the review open and permits one retry', async () => {
+  const ctx = await bootSignedIn({ bids: [openBid()] });
+  const { doc, win } = ctx;
+  const fetch = win.fetch;
+  let requests = 0;
+  win.fetch = async (url, init) => {
+    if (String(url).includes('/notary/bids/accept') && ++requests === 1) {
+      await wait(30);
+      throw new Error('offline');
+    }
+    return fetch(url, init);
+  };
+  click(doc.querySelector('#notary-open-list .nc-accept'));
+  click($(doc, 'nc-retenir-go'));
+  click($(doc, 'nc-retenir-go'));
+  await waitUntil(() => !$(doc, 'nc-retenir-error').hidden);
+  assert.equal(requests, 1, 'repeated clicks while sending do not duplicate requests');
+  assert.equal($(doc, 'nc-retenir-dialog').open, true);
+  click($(doc, 'nc-retenir-go'));
+  await waitUntil(() => ctx.Nota.notary.retainedFor('demo@etude.ca').length === 1);
+  assert.equal(requests, 2);
+  assert.notEqual($(doc, 'nc-retenir-dialog').open, true);
 });
 
 // --- 9. Alert preferences are server data; the SMS switch is express consent (ADR 0051)
@@ -615,12 +811,12 @@ test('the alert preferences render from profil.alertes and POST through /notary/
 
 test('a focused composer pauses the poll only for a while: after the grace the feed refreshes and the draft + focus survive', async () => {
   const state = { profil: PROFIL_COMPLET(), retained: [retainedEntry()] };
-  // La grâce se compte depuis le DERNIER CHARGEMENT (`ncLastLoadAt`), pas
-  // depuis la prise de focus. Avec 120 ms de grâce, un boot un peu lent la
-  // consommait AVANT que le test ne commence à mesurer : le poll repartait
-  // pendant la fenêtre censée être calme et l'assertion tombait, sans qu'aucun
-  // code n'ait changé. 600 ms laissent la place à un exécuteur chargé.
-  const { doc, Nota } = await bootSignedIn(state, { pollMs: 30, focusedMs: 600 });
+  // Control elapsed time independently of CPU contention. The real interval
+  // still runs, but a slow render cannot accidentally consume the grace.
+  const { doc, Nota, win } = await bootSignedIn(state, { pollMs: 30, focusedMs: 600 });
+  const realNow = win.Date.now;
+  let now = realNow();
+  win.Date.now = () => now;
   const ta = () => doc.querySelector('#notary-retained-list .nc-card[data-id="r-1"] .chat-input');
   // Repartir d'un chargement FRAIS : la fenêtre de grâce commence ici, à un
   // instant que le test connaît, au lieu d'un instant quelconque du boot.
@@ -632,6 +828,7 @@ test('a focused composer pauses the poll only for a while: after the grace the f
   assert.equal(state.feedPulls, at, 'right after focusing, the poll waits');
   // Meanwhile the client writes.
   state.retained[0].messages.push({ id: 'c9', de: 'client', texte: 'Nouvelle question', createdAt: '2026-08-12T11:00:00Z' });
+  now += 601;
   // Au-delà de la grâce le poll REPREND — l'instant exact dépend de la machine,
   // donc on attend l'événement, avec une borne qui reste un vrai échec.
   await waitUntil(() => state.feedPulls > at, { timeout: 5000, quoi: 'la reprise du poll après la grâce' });
@@ -643,6 +840,7 @@ test('a focused composer pauses the poll only for a while: after the grace the f
   assert.ok([...doc.querySelectorAll('#notary-retained-list .chat-bubble')].some((b) => /Nouvelle question/.test(b.textContent)), 'the client’s message arrived');
   assert.equal(ta().value, 'brouillon en cours', 'the draft survived the re-render');
   assert.equal(doc.activeElement, ta(), 'the focus survived the re-render');
+  win.Date.now = realNow;
 });
 
 // ---------------------------------------------------------------------------
@@ -931,3 +1129,107 @@ test('« Demander des documents » on a retained card pre-checks the server’s 
   assert.equal(boxes[0].checked, true, 'the missing one is pre-checked');
   assert.equal(boxes[1].checked, false);
 });
+
+// Complete review matrix: the four acts share one review, with all information
+// visible before acceptance. Real domain labels and the real i18n engine.
+for (const lang of ['fr', 'en']) {
+  test(`complete offer review: all four services, terms, documents and activity (${lang})`, async () => {
+    const { win, doc, Nota, D, calls } = await bootSignedIn({}, { lang });
+    const tr = (s) => win.NotaI18N.t(s);
+    for (const [i, svc] of D.SERVICES.entries()) {
+      const items = D.requestableItems(svc.id);
+      const lenderApplies = svc.pricing.criteria.some((c) => c.id === D.LENDER_CRITERION_ID);
+      const factors = ['Renseignement déclaré sans séparateur', 'Situation : ' + 'Précisions du client '.repeat(24).trim()];
+      const bid = openBid({
+        id: 'matrix-' + svc.id, serviceId: svc.id, ready: i % 2 === 0,
+        preteur: lenderApplies ? { nom: 'Prêteur de démonstration', virtuel: true } : null,
+        missing: items.map((x) => x.nom), distanceKm: i === 0 ? 0 : null,
+        expiresOn: addDays(todayISO(), 8),
+        complexity: { level: ['simple', 'standard', 'complexe', 'complexe'][i], factors },
+        proposition: { montant: 3500, status: 'en_attente' },
+        demande: { documents: [items[0].id], fournie: i % 2 === 0 },
+      });
+      Nota.notary.openRetain(bid);
+      await wait(5); // the DOM translation observer
+      const dlg = $(doc, 'nc-retenir-dialog');
+      assert.equal(dlg.open, true, svc.id);
+      assert.equal($(doc, 'nc-retenir-svc').textContent, lang === 'en' ? svc.nomEn : svc.nom);
+      assert.equal(dlg.querySelector('details'), null, 'no offer information behind a disclosure');
+      assert.equal($(doc, 'nc-retenir-lender').hidden, !lenderApplies);
+      assert.equal($(doc, 'nc-retenir-lender-label').hidden, !lenderApplies);
+      assert.equal($(doc, 'nc-retenir-expiry').hidden, false);
+      assert.ok($(doc, 'nc-retenir-date').textContent.includes(bid.dateISO.slice(0, 4)), 'the year is explicit');
+      assert.equal($(doc, 'nc-retenir-distance').textContent, i === 0 ? '≈ 0 km' : tr('Non précisée'));
+      const missing = [...dlg.querySelectorAll('.nc-retenir-missing li')].map((n) => n.textContent);
+      assert.deepEqual(missing, [...new Set(Array.from(items, (x) => tr(x.nom)))], svc.id + ': every missing label is individually readable');
+      assert.deepEqual([...dlg.querySelectorAll('.nc-retenir-factor-list li')].map((n) => n.textContent), factors);
+      assert.equal(dlg.querySelector('.nc-ready').dataset.ready, String(bid.ready), 'readiness comes from the API');
+      assert.ok(dlg.textContent.includes(tr('Les documents restent à vérifier.')) || dlg.textContent.includes(tr('L’état du dossier indique si les renseignements requis et le consentement sont reçus. Les documents restent à vérifier.')));
+      assert.ok($(doc, 'nc-retenir-status').textContent.includes(tr(items[0].nom)), 'requested IDs become readable labels');
+      assert.ok($(doc, 'nc-retenir-status').textContent.includes(tr(D.money(3500))), 'the proposed price stays distinct from the offer');
+      for (const heading of ['Honoraires et paiement', 'Signature et déplacement', 'Dossier et documents', 'Conditions d’annulation et de désistement']) {
+        assert.ok(dlg.textContent.includes(tr(heading)), heading);
+      }
+      assert.equal($(doc, 'nc-retenir-go-amt').textContent, tr(D.money(bid.montant)));
+      const answers = Object.fromEntries(svc.pricing.criteria.map(c => [c.id, c.type === 'choice' ? c.options[0].id : c.type === 'flag' ? false : 2]));
+      bid.details = D.notaryOfferDetails(svc.id, answers);
+      Nota.notary.openRetain(bid);
+      await wait(5);
+      const rows = [...doc.querySelectorAll('.nc-retenir-detail')];
+      assert.equal(rows.length, svc.pricing.criteria.length, 'all criteria, including simple answers');
+      for (const [n, row] of rows.entries()) {
+        assert.equal(row.querySelector('dt').textContent, tr(bid.details[n].label));
+        assert.equal(row.querySelector('dd').textContent, tr(bid.details[n].value));
+      }
+      $(doc, 'nc-retenir-dialog').querySelector('.nc-retenir').scrollTop = 900;
+      click($(doc, 'nc-retenir-later'));
+    }
+    assert.equal(calls.filter((c) => c.path.includes('/notary/bids/accept')).length, 0, 'reviewing never accepts');
+    win.close();
+  });
+}
+
+test('offer review handles absent, empty and malformed optional details without stale content or false completeness', async () => {
+  const { win, doc, Nota } = await bootSignedIn();
+  for (const missing of [undefined, null, {}, 'unavailable', []]) {
+    Nota.notary.openRetain(openBid({ missing, complexity: { level: 'standard', factors: {} }, preteur: null, deplacement: null, prefixe: null, distanceKm: null, expiresOn: 'invalid' }));
+    assert.equal($(doc, 'nc-retenir-dialog').open, true);
+    assert.equal($(doc, 'nc-retenir-dossier').querySelectorAll('li').length, 0);
+    assert.match($(doc, 'nc-retenir-dossier').textContent, Array.isArray(missing) ? /Aucun élément manquant signalé/ : /n’est pas disponible/);
+    assert.equal($(doc, 'nc-retenir-dep').textContent, 'Non précisé');
+    assert.equal($(doc, 'nc-retenir-sector').textContent, 'Non précisé');
+    assert.equal($(doc, 'nc-retenir-lender').textContent, 'Non précisé');
+    assert.equal($(doc, 'nc-retenir-lender').hidden, false, 'lender still applies to an older mortgage offer');
+    assert.equal($(doc, 'nc-retenir-expiry').hidden, true);
+    assert.equal($(doc, 'nc-retenir-status').textContent, '');
+    assert.equal(doc.querySelector('.nc-retenir').scrollTop, 0, 'a new offer starts at its heading');
+    click($(doc, 'nc-retenir-later'));
+  }
+  const literal = '<img src=x onerror=alert(1)>';
+  Nota.notary.openRetain(openBid({ missing: ['Relevé hypothécaire', '', null, {}, 'Relevé hypothécaire', literal], complexity: { level: 'simple', factors: [literal] } }));
+  assert.deepEqual([...doc.querySelectorAll('.nc-retenir-missing li')].map((li) => li.textContent), ['Relevé hypothécaire', literal]);
+  assert.equal($(doc, 'nc-retenir-dialog').querySelector('img'), null, 'API labels stay literal text');
+  click($(doc, 'nc-retenir-later'));
+  Nota.notary.openRetain(openBid({ serviceId: 'testament', preteur: null, missing: [], complexity: null, proposition: null, demande: null }));
+  assert.equal($(doc, 'nc-retenir-status').childElementCount, 0);
+  assert.equal(doc.querySelectorAll('.nc-retenir-missing li').length, 0);
+  assert.equal(doc.querySelectorAll('#nc-retenir-signals .nc-complexity').length, 0);
+  assert.equal($(doc, 'nc-retenir-lender').hidden, true);
+  win.close();
+});
+
+for (const status of [404, 409]) {
+  test(`an offer taken or removed during review (${status}) never creates a local retention`, async () => {
+    const { win, doc, Nota } = await bootSignedIn({ bids: [openBid()] });
+    const originalFetch = win.fetch;
+    win.fetch = (url, init) => String(url).includes('/notary/bids/accept')
+      ? Promise.resolve({ ok: false, status, json: async () => ({ errors: [{ message: 'Demande indisponible.' }] }) })
+      : originalFetch(url, init);
+    click(doc.querySelector('#notary-open-list .nc-accept'));
+    click($(doc, 'nc-retenir-go'));
+    await waitUntil(() => !$(doc, 'nc-retenir-dialog').open);
+    assert.equal(Nota.notary.retainedFor('demo@etude.ca').length, 0);
+    assert.equal(doc.querySelector('#notary-open-list .nc-card[data-id="b-1"]'), null);
+    win.close();
+  });
+}

@@ -182,6 +182,7 @@ test('sans facturation, la feuille dit qu’aucune garantie n’est en place plu
   click(doc.querySelector('#notary-open-list .nc-card[data-id="b1"] .nc-accept'));
   await wait(20);
   assert.match($(doc, 'nc-retenir-caution').textContent, /Aucune garantie en place/);
+  assert.doesNotMatch($(doc, 'nc-retenir-caution').textContent, /est validée|est réservée/, 'the demo never claims a real card was validated or reserved');
 });
 
 // --- 3. l'acte RETENU : c'est là que la garantie compte le plus ---------------

@@ -270,3 +270,37 @@ test('failed delivery retries remain visible and read-only operators cannot trig
   assert.ok(readonly.win.document.querySelector('.support-email-state'));
   assert.equal(readonly.win.document.querySelector('.support-email-state button'), null);
 });
+
+test('a reviewed answer draft survives polling and navigation; approval and withdrawal are explicit writes', async () => {
+  const state = api();
+  let knowledge = { revision: 0, entries: [], limites: { questionMax: 500, messageMax: 2000 } };
+  const reviews = [];
+  state.override = async call => {
+    if (call.path !== '/support-knowledge') return null;
+    if (call.method === 'GET') return [200, structuredClone(knowledge)];
+    reviews.push(call.body);
+    knowledge = { revision: knowledge.revision + 1, entries: call.body.active === false ? [] : [{ ...call.body, id: 'approved-one', active: true }] };
+    return [200, structuredClone(knowledge)];
+  };
+  const { win } = await boot({ state });
+  await select(win, 'thread-two');
+  win.document.querySelector('.support-learn').click();
+  $(win, 'knowledge-fr-question').value = 'Question générale ?';
+  $(win, 'knowledge-en-question').value = 'General question?';
+  $(win, 'knowledge-en-answer').value = 'A reviewed general answer.';
+  assert.equal(reviews.length, 0, 'drafting does not publish');
+  $(win, 'support-refresh').click();
+  await select(win, 'thread-one');
+  assert.equal($(win, 'knowledge-en-answer').value, 'A reviewed general answer.');
+  $(win, 'knowledge-approved').checked = true;
+  $(win, 'support-knowledge-form').dispatchEvent(new win.Event('submit', { bubbles: true, cancelable: true }));
+  await until(() => reviews.length === 1 && $(win, 'support-knowledge-form').hidden);
+  assert.equal(reviews[0].threadId, 'thread-two');
+  assert.equal(reviews[0].messageId, 'nota-two');
+  assert.equal(reviews[0].approved, true);
+  assert.equal(reviews[0].revision, 0);
+  win.document.querySelector('.support-knowledge-entry button').click();
+  await until(() => reviews.length === 2);
+  assert.equal(reviews[1].active, false);
+  assert.equal(reviews[1].revision, 1);
+});

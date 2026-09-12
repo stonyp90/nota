@@ -15,6 +15,12 @@ const SHELL = [
   '/', '/index.html', '/app.js', '/acquisition.js', '/analytics.js', '/domain.js', '/i18n.js', '/styles.css',
   '/favicon.svg', '/icon-192.png', '/icon-512.png', '/manifest.webmanifest',
   '/manifest.en.webmanifest',
+  /* Les polices vivent chez nous depuis le 2026-09-12 : sans elles dans la
+     coquille, une visite hors ligne retombait sur la police système et la page
+     changeait de visage. Leur nom ne porte pas d'empreinte — leur contenu ne
+     bouge pas — donc build.mjs n'a rien à y réécrire. */
+  '/fonts/inter-latin.woff2', '/fonts/inter-latin-ext.woff2',
+  '/fonts/sora-latin.woff2', '/fonts/sora-latin-ext.woff2',
 ]; /* build.mjs rewrites this list with the hashed filenames */
 
 self.addEventListener('install', (e) => {
@@ -35,9 +41,10 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return; // never cache POST/PUT (offers, notary actions)
   const url = new URL(req.url);
-  // Same origin only: the font host (rsms.me), Stripe and the signed document
-  // URLs (ADR 0032: bytes go straight to the bucket) are never cached here
-  // and never answered by this worker — the browser fetches them itself.
+  // Same origin only: Stripe and the signed document URLs (ADR 0032: bytes go
+  // straight to the bucket) are never cached here and never answered by this
+  // worker — the browser fetches them itself. The fonts, themselves same-origin
+  // since 2026-09-12, go through the hashed-asset path below.
   if (url.origin !== self.location.origin) return;
 
   // API: network-first, no cache; graceful offline JSON.

@@ -678,7 +678,11 @@ test('notaires landing preserves empty slots across live inventory refreshes', a
     assert.equal(grid.querySelectorAll('.nc-live-card').length, Math.min(count, 12));
     // Sparse inventory uses a compact six-slot footprint. Once six real cards
     // exist, the grid grows only for actual demand instead of a hidden reserve.
-    assert.equal(grid.querySelectorAll('.nc-live-slot').length, Math.max(0, 6 - Math.min(count, 12)));
+    // At zero there is no inventory to keep a footprint for: the grid shrinks
+    // to a compact three-slot band and the next-step block below carries the
+    // page. Sparse-but-real inventory still holds the six-slot footprint.
+    const expectedSlots = count === 0 ? 3 : Math.max(0, 6 - Math.min(count, 12));
+    assert.equal(grid.querySelectorAll('.nc-live-slot').length, expectedSlots);
     assert.equal(grid.querySelectorAll('.nc-live-more').length, count > 12 ? 1 : 0);
     for (const slot of grid.querySelectorAll('.nc-live-slot')) {
       assert.equal(slot.textContent, 'Pas d’offre');
@@ -688,9 +692,21 @@ test('notaires landing preserves empty slots across live inventory refreshes', a
     }
     assert.equal(grid.classList.contains('nc-live-grid--empty'), count === 0);
     assert.equal(grid.querySelectorAll('.nc-live-empty').length, count === 0 ? 1 : 0);
+    const next = $(doc, 'notary-live-next');
     if (count === 0) {
-      assert.equal(grid.querySelector('[role="status"] strong').textContent, 'Pas d’offres');
+      assert.equal(grid.querySelector('[role="status"] strong').textContent, 'Aucune demande ouverte');
       assert.equal(grid.querySelectorAll('button').length, 0, 'no fake offers at zero');
+      // A notary who arrives on an empty carnet must still have somewhere to
+      // go: the agenda subscription and the free account, both real actions.
+      assert.ok(next, 'the empty carnet offers a next step');
+      assert.equal(next.hidden, false, 'the next step is visible at zero');
+      assert.equal(next.querySelectorAll('button').length, 2, 'two next steps, no more');
+      assert.ok(
+        next.textContent.includes('agenda'),
+        'the first next step is the agenda subscription',
+      );
+    } else {
+      assert.equal(next && next.hidden, true, 'the next step hides as soon as a demand is open');
     }
   }
 });
@@ -715,11 +731,19 @@ test('notary landing presents the assisted preparation as a truthful free beta',
   const note = doc.getElementById('notary-ai-beta-note');
   assert.ok(note, 'the notary landing names the beta');
   assert.match(note.textContent, /bêta gratuite/);
-  assert.match(note.textContent, /système spécialisé/);
-  assert.match(note.textContent, /algorithmes propriétaires/);
-  assert.match(note.textContent, /pourra évoluer vers un abonnement/);
+  assert.match(note.textContent, /IA propriétaire/);
+  // ADR 0052 — les deux voies et la seule différence entre elles.
+  assert.match(note.textContent, /Si vous payez, vous ne devez rien à l’apprentissage/);
+  assert.match(note.textContent, /Si vous ne payez pas, vos corrections servent à améliorer le système/);
+  // Ce que le notaire ne PEUT pas donner : le secret professionnel est celui
+  // de son client, et rien de la matière du dossier ne sert à l'apprentissage.
+  assert.match(note.textContent, /Jamais un document de votre client/);
+  assert.match(note.textContent, /le secret professionnel ne vous appartient pas/);
+  // Refuser les deux ne retire rien du marché — la condition qui rend le
+  // consentement libre (art. 14, Loi 25).
+  assert.match(note.textContent, /ne vous retire rien du marché/);
+  // Et rien n'est encore en vente : la pastille dit « Bientôt ».
   assert.match(note.textContent, /aucun prix ni échéance n’est fixé/);
-  assert.match(note.textContent, /ne servent pas à entraîner les modèles/);
 });
 
 test('notary beta teaser opens from the information button, not the copy', async () => {
@@ -742,9 +766,10 @@ test('notary beta notice translates in English and stays off the customer surfac
   const { doc } = await boot({ url: 'https://nota.example/?lang=en' });
   const note = doc.getElementById('notary-ai-beta-note');
   assert.match(note.textContent, /free beta/);
-  assert.match(note.textContent, /proprietary algorithms/);
-  assert.match(note.textContent, /may evolve into a subscription/);
-  assert.match(note.textContent, /not used to train the models/);
+  assert.match(note.textContent, /proprietary AI/);
+  assert.match(note.textContent, /If you pay, you owe the learning program nothing/);
+  assert.match(note.textContent, /Never a document belonging to your client/);
+  assert.match(note.textContent, /no price and no date have been set/);
   assert.equal(doc.querySelector('#pane-carnet #notary-ai-beta-note'), null,
     'the beta notice belongs only to the notary landing');
 });
@@ -1870,15 +1895,17 @@ test('onboarding: choosing the notary role renders its 3 steps + CTA, and back r
 });
 
 // 24. Completing the client CTA sets the flag, closes the guide, and routes into
-//     the real offer flow (carnet tab + the day dialog opens).
-test('onboarding: the client CTA flags onboarded, closes, and opens the offer flow', async () => {
+//     the calendar, where the client explicitly chooses their date.
+test('onboarding: the client CTA flags onboarded, closes, and focuses the calendar', async () => {
   const { doc, win, Nota } = await boot();
   doc.querySelector('#onb-view-role .onb-choice[data-role="client"]').click();
   $(doc, 'onb-cta').click();
   assert.equal(win.localStorage.getItem('nota.onboarded.v1'), '1', 'onboarded flag is set');
   assert.equal($(doc, 'onboarding-dialog').open, false, 'the guide is closed');
   assert.equal(Nota.state.tab, 'carnet', 'routed into the carnet');
-  assert.equal($(doc, 'day-dialog').open, true, 'the reserve/offer day dialog opened');
+  assert.equal($(doc, 'day-dialog').open, false, 'no date chosen on the client’s behalf');
+  assert.ok(doc.activeElement.matches('#cal-grid .cal-cell:not([aria-disabled="true"])'));
+  assert.equal($(doc, 'client-walkthrough').dataset.step, '0', 'the optional guide starts in the calendar');
 });
 
 // 25. Completing the notary CTA routes to the notaires tab.
@@ -2381,7 +2408,7 @@ test('ambient gradients live on the background; every component is flat and opaq
   // and shadow carry it, like every other big container.
   assert.ok(blocks('.panel').some((b) => /var\(--surface\)/.test(b) && !/border:\s*1px/.test(b)),
     'the panel base is borderless on its flat surface');
-  // The calendar wears the shared skin, now at 95 % (owner, 2026-08-27:
+  // The calendar wears the shared skin, now at 84 % (owner, 2026-08-27:
   // « blanc c'est très beau… mais on pourrait mettre un tout petit peu
   // d'opacité, genre quatre-vingt-quinze pour cent » — superseding the
   // earlier 90 % call). The register is one token, --surface-veil, and it
@@ -2390,25 +2417,23 @@ test('ambient gradients live on the background; every component is flat and opaq
   // Element opacity stays banned — the veil lives in the background alpha.
   assert.match(css, /--surface-veil:\s*color-mix\(in srgb,\s*var\(--surface\)\s*var\(--surface-veil-mix\),\s*transparent\)/,
     'the veil is one shared token, mixed from the theme surface');
-  assert.match(css, /--surface-veil-mix:\s*95%/, 'the veil stays a light touch — 95 %');
+  assert.match(css, /--surface-veil-mix:\s*84%/, 'the owner’s lighter panel skin — 84 %');
   assert.ok(blocks('#carnet-panel').some((b) => /background:\s*var\(--surface-veil\)/.test(b) && /backdrop-filter:\s*blur/.test(b)),
     'the carnet panel wears the veil, blurred so the grid stays legible');
   assert.ok(!blocks('#carnet-panel').some((b) => /(?<!b)opacity:/.test(b)),
     'no element opacity — the veil is background alpha, text stays crisp');
-  // The market rows' hover wash (Refinancement / Financement on the landing)
-  // follows the same register: the hover surface mixes down through the veil
-  // instead of landing as an opaque card over the drifting background
-  // (owner, 2026-08-27: « le hover sur le financement est bizarre »).
+  // The shared hover veil remains available to filled surfaces.
   assert.match(css, /--surface-hover-veil:\s*color-mix\(in srgb,\s*var\(--surface-hover\)\s*var\(--surface-veil-mix\),\s*transparent\)/,
     'a hover veil token exists, mixed from the theme hover surface');
-  assert.ok(blocks('.pulse-row:hover').some((b) => /background:\s*var\(--surface-hover-veil\)/.test(b)),
-    'the market row hover wears the translucent hover veil, not the opaque wash');
+  // The market strip stays open on the page, including hover and selection.
+  assert.match(css, /\.pulse-row:hover \.pulse-svc,\s*\.pulse-row\.is-on \.pulse-svc\s*\{[^}]*text-decoration:\s*underline/,
+    'market interactions underline the service without a card surface');
   // Components that wear the brand wash sit DIRECTLY on the drifting page
   // background — their fill must be the OPAQUE tint (mixed down to the
   // surface), never the translucent --brand-tint, which stays reserved for
   // the background layers (body fade, --wash-glow, the intro film).
   assert.match(css, /--brand-tint-solid:\s*color-mix/, 'an opaque brand tint exists for component fills');
-  for (const sel of ['.pr-step-ic', '.cnq-badge', '.nc-live-more:hover']) {
+  for (const sel of ['.cnq-badge', '.nc-live-more:hover']) {
     assert.ok(blocks(sel).some((b) => /var\(--brand-tint-solid(-strong)?\)/.test(b)),
       sel + ' fills with the opaque tint');
     assert.ok(!blocks(sel).some((b) => /var\(--brand-tint\)[^-]/.test(b)),
@@ -2496,7 +2521,11 @@ const key = (win, elmt, k) =>
 
 test('header tabs: roving tabindex and arrow-key activation', async () => {
   const { win, doc, Nota } = await boot();
-  const tabs = all(doc, '.nav-tabs .nav-tab');
+  // The arrow walk covers the doors this visitor HAS. « Signature » needs an
+  // account (portes-authentifiees.test.mjs), so an anonymous visitor's strip is
+  // the three public doors and the walk wraps after the third.
+  const tabs = all(doc, '.nav-tabs .nav-tab').filter((t) => !t.hidden);
+  assert.equal(tabs.length, 3, 'three public doors while signed out');
   assert.equal(tabs[0].tabIndex, 0, 'selected tab is in the Tab order');
   assert.equal(tabs[1].tabIndex, -1, 'unselected tab is reached by arrows, not Tab');
 
@@ -2510,13 +2539,11 @@ test('header tabs: roving tabindex and arrow-key activation', async () => {
 
   key(win, tabs[1], 'ArrowRight'); // third door
   assert.equal(Nota.state.tab, 'partenaires');
-  key(win, tabs[2], 'ArrowRight'); // Beta is the fourth door
-  assert.equal(Nota.state.tab, 'beta');
-  key(win, tabs[3], 'ArrowRight'); // wraps around
+  key(win, tabs[2], 'ArrowRight'); // wraps around
   assert.equal(Nota.state.tab, 'carnet');
   key(win, tabs[0], 'End');
-  assert.equal(Nota.state.tab, 'beta');
-  key(win, tabs[3], 'Home');
+  assert.equal(Nota.state.tab, 'partenaires');
+  key(win, tabs[2], 'Home');
   assert.equal(Nota.state.tab, 'carnet');
 
   // A pane with no header tab (profil) must not strand the tablist at -1/-1.
@@ -2713,6 +2740,7 @@ test('calendar CSS: the urgency price badge flows, it is never absolutely positi
   }
 });
 
+
 test('calendar CSS: compact widths give the next-availability cue the full metadata track', () => {
   const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
   const compact = css.slice(css.indexOf('@media (max-width: 480px)'));
@@ -2764,8 +2792,16 @@ test('the hero carries one product description, shown at every width', async () 
   // The duplicates are gone: no second pitch paragraph, no inline step list.
   assert.equal(doc.querySelector('#pane-carnet .intro--hero .hero-points'), null,
     'the hero step list is gone (the steps live in the guide)');
-  const paras = doc.querySelectorAll('#pane-carnet .intro--hero .intro-main > p');
-  assert.equal(paras.length, 1, 'one paragraph: the tagline');
+  // Un SEUL argumentaire (propriétaire, 2026-08-25). Les paragraphes qui
+  // suivent ne sont pas des pitchs concurrents : ce sont des mentions d'aide,
+  // et elles portent la classe qui le dit. Depuis le 2026-09-12, la ligne
+  // « publier ne coûte rien » vit sous les deux actions, là où on décide.
+  const paras = [...doc.querySelectorAll('#pane-carnet .intro--hero .intro-main > p')];
+  assert.equal(paras[0], tag, 'the tagline leads');
+  for (const para of paras.slice(1)) {
+    assert.ok(para.classList.contains('help'),
+      'a second hero paragraph is fine print, never a second pitch: ' + para.textContent.trim());
+  }
 
   const css = readFileSync(fileURLToPath(new URL('../public/styles.css', import.meta.url)), 'utf8');
   assert.ok(!/\.hero-tagline\s*\{[^}]*display:\s*none/.test(css),

@@ -339,6 +339,9 @@
     { region: 'ob-week', slot: '.nc-week-head' },
     { region: 'ob-bid', slot: '.nc-week-head' },
     { region: 'notary-live', slot: '.nc-live-head' },        // le fil du notaire
+    // La vitrine de l'arrivée : ses prix sont calibrés sur state.monthBids
+    // comme ceux du calendrier, donc inventés quand le mois l'est.
+    { region: 'ig-carnet', slot: '.ig-cal-head' },
   ];
   function demoMark() {
     var sp = el('span', 'demo-mark', 'démonstration');
@@ -1784,13 +1787,50 @@
   // accountRole() below, which is derived from a real session — this is only a
   // preference, used to open the right door (auth modal, onboarding guide).
   var LS_ROLE = 'nota.role.v1';
-  function roleGet() { var r = flagGet(LS_ROLE); return r === 'notary' || r === 'client' ? r : ''; }
-  function roleSet(role) { if (role === 'notary' || role === 'client') flagSet(LS_ROLE, role); }
+  function roleGet() { var r = flagGet(LS_ROLE); return r === 'notary' || r === 'client' || r === 'partner' ? r : ''; }
+  function roleSet(role) { if (role === 'notary' || role === 'client' || role === 'partner') flagSet(LS_ROLE, role); }
 
   function accountRole() {
     if (nc && nc.token) return 'notary';
     if (profileGet().courriel) return 'client';
     return 'anon';
+  }
+
+  // ---------------------------------------------------------------------------
+  // Doors that need an account
+  //
+  // The owner, 2026-09-12: « les sections qui doivent nécessiter une
+  // authentification ne sont pas disponibles. Donc la signature ne doit pas
+  // être disponible tant et aussi longtemps que l'usager ne soit pas signé.
+  // Faire de même pour tous les autres. »
+  //
+  // So a signed-out visitor is not shown a door they cannot walk through: the
+  // tab goes from the header and the drawer, and a deep link to the pane lands
+  // on the carnet with the sign-in sheet open instead of a dead end.
+  //
+  // `profil` and `dossier` are NOT on this list, and that is deliberate: they
+  // are where a visitor BECOMES authenticated. The profile is where a client
+  // enters the address that signs them in on this device, and a client who
+  // published without an account still holds that offer's bearer here — their
+  // dossier is reachable from the post-publish card, authenticated by token
+  // rather than by profile. Closing either would lock people out of their own
+  // sign-in surface. The doors that need an account, and have nothing to offer
+  // without one, are the list below.
+  // ---------------------------------------------------------------------------
+  var GATED_PANES = ['beta'];
+
+  function paneNeedsAccount(tab) {
+    return accountRole() === 'anon' && GATED_PANES.indexOf(tab) !== -1;
+  }
+
+  // The header tab and the drawer link for every closed door.
+  function syncGatedDoors() {
+    GATED_PANES.forEach(function (tab) {
+      var closed = paneNeedsAccount(tab);
+      document.querySelectorAll('.nav-tab[data-tab="' + tab + '"], .mnav-link[data-tab="' + tab + '"]').forEach(function (el) {
+        el.hidden = closed;
+      });
+    });
   }
 
   // Small inline icon for an account-menu action row (18px, currentColor).
@@ -2016,7 +2056,7 @@
       try { dlg.showModal(); } catch (e) { /* already open */ }
       setTimeout(function () { try { (em || dlg).focus(); } catch (e) {} }, 30);
     } else { // jsdom / no <dialog> support: fall back to the profile identity path
-      setTab('profil', { focus: false });
+      setTab('profil', { focus: false, gate: false });
       var f = $('p-courriel'); if (f) { try { f.focus(); } catch (e) {} }
     }
   }
@@ -2527,6 +2567,7 @@
   function onbOpen() {
     onbCount('shown');
     var known = roleGet();
+    if (known === 'partner') { partnerStart(); return; }
     if (known && ONB_FLOWS[known]) onbShowStepsView(known);
     else onbShowRoleView();
     toggleNotifPanel(false);
@@ -2559,8 +2600,7 @@
     onbOpen();
   }
 
-  // The CTA: remember we're done, close, and route into the REAL component —
-  // client reuses the hero reserve path, notary jumps to the notaries tab.
+  // After the product explanation, coach the client in the actual carnet.
   function onbComplete(explore) {
     var dlg = $('onboarding-dialog');
     // roleGet() is the source of truth (onbShowStepsView persisted it); the
@@ -2569,17 +2609,152 @@
     onbCount(explore === true ? 'explored' : 'completed');
     onbMarkSeen();
     if (dlg && dlg.close) { try { dlg.close(); } catch (e) {} }
-    // "Explorer le carnet d'abord": land on the marketplace itself. The primary
-    // CTA chains straight into the offer modal, which is the right default but a
-    // jarring modal-to-modal jump for anyone who just wants to look around.
     if (explore === true) { setTab(role === 'notary' ? 'notaires' : 'carnet'); return; }
     if (role === 'notary') {
       setTab('notaires');
     } else {
-      var heroCta = $('cta-reserver');
-      if (heroCta) heroCta.click(); // reuse the exact hero reserve flow
-      else openOfferFlow();
+      setTab('carnet');
+      clientWalkStart(true);
     }
+  }
+
+  // Optional, contextual coaching. The real form owns its values, validation
+  // and publication; this guide only points to controls or invokes Continue.
+  // Put the card INSIDE an open dialog so native modal inertness never traps it.
+  var clientWalk = null;
+  var LS_CLIENT_WALK = 'nota.clientWalkthrough.v1';
+  var CLIENT_WALK_STEPS = [
+    ['Votre date de signature', 'Prenons un refinancement comme exemple. Cliquez sur la date qui vous convient, même si elle contient déjà des offres.'],
+    ['Votre acte', 'Pour notre exemple, choisissez « Refinancement ». Vous pouvez aussi choisir l’acte dont vous avez besoin.'],
+    ['Votre situation', 'Répondez aux questions avec les renseignements de votre dossier. Le notaire pourra ainsi évaluer votre demande.'],
+    ['Votre prix', 'Vérifiez votre offre, le prix du service Nota et le total. Vous pouvez ajuster votre offre avant de continuer.'],
+    ['Vos coordonnées', 'Indiquez le lieu de signature et vos coordonnées pour qu’un notaire puisse vous joindre.'],
+    ['À vous de publier', 'Vérifiez votre demande, puis cliquez sur « Publier mon offre » lorsque vous êtes prêt. Un notaire devra la retenir pour confirmer la suite.']
+  ];
+  function clientWalkUnmark() {
+    if (!clientWalk || !clientWalk.target) return;
+    var target = clientWalk.target;
+    target.classList.remove('client-walk-target');
+    var ids = (target.getAttribute('aria-describedby') || '').split(/\s+/).filter(function (id) { return id && id !== 'client-walk-copy'; });
+    if (ids.length) target.setAttribute('aria-describedby', ids.join(' '));
+    else target.removeAttribute('aria-describedby');
+    clientWalk.target = null;
+  }
+  function clientWalkStop(restoreFocus) {
+    if (!clientWalk) return;
+    var walk = clientWalk, restore = restoreFocus === true || walk.card.contains(document.activeElement) ? walk.target : null;
+    clientWalkUnmark();
+    walk.observer.disconnect();
+    document.removeEventListener('keydown', clientWalkKey, true);
+    walk.card.remove();
+    clientWalk = null;
+    flagSet(LS_CLIENT_WALK, '1');
+    flagSet(LS_INTRO, '1');
+    if (restore && restore.isConnected) clientWalkFocus(restore);
+  }
+  function clientWalkKey(event) {
+    if (event.key !== 'Escape' || !clientWalk) return;
+    // Nested selects retain their own Escape behavior. Otherwise Escape skips
+    // only the guide, keeping the client's entered answers in the open form.
+    if ($('day-dialog').open && document.querySelector('#day-dialog .nselect-btn[aria-expanded="true"]')) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    clientWalkStop();
+  }
+  function clientWalkPoint() {
+    if (!clientWalk || !clientWalk.target) return;
+    var target = clientWalk.target;
+    if (target.scrollIntoView) target.scrollIntoView({ block: $('day-dialog').open ? 'center' : 'start', behavior: 'instant' });
+    clientWalkFocus(target);
+  }
+  function clientWalkFocus(target) {
+    var control = target.matches('button, input, [tabindex]') ? target
+      : target.querySelector('button:not([disabled]), input:not([type="hidden"]):not([disabled])');
+    if (control && control.matches('#cal-grid .cal-cell')) {
+      // Keyboard arrows use the ISO date in state, not document.activeElement.
+      // Keep that anchor and the grid's single tab stop with the shown date.
+      state.focusDate = control.dataset.date;
+      Array.prototype.forEach.call($('cal-grid').querySelectorAll('.cal-cell'), function (cell) {
+        cell.tabIndex = cell === control ? 0 : -1;
+      });
+    }
+    if (control && control.focus) control.focus({ preventScroll: true });
+  }
+  function clientWalkSync() {
+    if (!clientWalk) return;
+    if (state.tab !== 'carnet') { clientWalkStop(); return; }
+    var dlg = $('day-dialog'), form = $('offer-form');
+    if (form && form.dataset.at === 'done') { clientWalkStop(); return; }
+    var open = !!(dlg && dlg.open), preview = open && dlg.dataset.interaction === 'preview';
+    var step = !open || preview ? 0 : bookAt;
+    if (step === 4 && !bookScreenDue(4)) step = 5;
+    var target = step === 0 ? (preview ? document.querySelector('#day-preview > button')
+      : document.querySelector('#cal-grid .cal-cell[data-date="' + firstStandardDate() + '"]')
+        || document.querySelector('#cal-grid .cal-cell:not(.is-out):not(.is-past)'))
+      : step === 1 ? $('o-service-chips') : step === 2 ? $('o-criteria-step')
+      : step === 3 ? document.querySelector('.book-step-offer') : step === 4 ? $('identity-rows') : $('offer-submit');
+    var card = clientWalk.card, host = open ? dlg : document.body;
+    if (card.parentNode !== host) {
+      if (open) dlg.insertBefore(card, form);
+      else host.appendChild(card);
+    }
+    if (clientWalk.target !== target) {
+      clientWalkUnmark();
+      clientWalk.target = target;
+      if (target) {
+        target.classList.add('client-walk-target');
+        target.setAttribute('aria-describedby', ((target.getAttribute('aria-describedby') || '') + ' client-walk-copy').trim());
+      }
+    }
+    var key = String(step) + (preview ? '-preview' : '');
+    if (card.dataset.step === key) return;
+    card.dataset.step = key;
+    clientWalk.step = step;
+    $('client-walk-progress').textContent = T('Guide interactif') + ' · ' + (step + 1) + ' / ' + CLIENT_WALK_STEPS.length;
+    $('client-walk-title').textContent = T(CLIENT_WALK_STEPS[step][0]);
+    $('client-walk-copy').textContent = T(preview
+      ? 'Touchez « Préparer mon offre » pour ajouter votre projet et votre prix à cette date.'
+      : CLIENT_WALK_STEPS[step][1]);
+    $('client-walk-next').textContent = T(step === 5 ? 'Terminer le guide' : step === 0
+      ? (preview ? 'Préparer mon offre' : 'Me montrer') : step === 4 ? 'Me montrer' : 'Continuer');
+  }
+  function clientWalkStart(replay) {
+    if (clientWalk || state.tab !== 'carnet' || (!replay && flagGet(LS_CLIENT_WALK))) return;
+    // The product explanation is already complete. A reload must not replace
+    // this optional guide with the older first-visit product dialog.
+    onbMarkSeen();
+    roleSet('client');
+    var card = el('aside', 'client-walk'); card.id = 'client-walkthrough';
+    card.setAttribute('aria-labelledby', 'client-walk-title');
+    var top = el('div', 'client-walk-top');
+    var progress = el('span', 'client-walk-progress'); progress.id = 'client-walk-progress';
+    var skip = el('button', 'client-walk-skip', T('Passer')); skip.type = 'button'; skip.id = 'client-walk-skip';
+    skip.addEventListener('click', function () { clientWalkStop(true); });
+    top.appendChild(progress); top.appendChild(skip); card.appendChild(top);
+    var live = el('div'); live.setAttribute('aria-live', 'polite'); live.setAttribute('aria-atomic', 'true');
+    var title = el('h2'); title.id = 'client-walk-title';
+    var copy = el('p'); copy.id = 'client-walk-copy';
+    live.appendChild(title); live.appendChild(copy); card.appendChild(live);
+    var next = el('button', 'btn btn-primary'); next.type = 'button'; next.id = 'client-walk-next';
+    next.addEventListener('click', function () {
+      if (!clientWalk) return;
+      var step = clientWalk.step;
+      if (step === 5) { clientWalkStop(true); return; }
+      if (step === 0 && $('day-dialog').open) { clientWalk.target.click(); return; }
+      if (step === 0 || step === 4) { clientWalkPoint(); return; }
+      bookForward();
+      clientWalkSync();
+    });
+    card.appendChild(next);
+    var observer = new MutationObserver(clientWalkSync);
+    clientWalk = { card: card, observer: observer, target: null, step: 0 };
+    observer.observe($('day-dialog'), { attributes: true, attributeFilter: ['open', 'data-interaction'] });
+    observer.observe($('offer-form'), { attributes: true, attributeFilter: ['data-at'] });
+    observer.observe($('offer-submit'), { attributes: true, attributeFilter: ['disabled'] });
+    observer.observe($('cal-grid'), { childList: true });
+    document.addEventListener('keydown', clientWalkKey, true);
+    clientWalkSync();
+    clientWalkPoint();
   }
 
   // Wired to the dialog's `close` event, i.e. the ambiguous exits (✕ / Escape /
@@ -2664,6 +2839,8 @@
     // header shows the explicit login/signup pair instead. Everything below
     // paints the inside of the wrap, so the anon render stops here.
     var acctWrap = document.querySelector('.acct-wrap'); if (acctWrap) acctWrap.hidden = role === 'anon';
+    // Signing in or out opens and closes the gated doors in the same breath.
+    syncGatedDoors();
     if (role === 'anon') return;
     var p = profileGet();
 
@@ -3013,6 +3190,7 @@
       // tier is a pure function of the notice, so an empty day has a price too,
       // and that is precisely the day a client is deciding about.
       if (!isPast) {
+        cell.setAttribute('aria-haspopup', 'dialog');
         var tier = D.tierById(D.tierForDays(D.daysBetween(today, iso)));
         if (tier) {
           cell.dataset.tier = tier.id;
@@ -3240,7 +3418,7 @@
   // that two or three amounts cannot carry.
   var PULSE_REPERE_MIN = 3;
 
-  function pulseRow(s, active, busiest) {
+  function pulseRow(s, active, busiest, showRepere) {
     var short = s.nom.split(' ')[0];
     var row = el('button', 'pulse-row' + (active ? ' is-on' : ''));
     row.type = 'button';
@@ -3248,7 +3426,7 @@
     row.setAttribute('aria-pressed', active ? 'true' : 'false');
     // The row is several fragments; name the WHOLE control once so a screen
     // reader announces the figures and what clicking it does, not "788 $ 10 offres".
-    var hasRepere = s.median != null && s.total >= PULSE_REPERE_MIN;
+    var hasRepere = showRepere && s.median != null && s.total >= PULSE_REPERE_MIN;
     row.setAttribute('aria-label',
       short + ', à partir de ' + D.money(prixAnnonceDollars(s.id))
       + (s.total === 0 ? ', aucune offre ce mois' : hasRepere ? ', repère du mois ' + D.money(s.median) : ', pas assez d’offres ce mois pour un repère') + '. '
@@ -3277,12 +3455,18 @@
     dep.appendChild(el('span', 'pulse-fig-v', D.money(prixAnnonceDollars(s.id))));
     figs.appendChild(dep);
 
-    var med = el('span', 'pulse-fig');
-    med.appendChild(el('span', 'pulse-fig-k', 'repère du mois'));
-    var medV = el('span', 'pulse-fig-v', hasRepere ? D.money(s.median) : '—');
-    if (!hasRepere) medV.classList.add('is-empty');
-    med.appendChild(medV);
-    figs.appendChild(med);
+    // Month-level, never row-level: a column on two rows and not the other two
+    // would slide the amounts out of line. It goes only when the month holds no
+    // offer at all — four em dashes under a heading promise a figure that
+    // nothing in the month can produce.
+    if (showRepere) {
+      var med = el('span', 'pulse-fig');
+      med.appendChild(el('span', 'pulse-fig-k', 'repère du mois'));
+      var medV = el('span', 'pulse-fig-v', hasRepere ? D.money(s.median) : '—');
+      if (!hasRepere) medV.classList.add('is-empty');
+      med.appendChild(medV);
+      figs.appendChild(med);
+    }
 
     row.appendChild(figs);
 
@@ -3292,18 +3476,33 @@
     // Volume bar: this service's share of the busiest one, in its own hue. It
     // carries the row structure now that the separators are gone, and adds the
     // one thing the numbers alone don't show — which act drives the month.
-    var bar = el('span', 'pulse-bar');
-    var fill = el('span');
-    fill.style.width = (busiest > 0 ? Math.round((s.total / busiest) * 100) : 0) + '%';
-    fill.style.background = 'var(--svc-' + s.id + ')';
-    bar.appendChild(fill);
-    row.appendChild(bar);
+    // A month with no offer at all gets no track: an empty gauge is a shape
+    // that promises data. And a row with no offer in a month that has some gets
+    // the track but no fill — the fill's 4px min-width (there so a 1-of-40
+    // share stays visible) painted a sliver of market at 0 %.
+    if (busiest > 0) {
+      var bar = el('span', 'pulse-bar');
+      if (s.total > 0) {
+        var fill = el('span');
+        fill.style.width = Math.round((s.total / busiest) * 100) + '%';
+        fill.style.background = 'var(--svc-' + s.id + ')';
+        bar.appendChild(fill);
+      }
+      row.appendChild(bar);
+    }
 
     // The row filters; the button beside it books. They are SIBLINGS — a button
     // cannot legally nest inside a button, and the two actions are different.
     var item = el('div', 'pulse-item');
     item.appendChild(row);
-    item.appendChild(miniBtn('reserver', 'Réserver un ' + short.toLowerCase(), function () { bookService(s.id); }));
+    // « Réserver une procuration » — the article comes from the catalogue (no
+    // rule deduces a gender from a noun), and the name goes through T() like
+    // every other composed sentence, so an English reader is not offered a
+    // « Book a refinancement ».
+    var svcC = D.serviceById(s.id);
+    var booking = miniBtn('agenda', 'Réserver ' + ((svcC && svcC.article) || 'un') + ' ' + T(short).toLowerCase(), function () { bookService(s.id); });
+    booking.classList.add('mini-reserver');
+    item.appendChild(booking);
     return item;
   }
 
@@ -3331,8 +3530,13 @@
 
     clear(rows);
     var busiest = p.services.reduce(function (m, s) { return Math.max(m, s.total); }, 0);
+    // One month-level question, asked once for the whole strip: is there a
+    // market at all? A month with offers keeps its reference column on every
+    // row (« — » where an act has too few offers still reads as « not yet »,
+    // because its neighbours carry figures). A month with NONE has nothing for
+    // the column to mean — and nothing for a gauge to measure.
     p.services.forEach(function (s) {
-      rows.appendChild(pulseRow(s, state.filters.service === s.id, busiest));
+      rows.appendChild(pulseRow(s, state.filters.service === s.id, busiest, busiest > 0));
     });
   }
 
@@ -3405,6 +3609,12 @@
   // fermant. Le focus va à l'acte déjà retenu ; l'anneau ne se peint que si la
   // date a été ouverte au clavier, ce qui est exactement quand il sert.
   function focusBookingStart() {
+    var dlg = $('day-dialog');
+    if (dlg && dlg.dataset.interaction === 'preview') {
+      var reserve = dlg.querySelector('#day-preview > button');
+      if (reserve) reserve.focus();
+      return;
+    }
     var wrap = $('o-service-chips');
     if (!wrap) return;
     var t = wrap.querySelector('.chip.is-on') || wrap.querySelector('.chip:not(.chip-soon)');
@@ -3440,26 +3650,47 @@
   function setDayInteractionMode(preview) {
     var dlg = $('day-dialog'), form = $('offer-form'), bids = $('day-bids');
     if (!dlg || !form || !bids) return;
-    var market = bids.closest('.day-market');
+    var market = form.querySelector('.day-market');
     var host = $('day-preview');
     if (preview) {
       if (!host) {
-        host = el('div', 'day-market'); host.id = 'day-preview';
-        var action = el('button', 'btn btn-primary btn-lg', T('Réserver cette date'));
+        host = el('section', 'day-preview'); host.id = 'day-preview';
+        var intro = el('p', 'day-preview-intro', T('Ajoutez votre projet et votre prix. Vous vérifierez le tout avant de publier.'));
+        intro.id = 'day-preview-intro'; host.appendChild(intro);
+        var action = el('button', 'btn btn-primary btn-lg', T('Préparer mon offre'));
+        action.setAttribute('aria-describedby', intro.id);
         action.type = 'button'; action.addEventListener('click', function () {
           setDayInteractionMode(false);
           bookGoTo(1);
           focusBookingStart();
         });
         host.appendChild(action);
+        var offers = el('details', 'day-preview-offers'); offers.id = 'day-preview-offers';
+        var summary = el('summary');
+        summary.appendChild(el('span', '', T('Offres déjà publiées')));
+        var count = el('span', 'day-preview-count'); count.id = 'day-preview-count';
+        summary.appendChild(count); offers.appendChild(summary); host.appendChild(offers);
+        var empty = el('p', 'day-preview-empty', T('Aucune offre publiée pour cette date.'));
+        empty.id = 'day-preview-empty'; host.appendChild(empty);
         dlg.insertBefore(host, form);
       }
-      if (bids.parentNode !== host) host.appendChild(bids);
+      var offersHost = $('day-preview-offers');
+      if (bids.parentNode !== offersHost) offersHost.appendChild(bids);
+      offersHost.open = false;
+      var total = state.monthBids.filter(function (b) { return b.dateISO === state.selectedDate; }).length;
+      offersHost.hidden = total === 0;
+      $('day-preview-count').textContent = bids.dataset.count || '0';
+      $('day-preview-empty').hidden = total > 0;
+      // One disclosure is enough: within the preview, show the full visible day.
+      var rest = bids.querySelector('.day-bids-rest'); if (rest) rest.hidden = false;
+      var toggle = bids.querySelector('.day-bids-toggle'); if (toggle) toggle.hidden = true;
       host.hidden = false;
       form.hidden = true;
       dlg.dataset.interaction = 'preview';
     } else {
       if (market && bids.parentNode !== market) market.appendChild(bids);
+      // Restore the compact, act-specific market context in the real form.
+      if (host && !host.hidden && state.selectedDate) renderDayBids(state.selectedDate);
       if (host) host.hidden = true;
       form.hidden = false;
       dlg.dataset.interaction = 'offer';
@@ -3485,7 +3716,7 @@
     var takenN = all.filter(function (b) { return b.status === D.STATUS.RETENUE; }).length;
     // An empty day states only the lead time here — "no offers / be the first"
     // is said ONCE, in #day-hint (renderDayBids writes it for the empty act).
-    $('day-sub').textContent = all.length
+    $('day-sub').textContent = !preview && all.length
       ? all.length + ' offre' + (all.length > 1 ? 's' : '') + (takenN ? ' · ' + takenN + ' retenue' + (takenN > 1 ? 's' : '') : '') + ' · ' + when
       : when.charAt(0).toUpperCase() + when.slice(1);
 
@@ -3531,6 +3762,7 @@
     renderActiveView();
     var dlg = $('day-dialog');
     var wasOpen = !!dlg.open;
+    if (!wasOpen && $('day-date-edit')) $('day-date-edit').open = false;
     if (dlg.showModal && !dlg.open) dlg.showModal();
     setDayInteractionMode(preview);
     // The criteria were rendered while the dialog was still closed — zero
@@ -3563,6 +3795,7 @@
       if (f.max != null && b.montant > f.max) return false;
       return true;
     }).sort(function (a, b) { return b.montant - a.montant; });
+    list.dataset.count = String(dayAll.length);
 
     var svc = D.serviceById($('o-service') ? $('o-service').value : '');
     var matching = svc ? dayAll.filter(function (b) { return b.serviceId === svc.id; }) : dayAll;
@@ -3799,20 +4032,8 @@
         nota: true, notaIndex: navHistoryIndex, pane: state.tab,
       }), '', url);
     }
-    syncHistoryControls();
   }
   function num(v) { var n = Number(v); return Number.isFinite(n) ? n : null; }
-
-  function syncHistoryControls() {
-    document.querySelectorAll('[data-history="back"]').forEach(function (back) {
-      back.disabled = navHistoryIndex <= 0;
-      back.setAttribute('aria-disabled', back.disabled ? 'true' : 'false');
-    });
-    document.querySelectorAll('[data-history="forward"]').forEach(function (forward) {
-      forward.disabled = navHistoryIndex >= navHistory.length - 1;
-      forward.setAttribute('aria-disabled', forward.disabled ? 'true' : 'false');
-    });
-  }
 
   function setGroupActive(group, btn) {
     group.querySelectorAll('.chip, .seg-btn').forEach(function (x) {
@@ -5999,7 +6220,7 @@
     card.appendChild(profilHead(IC_OFFERS, 'Mes offres'));
     if (!offers.length) {
       var empty = el('div', 'profil-empty');
-      empty.appendChild(el('p', 'profil-empty-text', 'Vous n’avez pas encore publié d’offre. Choisissez une date au carnet et un notaire de Québec la retient.'));
+      empty.appendChild(el('p', 'profil-empty-text', 'Vous n’avez pas encore publié d’offre. Choisissez une date au carnet pour envoyer votre première demande.'));
       var cta = el('button', 'btn btn-primary btn-sm', 'Réserver ma première date'); cta.type = 'button';
       cta.addEventListener('click', function () { toggleNotifPanel(false); setTab('carnet'); });
       empty.appendChild(cta);
@@ -6654,6 +6875,17 @@
   var contactMessageStarted = false;
   var contactSubjectSyncing = false;
   function openContactDialog(context) {
+    track('contact_ouvert');
+    var input = $('chat-text'), offer = context && context.offer;
+    // Offer help stays in the same inbox. Never send or overwrite a draft.
+    if (offer && input && !input.value.trim()) {
+      input.value = T('Aide avec une offre') + ' — ' + offer.id + '\n';
+      chatAutoGrow(input); chatCount();
+    }
+    chatToggle(true);
+  }
+  // Kept for existing contact integrations; the site's contact doors open chat.
+  function openEmailContactDialog(context) {
     var o = context && context.offer;
     contactBidId = o ? o.id : null;
     contactMessageStarted = false;
@@ -6807,46 +7039,54 @@
     return d > 0 ? 'dans ' + plural(d, 'jour') : 'il y a ' + plural(-d, 'jour');
   }
 
-  // One line, both amounts — always the DOMAIN's figures (D.REFERRAL via
-  // D.money), the same ones the Partenaires pane advertises. Never hardcoded.
-  function referralRewardLine() {
-    return D.money(D.REFERRAL.client) + ' par client référé retenu, '
-      + D.money(D.REFERRAL.notaire) + ' au premier acte d’un notaire référé.';
-  }
-
   // Parrainage card — the partner's claimed code, resurfaced. The claim is
   // made on the Partenaires pane; once made, the code and its share link live
   // here so closing the tab never loses them. Rewards are announced by
   // courriel (ADR 0011) — deliberately no earnings dashboard.
   function buildReferralCard() {
-    var card = el('div', 'profil-card');
+    var card = el('div', 'profil-card profil-referral'); card.id = 'profil-referral';
     var rec = partnerGet();
-    // Partner state: the reward amounts become the head's caption; the empty
-    // state keeps its own pitch line beside the CTA.
-    card.appendChild(profilHead(IC_PARR, 'Parrainage', rec ? referralRewardLine() : null));
+    card.appendChild(profilHead(IC_PARR, 'Parrainage', 'Un lien à partager. Une récompense quand la référence aboutit.'));
+    var rewards = el('div', 'profil-rewards');
+    [
+      { amount: D.REFERRAL.client, title: 'Client référé', detail: 'Quand sa demande est retenue par un notaire.' },
+      { amount: D.REFERRAL.notaire, title: 'Notaire référé', detail: 'Une seule fois, à son premier acte retenu.' },
+    ].forEach(function (reward) {
+      var item = el('div', 'profil-reward');
+      item.appendChild(el('span', 'profil-reward-label', reward.title));
+      item.appendChild(el('strong', 'profil-reward-amount', D.money(reward.amount)));
+      item.appendChild(el('p', 'help', reward.detail)); rewards.appendChild(item);
+    });
+    card.appendChild(rewards);
+    card.appendChild(el('p', 'help', 'Le versement suit la signature de l’acte. Une demande annulée avant la signature ne donne lieu à aucun versement.'));
     if (!rec) {
-      // Not a partner yet: the pitch (domain amounts) and the door to the form.
       var empty = el('div', 'profil-empty');
       var copy = el('div', 'profil-empty-copy');
-      copy.appendChild(el('p', 'profil-empty-text', 'Référez des clients ou des notaires et soyez récompensé.'));
-      copy.appendChild(el('p', 'help', referralRewardLine()));
+      copy.appendChild(el('p', 'profil-empty-text', 'Votre prochain bon contact commence ici.'));
+      copy.appendChild(el('p', 'help', 'Choisissez votre code, confirmez votre courriel, puis partagez votre lien.'));
       empty.appendChild(copy);
       var cta = el('button', 'btn btn-primary btn-sm', 'Devenir partenaire'); cta.type = 'button';
-      cta.addEventListener('click', function () { toggleNotifPanel(false); setTab('partenaires'); });
+      cta.addEventListener('click', function () {
+        toggleNotifPanel(false); setTab('partenaires');
+        var form = $('partner-details'); if (form) form.open = true;
+        var email = $('partner-courriel'); if (email) email.focus();
+      });
       empty.appendChild(cta);
       card.appendChild(empty);
+      card.appendChild(el('p', 'help', 'Programme réservé aux professionnels qui ne sont pas notaires.'));
       return card;
     }
-    card.appendChild(el('p', 'help', 'Les récompenses vous parviennent par courriel — rien à surveiller ici.'));
     var codeRow = el('div', 'parr-code-row');
     codeRow.appendChild(el('span', 'parr-code-lbl', 'Votre code'));
-    codeRow.appendChild(el('strong', 'parr-code', rec.code));
+    var codeValue = el('strong', 'parr-code', rec.code); codeValue.setAttribute('data-i18n-skip', ''); codeRow.appendChild(codeValue);
+    codeRow.appendChild(el('span', 'profil-status', 'Code actif'));
     card.appendChild(codeRow);
     var linkRow = el('div', 'partner-link-row');
     var link = el('code', null, partnerShareLink(rec.code));
+    link.setAttribute('data-i18n-skip', ''); link.tabIndex = 0;
     linkRow.appendChild(link);
-    var copy = el('button', 'btn btn-sm', 'Copier le lien'); copy.type = 'button';
-    copy.addEventListener('click', function () { copyLinkText(link.textContent); });
+    var copy = el('button', 'btn btn-primary btn-sm', 'Copier le lien'); copy.type = 'button';
+    copy.addEventListener('click', function () { copyLinkText(link.textContent, function () { flashCopied(copy); }); });
     linkRow.appendChild(copy);
     // Same affordance as the Partenaires success box: native share where the
     // platform has a sheet — the button only exists when navigator.share does.
@@ -6856,11 +7096,48 @@
       linkRow.appendChild(share);
     }
     card.appendChild(linkRow);
+    var message = el('details', 'profil-message');
+    message.appendChild(el('summary', null, 'Un message prêt à envoyer'));
+    var messageText = el('p', 'partner-msg-text', partnerMessageText(rec.code)); messageText.setAttribute('data-i18n-skip', '');
+    message.appendChild(messageText);
+    var copyMessage = el('button', 'btn btn-sm', 'Copier le message'); copyMessage.type = 'button';
+    copyMessage.addEventListener('click', function () {
+      copyText(messageText.textContent, 'Message copié.', 'Copie impossible — sélectionnez le message.', function () { flashCopied(copyMessage); });
+    });
+    message.appendChild(copyMessage); card.appendChild(message);
+    var note = el('div', 'profil-referral-followup');
+    note.appendChild(el('p', 'help', 'Vos récompenses et leur suivi vous sont envoyés par courriel.'));
+    if (rec.courriel) { var email = el('span', 'profil-referral-email', rec.courriel); email.setAttribute('data-i18n-skip', ''); note.appendChild(email); }
+    var program = el('button', 'btn btn-sm btn-ghost', 'Voir le programme'); program.type = 'button';
+    program.addEventListener('click', function () { setTab('partenaires'); });
+    note.appendChild(program); card.appendChild(note);
     return card;
+  }
+
+  function renderProfilNav() {
+    var nav = $('profil-nav'); if (!nav) return; clear(nav);
+    nav.appendChild(el('span', 'eyebrow', 'Dans votre espace'));
+    [
+      ['profil-offers', 'Mes offres', IC_OFFERS], ['profil-contact', 'Coordonnées', IC_COORD],
+      ['profil-notifications', 'Notifications', IC_NOTIF], ['profil-documents', 'Mes documents', IC_DOCS],
+      ['profil-referral', 'Parrainage', IC_PARR],
+    ].forEach(function (section) {
+      var button = el('button', 'profil-nav-item'); button.type = 'button'; button.dataset.profileTarget = section[0]; button.setAttribute('aria-controls', section[0]);
+      var icon = el('span', 'profil-card-ic');
+      icon.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + section[2] + '</svg>';
+      button.appendChild(icon); button.appendChild(el('span', null, section[1]));
+      button.addEventListener('click', function () {
+        var target = $(section[0]); if (!target) return;
+        target.setAttribute('tabindex', '-1'); target.focus({ preventScroll: true });
+        if (target.scrollIntoView) target.scrollIntoView({ block: 'start' });
+      });
+      nav.appendChild(button);
+    });
   }
 
   function renderProfil() {
     var body = $('profil-body'); if (!body) return; clear(body);
+    renderProfilNav();
     var p = profileGet();
 
     // Back from Checkout: the same expectation line the success screen
@@ -6910,9 +7187,28 @@
       });
       row.appendChild(inp);
       if (f.help) { var fh = el('p', 'help', f.help); fh.id = 'p-' + f.key + '-help'; inp.setAttribute('aria-describedby', fh.id); row.appendChild(fh); }
+      if (f.key === 'courriel' || f.key === 'prefixe') {
+        var feedback = el('p', 'help profil-field-error'); feedback.id = 'p-' + f.key + '-error'; feedback.hidden = true;
+        feedback.setAttribute('aria-live', 'polite'); row.appendChild(feedback);
+        var description = inp.getAttribute('aria-describedby');
+        inp.setAttribute('aria-describedby', (description ? description + ' ' : '') + feedback.id);
+        var validate = function () {
+          var value = inp.value.trim();
+          var error = f.key === 'prefixe' ? (value && !D.isPostalPrefix(value) ? { message: 'Vérifiez votre secteur postal (ex. : G1R).' } : null)
+            : (value && !D.isEmail(value) ? { message: 'Entrez un courriel valide.' } : null);
+          inp.setAttribute('aria-invalid', error ? 'true' : 'false');
+          feedback.textContent = error ? T(error.message) : ''; feedback.hidden = !error;
+        };
+        inp.addEventListener('blur', validate);
+        inp.addEventListener('input', function () { if (inp.getAttribute('aria-invalid') === 'true') validate(); });
+      }
       idFields.appendChild(row);
     });
     idCard.appendChild(idFields);
+    var savedStatus = el('p', 'profil-save-status help', 'Enregistrement automatique sur cet appareil.');
+    savedStatus.id = 'profil-save-status'; savedStatus.setAttribute('role', 'status');
+    idFields.addEventListener('input', function () { savedStatus.textContent = T('Modifications enregistrées sur cet appareil.'); });
+    idCard.appendChild(savedStatus);
     body.appendChild(idCard);
 
     // Notifications card — on by default, per-kind toggles gate addNotif().
@@ -6936,7 +7232,7 @@
       });
       lab.appendChild(cb); lab.appendChild(el('span', 'track'));
       // Control first (left), label after — toggles line up in a clean column.
-      var txt = el('div'); txt.appendChild(el('div', 'switch-title', t.label));
+      var txt = el('label', 'switch-title', t.label); txt.htmlFor = cb.id;
       row.appendChild(lab); row.appendChild(txt); nGrid.appendChild(row);
     });
     nCard.appendChild(nGrid);
@@ -6947,12 +7243,14 @@
       if (offer) openEmailPreferences(offer.clientToken, offer.id, offer.dateISO);
       else toast(T('Impossible de charger les préférences. Ouvrez le lien dans un courriel récent.'));
     });
-    nCard.appendChild(emailChoice);
+    var emailRow = el('div', 'profil-email-prefs');
+    emailRow.appendChild(el('p', 'help', 'Les courriels se règlent séparément des notifications dans l’application.'));
+    emailRow.appendChild(emailChoice); nCard.appendChild(emailRow);
     body.appendChild(nCard);
 
     // Documents card — the full document list per service, with upload / remove /
     // mark-validated. "One profile" = coordinates + notifications + documents.
-    var dCard = el('div', 'profil-card profil-docs');
+    var dCard = el('div', 'profil-card profil-docs'); dCard.id = 'profil-documents';
     dCard.appendChild(profilHead(IC_DOCS, 'Mes documents', 'Seules les pièces nécessaires pour l’acte actif sont affichées. Les réponses de votre dossier déterminent la liste ; rien ne bloque votre demande.'));
     // Service picker as outline chips (not a native dropdown) — matches the
     // calendar, one click to switch, on-aesthetic.
@@ -6966,7 +7264,7 @@
       || D.SERVICES[0].id;
     D.SERVICES.forEach(function (s) {
       var on = s.id === docsPre;
-      var c = el('button', 'chip' + (on ? ' is-on' : ''), s.nom.split(' ')[0]);
+      var c = el('button', 'chip' + (on ? ' is-on' : ''), s.nom);
       c.type = 'button'; c.dataset.svc = s.id; c.setAttribute('aria-pressed', on ? 'true' : 'false');
       dchips.appendChild(c);
     });
@@ -6984,7 +7282,7 @@
 
     // Parrainage — the referral program's place in the profile, closing the page.
     body.appendChild(buildReferralCard());
-    accountTourReplay('client', body);
+    accountTourReplay('client', $('profil-nav') || body);
   }
 
   // Render the per-service document checklist into `container`: each item can be
@@ -7692,6 +7990,10 @@
   // one is visible at a time — the swap is what keeps a first visit from reading
   // as a failed login.
   function ncShowGateStep(which) {
+    if (which !== 'email') {
+      var access = $('notary-calendar-access');
+      if (access) access.open = true;
+    }
     var email = $('notary-gate-step-email'); if (email) email.hidden = which !== 'email';
     var sent = $('notary-gate-step-sent'); if (sent) sent.hidden = which !== 'sent';
     var signup = $('notary-signup-prompt'); if (signup) signup.hidden = which !== 'signup';
@@ -7744,6 +8046,8 @@
   // the field so a typo costs one edit, not a retype.
   function ncShowEmailStep() {
     ncShowGateStep('email');
+    var access = $('notary-calendar-access');
+    if (access) access.open = true;
     var inp = $('nc-email');
     if (inp) { try { inp.focus({ preventScroll: true }); } catch (e) { try { inp.focus(); } catch (e2) {} } }
   }
@@ -7761,6 +8065,7 @@
   // Feed disclosure level (ADR 0019): 'compact' folds every open card to its
   // decision row; 'detail' unfolds the whole feed. Remembered per device.
   var LS_NC_VIEW = 'nota.notary.view.v1';
+  var LS_NC_FILTERS = 'nota.notary.filters.v1';
   // Unread (ADR 0033): per retained act, the createdAt of the last CLIENT
   // message this device has seen — `{ [bidId]: iso }`. Unread = client
   // messages newer than that. Per device, like a read receipt nobody sends.
@@ -7779,7 +8084,7 @@
   // can prune a local entry the server stopped returning (a cancelled act).
   // deepAct -> the act a « #notaires&acte=<id> » link points at, until the
   // card is on screen.
-  var nc = { token: null, feedToken: null, email: null, open: [], filter: { service: 'all', readyOnly: false, day: null }, openDetails: {}, rating: null, profil: { lienCNQ: null }, tarif: null, cote: null, conditions: null, fenetre: null, deepAct: null, manquantsServeur: null, aiAccess: null };
+  var nc = { token: null, feedToken: null, email: null, open: [], filter: { service: 'all', readyOnly: false, day: null }, openDetails: {}, retainedDetails: {}, rating: null, profil: { lienCNQ: null }, tarif: null, cote: null, conditions: null, fenetre: null, deepAct: null, manquantsServeur: null, aiAccess: null };
 
   // --- AI preparation access -------------------------------------------------
   // The dossier checklist is always available. This separate product card is
@@ -8086,6 +8391,8 @@
     var box = $('notary-console-errors'); if (!box) return;
     clear(box);
     if (!msgs || !msgs.length) { box.hidden = true; return; }
+    var access = $('notary-calendar-access');
+    if (access) access.open = true;
     box.hidden = false;
     msgs.forEach(function (m) { box.appendChild(el('li', null, m)); });
   }
@@ -8098,8 +8405,11 @@
     nc.rating = null; nc.profil = { lienCNQ: null, rayonKm: 0, urgences: false }; nc.tarif = null;
     nc.cote = null; nc.conditions = null; nc.fenetre = null; nc.manquantsServeur = null;
     nc.aiAccess = null;
+    nc.pendingRetain = null;
+    var offerNotice = $('nc-offer-notice'); if (offerNotice) offerNotice.hidden = true;
     ncCloseRetainSheet(); // a sheet about a session that ended
     nc.retainedOrder = null;
+    nc.retainedDetails = {};
     ncRenderProfil({ force: true }); // the form must never keep another notary's fiche
     ncRenderProfilBanner();
     ncRenderCote();   // another notary must never inherit this one's cote
@@ -8131,6 +8441,10 @@
   // production the notary opens the emailed link, which boots into ncVerifyMagic.
   async function ncSignIn(email) {
     email = (email || '').trim();
+    // A mailbox link normally opens another tab. Keep only the public offer
+    // ID and intended account, so that tab can resume the review after login.
+    lsSave('nota.notary.offerIntent', nc.deepAct || nc.pendingRetain
+      ? { id: nc.deepAct || nc.pendingRetain, email: email.toLowerCase(), at: Date.now() } : null);
     ncShowGateStep('email'); // every attempt starts from the email step
     var r;
     try {
@@ -8190,6 +8504,10 @@
   async function ncApplySession(j, emailHint) {
     ncSetErrors([]);
     var email = j.email || emailHint || nc.email;
+    var intent = lsLoad('nota.notary.offerIntent');
+    lsSave('nota.notary.offerIntent', null);
+    if (!nc.deepAct && intent && typeof intent.id === 'string' && intent.email === String(email || '').toLowerCase()
+      && Date.now() - intent.at >= 0 && Date.now() - intent.at < 30 * 60 * 1000) nc.deepAct = intent.id;
     nc.token = j.token; nc.feedToken = j.feedToken || null; nc.email = email;
     lsSave(LS_NC_TOKEN, j.token); lsSave(LS_NC_FEED_TOKEN, nc.feedToken); lsSave(LS_NC_EMAIL, email);
     ncRenderAuthState();
@@ -8198,7 +8516,7 @@
     if (loaded) {
       toast('Console ouverte pour ' + email + '.');
       accountTourReplay('notary', $('notary-authed'));
-      accountTour('notary');
+      if (!nc.pendingRetain && !ncSheetBid) accountTour('notary');
     }
     returnToSigningBeta();
     return { ok: true };
@@ -8346,7 +8664,7 @@
     nc.retainedOrder = null; // a load re-sorts the retained cards; nothing else does (audit P2-19)
     if (gone.length || (j.retained && j.retained.length)) ncRenderRetained();
     if (gone.length) ncToastCancelled(gone);
-    ncConsumeDeepAct();
+    ncConsumeDeepAct(true);
     return true;
   }
   // Le bloc « Paiements » raconte la caution avec le nombre du DOMAINE, servi
@@ -8522,7 +8840,10 @@
   // panel covers the compact footprint.
   var NC_LIVE_MAX = 12;
   var NC_LIVE_MIN_SLOTS = 6;
+  var NC_LIVE_EMPTY_SLOTS = 3;
   function ncFocusGate() {
+    var access = $('notary-calendar-access');
+    if (access) access.open = true;
     // Land on whichever gate step is showing: the signup CTA mid-branch,
     // otherwise the email field.
     var signup = $('notary-signup-prompt');
@@ -8530,6 +8851,25 @@
     if (!inp) return;
     if (inp.scrollIntoView) { try { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
     try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); }
+  }
+  // The two zero-state actions are bound once, the first time the landing
+  // renders an empty carnet: the agenda card already on the page, and the same
+  // sign-in gate every live card focuses.
+  var ncNextWired = false;
+  function ncWireNextSteps() {
+    if (ncNextWired) return;
+    var agenda = $('notary-live-next-agenda');
+    var account = $('notary-live-next-account');
+    if (!agenda || !account) return;
+    agenda.addEventListener('click', function () {
+      var card = $('notary-carnet');
+      if (!card) return;
+      if (card.scrollIntoView) { try { card.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
+      var first = card.querySelector('.sub-btn, button, a');
+      if (first) { try { first.focus({ preventScroll: true }); } catch (e) { first.focus(); } }
+    });
+    account.addEventListener('click', ncFocusGate);
+    ncNextWired = true;
   }
   function ncLiveCard(b) {
     var svc = D.serviceById(b.serviceId);
@@ -8554,7 +8894,31 @@
     card.addEventListener('click', ncFocusGate);
     return card;
   }
+  // ADR 0052 §A — la troisième promesse est un CHIFFRE, pas un adjectif : les
+  // honoraires du même acte à délai normal, puis au premier palier que le
+  // domaine marque « élevé » (celui où la date est le problème). Les deux
+  // sortent de tierAmount(), c'est-à-dire de l'échelle TIERS et des offres du
+  // mois — la phrase suit le marché, et changer l'échelle la change.
+  // Le service est celui par défaut du domaine, jamais le filtre du carnet :
+  // la page des notaires ne doit pas dépendre de ce qu'un client a cliqué.
+  function renderNotaryPromesse() {
+    var out = $('nc-promesse-urgence'); if (!out) return;
+    var svc = D.serviceById(D.DEFAULT_SERVICE_ID) || D.SERVICES[0];
+    var presse = null;
+    for (var i = 0; i < D.TIERS.length && !presse; i++) if (D.TIERS[i].eleve) presse = D.TIERS[i];
+    var calmeAmt = tierAmount('standard', svc);
+    var presseAmt = presse ? tierAmount(presse.id, svc) : 0;
+    // Une échelle plate ne donne pas une demi-phrase : elle n'en donne aucune.
+    if (!svc || !presse || !calmeAmt || presseAmt <= calmeAmt) { out.textContent = ''; return; }
+    out.textContent = T('Le même acte : ' + D.money(calmeAmt) + ' d’honoraires à délai normal, '
+      + D.money(presseAmt) + ' à ' + presse.maxJours + ' jours d’avis.');
+  }
+
   function renderNotaryLive() {
+    renderNotaryPromesse();
+    // La vignette de l'agenda vit et meurt avec cette page : son `enabled` la
+    // referme dès que la console s'ouvre, et son onScreen() park la boucle dès
+    // que l'onglet change.
     var box = $('notary-live'); if (!box) return;
     var gate = $('notary-auth-form');
     var open = (state.monthBids || [])
@@ -8575,7 +8939,8 @@
       more.addEventListener('click', ncFocusGate);
       grid.appendChild(more);
     }
-    var slotCount = Math.min(NC_LIVE_MAX, Math.max(NC_LIVE_MIN_SLOTS, grid.children.length));
+    var floor = open.length ? NC_LIVE_MIN_SLOTS : NC_LIVE_EMPTY_SLOTS;
+    var slotCount = Math.min(NC_LIVE_MAX, Math.max(floor, grid.children.length));
     for (var i = grid.children.length; i < slotCount; i++) {
       var slot = el('div', 'nc-live-slot', T('Pas d’offre'));
       // These visual spaces carry no inventory or action. Avoid announcing
@@ -8587,10 +8952,12 @@
     if (!open.length) {
       var empty = el('div', 'nc-live-empty');
       empty.setAttribute('role', 'status');
-      empty.appendChild(el('strong', null, T('Pas d’offres')));
-      empty.appendChild(el('span', null, T('Les offres disponibles s’afficheront ici.')));
+      empty.appendChild(el('strong', null, T('Aucune demande ouverte')));
+      empty.appendChild(el('span', null, T('Personne n’a publié de date pour ce mois-ci.')));
       grid.appendChild(empty);
     }
+    var next = $('notary-live-next');
+    if (next) { ncWireNextSteps(); next.hidden = !!open.length; }
     box.hidden = false;
   }
 
@@ -8629,7 +8996,14 @@
   }
 
   function makeWeekVignette(cfg) {
-    var v = { timers: [], raf: null, offset: 0, cycling: false };
+    var v = { timers: [], raf: null, offset: 0, cycling: false, waits: 0 };
+    // Combien de fois la boucle attend que sa vignette apparaisse avant
+    // d'abandonner. Elle est armée au moment où la page se rend, ce qui peut
+    // précéder l'instant où elle est VISIBLE : sur un lien direct vers
+    // #t=notaires, le film d'accueil couvre encore l'application et le tableau
+    // restait vide pour toujours (constaté au navigateur, 2026-09-12). Borné :
+    // une vignette qu'on ne verra jamais ne doit pas sonder indéfiniment.
+    var WAIT_MS = 400, MAX_WAITS = 20;
 
     function stop() {
       v.timers.forEach(clearTimeout); v.timers = [];
@@ -8706,7 +9080,14 @@
     }
 
     function cycle() {
-      if (!onScreen()) { stop(); return; }
+      if (!onScreen()) {
+        // Pas encore à l'écran : on repasse, quelques fois. Une fois la patience
+        // épuisée, on se gare pour de bon — c'est ce qui park la boucle quand
+        // l'onglet change ou que la fenêtre passe en arrière-plan.
+        if (v.waits < MAX_WAITS) { v.waits++; later(cycle, WAIT_MS); return; }
+        stop(); return;
+      }
+      v.waits = 0;
       var batch = batchNow();
       if (!batch.items.length) { stop(); $(cfg.box).hidden = true; return; }
       v.offset = (v.offset + batch.items.length) % Math.max(1, batch.poolSize);
@@ -8764,6 +9145,7 @@
       }
       if (v.cycling) return; // a loop already drives the board
       v.cycling = true;
+      v.waits = 0;
       cycle();
     }
 
@@ -8955,6 +9337,14 @@
     var dlg = $('onboarding-dialog');
     if (!document.hidden && dlg && dlg.open) renderOnbWeekAnim();
   });
+
+  // Même réveil pour les deux vignettes des pages d'acquisition. Sans lui, un
+  // visiteur qui change d'onglet une dizaine de secondes revient devant un
+  // tableau mort : la boucle s'était garée, et plus rien ne la rarmait.
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) return;
+    if (state.tab === 'notaires') renderNotaryLive();
+  });
   // Crossing the phone breakpoint swaps which vignette a steps view carries.
   if (onbMobileMq) {
     var onbMqChange = function () { renderOnbWeekAnim(); };
@@ -9090,6 +9480,8 @@
       ? apiBaseAbs() + '/notary/feed.ics?token=' + encodeURIComponent(nc.feedToken) : '', T('Nota — signatures retenues'));
 
     var authed = !!nc.token;
+    var pageTitle = $('notary-page-title');
+    if (pageTitle) pageTitle.textContent = T(authed ? 'Espace notaire' : 'Ajoutez Nota à votre agenda.');
     // A signed-in notary's app IS the console: the body class lets the chrome
     // drop the client doors (Carnet, Partenaires) so nothing competes with
     // the agenda. Signing out restores the full menu.
@@ -9097,6 +9489,8 @@
     var form = $('notary-auth-form'); var view = $('notary-authed');
     if (form) form.hidden = authed;
     if (view) view.hidden = !authed;
+    var calendarAccess = $('notary-calendar-access');
+    if (calendarAccess) calendarAccess.hidden = authed;
     // Keep the beta announcement visible on the signed-out notary landing so
     // the disclosure remains discoverable; an authenticated notary instead
     // receives the account-scoped product card.
@@ -9227,6 +9621,23 @@
   function ncViewGet() { return flagGet(LS_NC_VIEW) === 'detail' ? 'detail' : 'compact'; }
   function ncViewSet(v) { flagSet(LS_NC_VIEW, v === 'detail' ? 'detail' : 'compact'); }
 
+  function ncFiltersExpanded() { return flagGet(LS_NC_FILTERS) === 'open'; }
+  function ncRenderFilterDisclosure() {
+    var expanded = ncFiltersExpanded();
+    var toggle = $('notary-filters-toggle');
+    if (toggle) {
+      toggle.hidden = !nc.open.length;
+      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    }
+    var count = Number(nc.filter.service !== 'all') + Number(nc.filter.readyOnly) + Number(!!nc.filter.day);
+    var badge = $('notary-filters-count');
+    if (badge) { badge.textContent = String(count); badge.hidden = !count; }
+    var filters = $('notary-open-filter');
+    if (filters) filters.hidden = !expanded || !nc.open.length;
+    var days = $('notary-open-days');
+    if (days) days.hidden = !expanded;
+  }
+
   // Progressive disclosure (ADR 0019): the card's always-visible half is the
   // DECISION ROW — act, amount, signal pills, facts line, anything already in
   // flight, and Retenir. Everything verbose (facteurs prose, the propose /
@@ -9260,8 +9671,15 @@
     var caut = ncCautionPill(b.caution);
     if (caut) meta.appendChild(caut);
     card.appendChild(meta);
-    var facts = ncFactsRow(b);
-    if (facts) card.appendChild(facts);
+    // Keep the signing location in the scan. The lender and full sector
+    // context remain available in the expanded offer and the review sheet.
+    var location = ncDeplacementPill(b.deplacement);
+    if (location) {
+      var locationRow = el('div', 'nc-card-location');
+      locationRow.appendChild(location);
+      if (b.distanceKm != null) locationRow.appendChild(el('span', 'nc-distance', '≈ ' + b.distanceKm + ' km'));
+      card.appendChild(locationRow);
+    }
 
     // What the notary already did on this demand: a proposition in flight and
     // / or a documents request — so the card tells the whole story at a glance.
@@ -9285,16 +9703,32 @@
     body.hidden = !unfolded;
     card.classList.toggle('is-open', unfolded);
 
+    var facts = ncFactsRow(b);
+    if (facts) body.appendChild(facts);
+
     // The parameters that make this file easy or hard — so the notary knows if
     // the posted price fits a simple or a complex case before retaining it.
-    if (b.complexity && b.complexity.factors && b.complexity.factors.length) {
+    var offerDetails = Array.isArray(b.details) ? b.details.filter(function (d) { return d && typeof d.label === 'string'; }) : [];
+    if (offerDetails.length) {
+      var parameters = el('dl', 'nc-card-parameters');
+      var parameterLabels = [];
+      offerDetails.forEach(function (d) {
+        if (!d.label.trim() || parameterLabels.indexOf(d.label) !== -1) return;
+        parameterLabels.push(d.label);
+        var row = el('div');
+        row.appendChild(el('dt', null, T(d.label)));
+        row.appendChild(el('dd', null, d.value == null ? T('Non précisé') : T(String(d.value))));
+        parameters.appendChild(row);
+      });
+      body.appendChild(parameters);
+    } else if (ncOfferLabels(b.complexity && b.complexity.factors).length) {
       // Each factor is a composed domain string ("label : option") — translate
       // it whole (the dictionary carries every composition) so an English boot
       // never shows a French factor; the "Facteurs :" prefix is the DOM
       // layer's pattern. The lender and déplacement factors are skipped: the
       // facts line above already states both — repeating them in prose was
       // the card's longest noise.
-      var factors = b.complexity.factors.filter(function (f) {
+      var factors = ncOfferLabels(b.complexity.factors).filter(function (f) {
         if (b.preteur && /^Prêteur hypothécaire :/.test(f)) return false;
         if (b.deplacement && /^Déplacement pour la signature :/.test(f)) return false;
         return true;
@@ -9314,6 +9748,8 @@
     docs.setAttribute('aria-expanded', 'false');
     more.appendChild(docs);
     more.appendChild(ncAgendaMenu(b));
+    var dec = el('button', 'btn btn-sm btn-ghost nc-decline', 'Décliner'); dec.type = 'button';
+    more.appendChild(dec);
     body.appendChild(more);
     card.appendChild(body);
 
@@ -9322,8 +9758,7 @@
     // stays small so the confirm reads first. The click opens the confirm
     // SHEET (ncOpenRetainSheet, ADR 0033); the sheet's primary accepts.
     var acc = el('button', 'btn btn-primary nc-accept', 'Retenir'); acc.type = 'button';
-    var dec = el('button', 'btn btn-sm nc-decline', 'Décliner'); dec.type = 'button';
-    actions.appendChild(acc); actions.appendChild(dec);
+    actions.appendChild(acc);
     // The per-card disclosure — pointless when the seg already unfolds all.
     if (!detailView) {
       var tog = el('button', 'btn btn-sm btn-ghost nc-toggle', unfolded ? 'Réduire' : 'Détails'); tog.type = 'button';
@@ -9413,7 +9848,9 @@
     return D.notaryContactMissing(nc.profil || {});
   }
   function ncProfilIncomplet() { return ncProfilManquants().length > 0; }
-  function ncProfilGate(j) {
+  function ncProfilGate(j, bid) {
+    // Keep the selected offer while the notary fills the required contact fields.
+    if (bid || ncSheetBid) nc.pendingRetain = (bid || ncSheetBid).id;
     var e = j && j.errors && j.errors[0];
     if (e && Array.isArray(e.manquants) && e.manquants.length) nc.manquantsServeur = e.manquants;
     ncCloseRetainSheet(); // a modal would trap the focus the door needs
@@ -9463,14 +9900,30 @@
   var ncSheetBid = null;
   function ncSetText(id, text) { var e = $(id); if (!e) return null; clear(e); if (text != null) e.appendChild(document.createTextNode(String(text))); return e; }
   function ncPct(taux) { return Math.round(Number(taux) * 100) + ' %'; }
+  // Labels supplied by the API are text, never markup. Older offers can omit
+  // these optional arrays; ignore blank/malformed entries and repeated labels.
+  function ncOfferLabels(value) {
+    return Array.isArray(value) ? value.filter(function (v, i, all) {
+      return typeof v === 'string' && v.trim() && all.indexOf(v) === i;
+    }) : [];
+  }
   function ncOpenRetainSheet(b) {
     var dlg = $('nc-retenir-dialog'); if (!dlg || !b) return;
     ncSheetBid = b;
+    nc.pendingRetain = null;
+    var scroll = dlg.querySelector('.nc-retenir'); if (scroll) scroll.scrollTop = 0;
+    var sheetError = $('nc-retenir-error'); if (sheetError) sheetError.hidden = true;
     var svc = D.serviceById(b.serviceId);
     ncSetText('nc-retenir-svc', svc ? svc.nom : b.serviceId);
-    ncSetText('nc-retenir-date', dayTitle(b.dateISO) + ' · ' + relativeDay(b.dateISO));
+    var fullDate = new Intl.DateTimeFormat(LOCALE, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
+    ncSetText('nc-retenir-date', fullDate.format(new Date(b.dateISO + 'T00:00:00Z')) + ' · ' + relativeDay(b.dateISO));
     ncSetText('nc-retenir-fee', D.money(b.montant));
     ncSetText('nc-retenir-go-amt', D.money(b.montant));
+    var signals = ncSetText('nc-retenir-signals', null);
+    if (signals) {
+      signals.appendChild(ncTierPill(b.tier));
+      if (b.complexity) signals.appendChild(ncComplexityPill(b.complexity));
+    }
     // The client's Nota price: `conditions.tarifNota` (ADR 0033) or the feed's
     // `tarif` (ADR 0031) — the same object. Depuis l'ADR 0034 c'est une GRILLE :
     // ce qui s'affiche est la cellule de CE service à CE palier, c'est-à-dire
@@ -9491,33 +9944,88 @@
       if (tarif && tarif.taxesIncluses === false) { nota.appendChild(document.createTextNode(' ')); nota.appendChild(el('span', 'nc-retenir-sub', 'Taxes en sus.')); }
       if (tarif && tarif.deboursInclus === false) { nota.appendChild(document.createTextNode(' ')); nota.appendChild(el('span', 'nc-retenir-sub', 'Débours en sus (droits de publication, RDPRM).')); }
     }
-    // Déplacement · secteur · distance — the same facts as the card, in the
-    // same words (each its own node so the dictionary can translate them).
+    // Separate the permitted travel band from the measured distance: they
+    // answer different questions and must never read as competing estimates.
     var dep = ncSetText('nc-retenir-dep', null);
     if (dep) {
       var parts = [];
       var dp = ncDeplacementPill(b.deplacement); if (dp) parts.push(dp);
-      if (b.prefixe) parts.push(el('span', 'nc-prefixe', b.prefixe));
-      if (b.distanceKm != null) parts.push(el('span', 'nc-distance', '≈ ' + b.distanceKm + ' km'));
       if (!parts.length) parts.push(el('span', 'nc-retenir-sub', 'Non précisé'));
       parts.forEach(function (p, i) { if (i) dep.appendChild(document.createTextNode(' · ')); dep.appendChild(p); });
     }
+    ncSetText('nc-retenir-sector', b.prefixe || T('Non précisé'));
+    var hasDistance = b.distanceKm != null && Number.isFinite(Number(b.distanceKm)) && Number(b.distanceKm) >= 0;
+    ncSetText('nc-retenir-distance', hasDistance ? '≈ ' + b.distanceKm + ' km' : T('Non précisée'));
     var lender = ncSetText('nc-retenir-lender', null);
     if (lender) {
       var lp = ncLenderPill(b.preteur);
       lender.appendChild(lp || el('span', 'nc-retenir-sub', 'Non précisé'));
+      // The service definition owns whether a lender question applies.
+      var hasLender = !!lp || !!(svc && svc.pricing && svc.pricing.criteria.some(function (c) { return c.id === D.LENDER_CRITERION_ID; }));
+      lender.hidden = !hasLender;
+      $('nc-retenir-lender-label').hidden = !hasLender;
+    }
+    var expiry = ncSetText('nc-retenir-expiry', null);
+    var validExpiry = /^\d{4}-\d{2}-\d{2}$/.test(b.expiresOn || '') && Number.isFinite(Date.parse(b.expiresOn + 'T00:00:00Z'));
+    if (expiry) {
+      expiry.hidden = !validExpiry;
+      $('nc-retenir-expiry-label').hidden = !validExpiry;
+      if (validExpiry) expiry.textContent = fullDate.format(new Date(b.expiresOn + 'T00:00:00Z'));
     }
     var dossier = ncSetText('nc-retenir-dossier', null);
     if (dossier) {
       dossier.appendChild(ncReadyBadge(b.ready));
-      var missing = (b.missing || []).map(String).filter(Boolean);
+      dossier.appendChild(el('p', 'nc-retenir-p nc-retenir-readiness', 'L’état du dossier indique si les renseignements requis et le consentement sont reçus. Les documents restent à vérifier.'));
+      var missing = ncOfferLabels(b.missing);
       if (missing.length) {
-        dossier.appendChild(document.createTextNode(' '));
-        var miss = el('span', 'nc-retenir-missing');
-        miss.appendChild(el('span', null, 'Il manque :'));
-        miss.appendChild(document.createTextNode(' '));
-        missing.forEach(function (m, i) { if (i) miss.appendChild(document.createTextNode(', ')); miss.appendChild(el('span', null, m)); });
+        var miss = el('div', 'nc-retenir-missing');
+        var heading = el('h5', null, 'Éléments à compléter');
+        heading.appendChild(document.createTextNode(' '));
+        heading.appendChild(el('span', 'nc-retenir-count', String(missing.length)));
+        miss.appendChild(heading);
+        var list = el('ul', 'nc-retenir-checklist');
+        missing.forEach(function (m) { list.appendChild(el('li', null, m)); });
+        miss.appendChild(list);
         dossier.appendChild(miss);
+      } else {
+        dossier.appendChild(el('p', 'nc-retenir-p', Array.isArray(b.missing) ? 'Aucun élément manquant signalé.' : 'La liste des éléments manquants n’est pas disponible.'));
+      }
+    }
+    var factors = ncSetText('nc-retenir-factors', null);
+    if (factors) {
+      var detailRows = Array.isArray(b.details) ? b.details.filter(function (d) { return d && typeof d.label === 'string'; }) : [];
+      var labels = ncOfferLabels(b.complexity && b.complexity.factors);
+      factors.appendChild(el('h5', null, 'Renseignements sur la demande'));
+      if (detailRows.length) {
+        var detailList = el('dl', 'nc-retenir-details');
+        detailRows.forEach(function (d) {
+          var row = el('div', 'nc-retenir-detail');
+          row.appendChild(el('dt', null, T(d.label)));
+          row.appendChild(el('dd', null, d.value == null ? T('Non précisé') : T(String(d.value))));
+          detailList.appendChild(row);
+        });
+        factors.appendChild(detailList);
+      } else if (labels.length) {
+        var factorList = el('ul', 'nc-retenir-factor-list');
+        labels.forEach(function (label) { factorList.appendChild(el('li', null, T(label))); });
+        factors.appendChild(factorList);
+      } else factors.appendChild(el('p', 'nc-retenir-p', 'Aucun renseignement supplémentaire fourni.'));
+    }
+    var status = ncSetText('nc-retenir-status', null);
+    if (status) {
+      var statusRow = ncStatusRow(b);
+      if (statusRow) {
+        status.appendChild(el('h5', null, 'Vos démarches sur cette offre'));
+        status.appendChild(statusRow);
+        var requested = ncOfferLabels(b.demande && b.demande.documents);
+        if (requested.length) {
+          var requestedList = el('ul', 'nc-retenir-checklist');
+          requested.forEach(function (id) {
+            var item = D.requestableItems(b.serviceId).find(function (it) { return it.id === id; });
+            requestedList.appendChild(el('li', null, item ? item.nom || item.label : id));
+          });
+          status.appendChild(requestedList);
+        }
       }
     }
     // ADR 0035 — la garantie de paiement, dans la même feuille que le reste de
@@ -9534,8 +10042,10 @@
       // réservée. Le nombre vient du serveur (`conditions.caution.jours`, lu du
       // domaine) — il n'est écrit nulle part dans cette page.
       var jours = nc.conditions && nc.conditions.caution && Number(nc.conditions.caution.jours);
-      if (jours > 0 && (!b.caution || b.caution.etat !== 'posee')) {
-        cautionDd.appendChild(el('div', 'nc-retenir-sub', T(ncCautionRegle(jours))));
+      if (jours > 0 && b.caution && b.caution.etat !== 'posee') {
+        var rule = el('div', 'nc-retenir-more');
+        rule.appendChild(el('div', 'nc-retenir-sub', T(ncCautionRegle(jours))));
+        cautionDd.appendChild(rule);
       }
     }
 
@@ -9594,6 +10104,7 @@
   function ncRevealRetained(id) {
     var card = document.querySelector('#notary-retained-list .nc-card[data-id="' + id + '"]');
     if (!card) return;
+    ncSetRetainedExpanded(card, true);
     if (card.scrollIntoView) {
       try { card.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
     }
@@ -9602,10 +10113,16 @@
   }
   async function ncConfirmRetainSheet() {
     var b = ncSheetBid; if (!b) return;
-    var go = $('nc-retenir-go'); if (go) go.disabled = true;
+    var go = $('nc-retenir-go'); if (go && go.disabled) return;
+    if (go) go.disabled = true;
+    var err = $('nc-retenir-error'); if (err) err.hidden = true;
     var ok = false;
     try { ok = (await ncAccept(b.id, b.dateISO, b)) === true; }
-    finally { if (go) go.disabled = false; ncCloseRetainSheet(); }
+    finally { if (go) go.disabled = false; }
+    // A temporary failure leaves the review in place so the notary can retry.
+    // Expired sessions, unavailable offers and profile refusals still leave it.
+    if (ok || !nc.token || !ncFindOpen(b.id) || ncProfilIncomplet()) ncCloseRetainSheet();
+    else if (err) err.hidden = false;
     // The act moved to « Dossiers retenus »: the focus follows it (audit P2-2).
     if (ok) {
       // Keep the accessible focus on the section heading, but bring the actual
@@ -9768,7 +10285,7 @@
     var wrap = $('notary-open-filter'); if (!wrap) return; clear(wrap);
     var f = nc.filter;
     if (!nc.open.length) { wrap.hidden = true; return; }
-    wrap.hidden = false;
+    wrap.hidden = !ncFiltersExpanded();
     function chip(label, svcId, on, extra) {
       var c = el('button', 'chip sm' + (on ? ' is-on' : '') + (extra ? ' ' + extra : ''));
       c.type = 'button'; c.dataset.svc = svcId; c.setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -9777,7 +10294,7 @@
     }
     chip('Tous', 'all', f.service === 'all');
     D.SERVICES.forEach(function (s) {
-      var n = nc.open.filter(function (b) { return b.serviceId === s.id; }).length;
+      var n = nc.open.filter(function (b) { return b.serviceId === s.id && ncLenderAccepted(b); }).length;
       if (!n) return;
       var parts = []; var ic = svcIcon(s.id, 12); if (ic) parts.push(ic);
       parts.push(el('span', 'chip-svc-main', s.nomCourt)); parts.push(el('span', 'chip-svc-sub', String(n)));
@@ -9808,6 +10325,15 @@
     var head = $('notary-open-h');
     ncRenderFilter();
     var all = nc.open;
+    var filtered = ncFilteredOpen();
+    var days = D.agendaByDate(filtered);
+    if (nc.filter.day && !days.some(function (d) { return d.dateISO === nc.filter.day; })) nc.filter.day = null;
+    ncRenderFilterDisclosure();
+    var shown = filtered.filter(function (b) { return !nc.filter.day || b.dateISO === nc.filter.day; });
+    var reset = $('notary-open-reset');
+    if (reset) reset.hidden = nc.filter.service === 'all' && !nc.filter.readyOnly && !nc.filter.day;
+    var lendersHideAll = all.length > 0 && !all.some(ncLenderAccepted);
+    var prefsDoor = $('notary-open-prefs'); if (prefsDoor) prefsDoor.hidden = !lendersHideAll;
     // The disclosure seg follows the filter: pointless over an empty feed,
     // pressed state mirrors the remembered device choice.
     var seg = $('notary-open-view');
@@ -9823,9 +10349,9 @@
       clear(head);
       head.appendChild(el('span', null, 'Demandes ouvertes'));
       head.appendChild(document.createTextNode(' · '));
-      head.appendChild(el('span', 'nc-h-n', String(all.length)));
-      if (all.length) {
-        var inPlay = all.reduce(function (s, b) { return s + (Math.round(Number(b.montant)) || 0); }, 0);
+      head.appendChild(el('span', 'nc-h-n', String(shown.length)));
+      if (shown.length) {
+        var inPlay = shown.reduce(function (s, b) { return s + (Math.round(Number(b.montant)) || 0); }, 0);
         head.appendChild(document.createTextNode(' · '));
         head.appendChild(el('span', 'nc-h-sum'));
         head.lastChild.appendChild(el('span', 'nc-h-amt', D.money(inPlay)));
@@ -9850,13 +10376,17 @@
       }
       return;
     }
-    var days = D.agendaByDate(ncFilteredOpen());
-    if (!days.length) { if (empty) { empty.textContent = 'Aucune demande ne correspond à ce filtre.'; empty.hidden = false; } return; }
+    if (!days.length) {
+      if (empty) {
+        empty.textContent = lendersHideAll ? 'Vos préférences de prêteurs masquent ces demandes.' : 'Aucune demande ne correspond à ce filtre.';
+        empty.hidden = false;
+      }
+      return;
+    }
     if (empty) empty.hidden = true;
     // The date is an attribute of the demand, not a layout axis (ADR 0020):
     // the day strip sums each signing day (and filters on click); the cards
     // pack ONE responsive grid chronologically, each carrying its own date.
-    if (nc.filter.day && !days.some(function (d) { return d.dateISO === nc.filter.day; })) nc.filter.day = null;
     list.appendChild(ncDayStrip(days));
     var grid = el('div', 'nc-grid nc-agenda-grid');
     days.forEach(function (day) {
@@ -9868,6 +10398,13 @@
     list.appendChild(grid);
   }
 
+  function ncResetFilters() {
+    nc.filter.service = 'all'; nc.filter.readyOnly = false; nc.filter.day = null;
+    ncRenderOpen();
+    var head = $('notary-open-h');
+    if (head) { head.tabIndex = -1; head.focus({ preventScroll: true }); }
+  }
+
   // The day rail: one mini calendar cell per signing day — weekday over the
   // day number, the day's money under it, the count as a corner badge. One
   // finger/wheel-scrollable row at every width: a dozen days must never wall
@@ -9876,6 +10413,8 @@
   // held the rest of the rail dims.
   function ncDayStrip(days) {
     var strip = el('div', 'nc-days');
+    strip.id = 'notary-open-days';
+    strip.hidden = !ncFiltersExpanded();
     strip.setAttribute('role', 'group');
     strip.setAttribute('aria-label', 'Filtrer par jour');
     strip.classList.toggle('has-day', !!nc.filter.day);
@@ -10690,6 +11229,8 @@
     if (entry && entry.annulee) return ncIndemniteCard(entry);
     var svc = D.serviceById(entry.serviceId);
     var card = el('div', 'nc-card is-retained'); card.dataset.id = entry.id; card.dataset.date = entry.dateISO || '';
+    var summary = el('div', 'nc-retained-summary');
+    var overview = el('div', 'nc-retained-overview');
     var head = el('div', 'nc-card-head');
     head.appendChild(el('div', 'nc-card-title', svc ? svc.nom : entry.serviceId));
     // Unread client messages (ADR 0033): the badge rides the head, beside
@@ -10697,13 +11238,13 @@
     var unread = ncUnreadCount(entry);
     if (unread) { head.appendChild(ncUnreadBadge(unread)); card.dataset.unread = String(unread); }
     head.appendChild(el('div', 'nc-card-amount', D.money(entry.montant)));
-    card.appendChild(head);
+    overview.appendChild(head);
     var meta = el('div', 'nc-card-meta');
     meta.appendChild(ncTierPill(entry.tier));
     meta.appendChild(el('span', 'pill pill-retenue', 'Retenue'));
     if (entry.viaProposition) meta.appendChild(el('span', 'nc-pill nc-via-prop', 'Prix accepté sur proposition'));
     if (entry.completed) meta.appendChild(el('span', 'nc-done-badge', 'Acte complété'));
-    card.appendChild(meta);
+    overview.appendChild(meta);
     // ADR 0035 — sur un acte RETENU, c'est là que la garantie compte le plus :
     // la journée est bloquée. Un refus est la seule mauvaise nouvelle que le
     // notaire doit pouvoir lire sans attendre un courriel, alors elle se lit en
@@ -10714,19 +11255,40 @@
       if (cautionLine) {
         var cautionRow = el('div', 'nc-card-facts nc-caution-row');
         cautionRow.appendChild(cautionLine);
-        card.appendChild(cautionRow);
+        overview.appendChild(cautionRow);
       }
     }
     // Retained cards live in a flat list (no day sections), so the signing
     // date leads; the lender / déplacement facts moved under « Votre client ».
     var facts = ncFactsRow({ dateISO: entry.dateISO, showDate: true });
-    if (facts) card.appendChild(facts);
+    if (facts) overview.appendChild(facts);
     var status = ncStatusRow({ demande: entry.demande });
-    if (status) card.appendChild(status);
-    // Who the client is, then the conversation, then the file (ADR 0033).
-    card.appendChild(ncClientBlock(entry));
-    card.appendChild(ncChatBlock(entry));
-    card.appendChild(ncDossierBlock(entry));
+    if (status) overview.appendChild(status);
+    summary.appendChild(overview);
+    summary.appendChild(ncClientBlock(entry));
+    card.appendChild(summary);
+    // A quick overview stays readable in the list. The entire working file
+    // remains mounted behind one disclosure so collapsing never loses a draft.
+    var start = el('div', 'nc-first-contact nc-retained-actions');
+    var firstContact = !entry.completed && !(entry.messages || []).length;
+    if (firstContact) start.appendChild(el('p', null, 'Confirmez l’heure du rendez-vous et les documents à préparer.'));
+    var buttons = el('div', 'nc-retained-buttons');
+    var write = el('button', 'btn btn-primary ' + (firstContact ? 'nc-contact-start' : 'nc-contact-open'), firstContact ? 'Écrire au client' : 'Ouvrir la conversation');
+    write.type = 'button';
+    buttons.appendChild(write);
+    var toggle = el('button', 'btn nc-retained-toggle', 'Détails du dossier');
+    toggle.type = 'button';
+    toggle.setAttribute('aria-controls', 'nc-retained-body-' + entry.id);
+    toggle.setAttribute('aria-expanded', 'false');
+    buttons.appendChild(toggle);
+    start.appendChild(buttons);
+    card.appendChild(start);
+    var workspace = el('div', 'nc-retained-workspace');
+    workspace.id = 'nc-retained-body-' + entry.id;
+    workspace.hidden = true;
+    workspace.appendChild(ncChatBlock(entry));
+    var file = el('div', 'nc-retained-file');
+    file.appendChild(ncDossierBlock(entry));
     // A retaining notary may still ask for what the dossier lacks, and block
     // the day in their own agenda.
     var more = el('div', 'nc-card-more');
@@ -10735,16 +11297,32 @@
     more.appendChild(docs);
     more.appendChild(ncAgendaMenu(entry));
     if (!entry.completed) more.appendChild(signingBetaLink(entry, 'notary'));
-    card.appendChild(more);
-    card.appendChild(ncCompleteBlock(entry));
+    file.appendChild(more);
+    file.appendChild(ncCompleteBlock(entry));
     // Withdrawing stays possible until the act completes: a surfaced detail
     // (prêteur inhabituel, conflit) can still make the file impossible.
     if (!entry.completed) {
       var forecast = ncForecastLine(entry);
-      if (forecast) card.appendChild(forecast);
-      card.appendChild(ncReleaseBlock(entry));
+      if (forecast) file.appendChild(forecast);
+      file.appendChild(ncReleaseBlock(entry));
     }
+    workspace.appendChild(file);
+    card.appendChild(workspace);
+    ncSetRetainedExpanded(card, !!(nc.retainedDetails && nc.retainedDetails[entry.id]));
     return card;
+  }
+  function ncSetRetainedExpanded(card, expanded) {
+    var workspace = card && card.querySelector('.nc-retained-workspace');
+    if (!workspace) return;
+    if (!nc.retainedDetails) nc.retainedDetails = {};
+    nc.retainedDetails[card.dataset.id] = !!expanded;
+    workspace.hidden = !expanded;
+    card.classList.toggle('is-expanded', !!expanded);
+    var toggle = card.querySelector('.nc-retained-toggle');
+    if (toggle) {
+      toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+      toggle.textContent = T(expanded ? 'Vue simple' : 'Détails du dossier');
+    }
   }
   // What a client cancellation TODAY would hand this notary (ADR 0033 §5):
   // the server's forecast on the entry — null (no live hold, free band) →
@@ -11263,7 +11841,7 @@
   // the open market untouched and this console stops seeing it.
   function ncReleaseBlock(entry) {
     var wrap = el('div', 'nc-release'); wrap.dataset.id = entry.id;
-    var open = el('button', 'link-btn nc-release-open', 'Un détail rend ce dossier impossible ? Me désister');
+    var open = el('button', 'btn btn-sm btn-ghost nc-release-open', 'Un détail rend ce dossier impossible ? Me désister');
     open.type = 'button'; open.setAttribute('aria-expanded', 'false');
     wrap.appendChild(open);
     var form = el('div', 'nc-release-form'); form.hidden = true;
@@ -11401,15 +11979,40 @@
     state.tab = 'notaires';
     return true;
   }
-  function ncConsumeDeepAct() {
+  function ncConsumeDeepAct(loaded) {
+    // Wait for the authenticated response before deciding whether a link is
+    // still available. Cached cards and filters are not authoritative.
+    if (!loaded || !nc.token) return;
     var id = nc.deepAct; if (!id) return;
-    var card = document.querySelector('#notary-retained-list .nc-card[data-id="' + id + '"], #notary-open-list .nc-card[data-id="' + id + '"]');
-    if (!card) return; // not painted yet — the next render tries again
+    var bid = ncFindOpen(id);
+    var card = Array.prototype.find.call(document.querySelectorAll('#notary-retained-list .nc-card, #notary-open-list .nc-card'), function (node) { return node.dataset.id === id; });
     nc.deepAct = null;
+    var notice = $('nc-offer-notice'); if (notice) notice.hidden = true;
+    if (!card && !bid) {
+      if (ncProfilIncomplet()) {
+        nc.pendingRetain = id;
+        ncProfilGate(null);
+      } else if (notice) {
+        ncSetText('nc-offer-notice-text', 'Cette demande n’est plus disponible pour votre profil. Choisissez une autre demande.');
+        notice.hidden = false;
+        var action = $('nc-offer-notice-dismiss');
+        if (action) action.focus();
+      }
+      return;
+    }
     if (state.tab !== 'notaires') setTab('notaires', { scroll: false, focus: false });
-    if (card.scrollIntoView) { try { card.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
-    retrigger(card, 'is-flash');
-    card.addEventListener('animationend', function () { card.classList.remove('is-flash'); }, { once: true });
+    if (card) {
+      if (card.classList.contains('is-retained')) ncSetRetainedExpanded(card, true);
+      if (card.scrollIntoView) { try { card.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
+      retrigger(card, 'is-flash');
+      card.addEventListener('animationend', function () { card.classList.remove('is-flash'); }, { once: true });
+    }
+    // Calendar/email links are already an explicit choice of this offer.
+    // Open its review; only the confirmation button may actually accept it.
+    if (bid && nc.token) {
+      if (ncProfilIncomplet()) ncProfilGate(null, bid);
+      else ncOpenRetainSheet(bid);
+    }
   }
 
   // Le cumul des revenus du notaire (ADR 0031) : ses HONORAIRES, entiers.
@@ -11487,7 +12090,9 @@
       box.appendChild(el('p', 'help', 'Vos clients ont payé ' + D.money(e.prixNota) + ' à Nota pour le service de la plateforme, en plus de vos honoraires. Rien n’a été retranché de ce qui vous revient.'));
     }
     if (e.pending) {
-      box.appendChild(el('p', 'help', e.pending + ' dossier' + (e.pending > 1 ? 's' : '') + ' à compléter · valeur estimée ' + D.money(e.pendingVal) + '. Vos honoraires vous sont virés à la signature, en entier.'));
+      var pending = el('p', 'help', e.pending + ' dossier' + (e.pending > 1 ? 's' : '') + ' à compléter · valeur estimée ' + D.money(e.pendingVal) + '. ');
+      pending.appendChild(el('span', null, 'Vos honoraires vous sont virés à la signature, en entier.'));
+      box.appendChild(pending);
     } else if (!e.done) {
       box.appendChild(el('p', 'help', T('0 acte complété. Vos honoraires s’afficheront ici dès votre premier acte complété.')));
     }
@@ -11932,6 +12537,17 @@
     if (errBox) { clear(errBox); errBox.hidden = true; }
     if (saved) saved.textContent = NC_PROFIL_SAVED;
     toast('Profil enregistré.');
+    if (nc.pendingRetain && !ncProfilIncomplet()) {
+      var selectedId = nc.pendingRetain;
+      // Refresh availability and the matching rules after changing the profile.
+      if (!(await ncLoadBids())) return;
+      var selected = ncFindOpen(selectedId);
+      if (selected && !ncProfilIncomplet()) ncOpenRetainSheet(selected);
+      else if (!selected) {
+        nc.pendingRetain = null;
+        toast('Cette demande n’est plus disponible pour votre profil.');
+      }
+    }
   }
 
   // Explicit sign-out purges the cached retained client PII (courriel/dossier),
@@ -11940,6 +12556,7 @@
   // …and the device ledgers that describe THIS notary's reading and roster
   // (audit P2-4): the next person on the device starts clean.
   function ncSignOut() {
+    lsSave('nota.notary.offerIntent', null);
     try { localStorage.removeItem(LS_NC_RETAINED); localStorage.removeItem(LS_NC_SEEN); localStorage.removeItem(LS_NC_PREFS); } catch (e) {}
     ncExpire('Déconnecté.');
   }
@@ -11970,7 +12587,7 @@
   // rest reached with arrow keys. Panes without a header tab (profil, legal)
   // keep the first tab reachable so the tablist never becomes a dead end.
   function syncNavTabs(tab) {
-    var tabs = document.querySelectorAll('.nav-tab');
+    var tabs = Array.prototype.filter.call(document.querySelectorAll('.nav-tab'), function (t) { return !t.hidden; });
     var anySelected = false;
     tabs.forEach(function (b) {
       var sel = b.dataset.tab === tab;
@@ -11990,12 +12607,22 @@
 
   function setTab(tab, opts) {
     opts = opts || {};
+    // A door that needs an account does not open on a deep link either: the
+    // visitor lands on the carnet with the sign-in sheet in front of them,
+    // rather than on a pane that has nothing to show them. `gate: false` is
+    // the one way through — it belongs to the sign-in sheet's own fallback,
+    // which walks an engine without <dialog> to the identity form.
+    if (opts.gate !== false && paneNeedsAccount(tab)) {
+      openAuthModal('client', 'signin');
+      tab = 'carnet';
+    }
     var prev = state.tab;
     if (tab !== prev) {
       var prevIndex = PANES.indexOf(prev), nextIndex = PANES.indexOf(tab);
       document.documentElement.setAttribute('data-nav-direction', nextIndex >= prevIndex ? 'forward' : 'back');
     }
     state.tab = tab;
+    if (tab !== 'carnet' && clientWalk) clientWalkStop();
     syncNavTabs(tab);
     PANES.forEach(function (t) {
       var pane = $('pane-' + t);
@@ -12007,6 +12634,9 @@
     if (tab === 'dossier') renderDossier();
     if (tab === 'profil') renderProfil();
     if (tab === 'notaires') { renderNotaryLive(); noteNotaryDoor(); }
+    // Le circuit du code ne joue que devant quelqu'un : il démarre à
+    // l'ouverture de la porte et se gare de lui-même quand elle se referme.
+    if (tab === 'partenaires') partnerFlow.restart(); else partnerFlow.stop();
     // The client thread refreshes itself only while Mes offres is on screen.
     clientPollSync();
     if (opts.scroll !== false) window.scrollTo({ top: 0, behavior: 'auto' });
@@ -12021,7 +12651,6 @@
     // Each pane change is a history entry (deep-linkable, Back walks panes
     // instead of leaving the site). fromHistory guards the popstate round-trip.
     if (tab !== prev && !opts.fromHistory) writeHash({ push: true });
-    else syncHistoryControls();
   }
 
   // Every modal the page can hold; closed together when history moves.
@@ -12237,13 +12866,6 @@
   function wire() {
     // Les sections écrites en dur reçoivent leur glyphe une fois pour toutes.
     paintStaticSectionIcons();
-    document.querySelectorAll('[data-history="back"]').forEach(function (button) {
-      button.addEventListener('click', function () { if (!this.disabled) history.back(); });
-    });
-    document.querySelectorAll('[data-history="forward"]').forEach(function (button) {
-      button.addEventListener('click', function () { if (!this.disabled) history.forward(); });
-    });
-    syncHistoryControls();
     wireSalle();
     // Tabs
     document.querySelectorAll('.nav-tab').forEach(function (b) {
@@ -12254,7 +12876,9 @@
     // activation — two tabs, both cheap to render), Home/End jump.
     var tablist = document.querySelector('.nav-tabs');
     if (tablist) tablist.addEventListener('keydown', function (e) {
-      var tabs = Array.prototype.slice.call(tablist.querySelectorAll('.nav-tab'));
+      // A door closed to this visitor is not in the arrow order either: a
+      // hidden tab cannot be focused, so landing on it would strand the walk.
+      var tabs = Array.prototype.slice.call(tablist.querySelectorAll('.nav-tab')).filter(function (t) { return !t.hidden; });
       if (!tabs.length) return;
       var i = tabs.indexOf(document.activeElement);
       var next = null;
@@ -12282,6 +12906,11 @@
       var b = e.target.closest('.chip'); if (!b) return;
       partnerSetType(b.dataset.type);
     });
+    var pEmailEdit = $('partner-email-edit');
+    if (pEmailEdit) pEmailEdit.addEventListener('click', function () {
+      var email = $('partner-courriel');
+      if (email) { email.focus(); email.select(); }
+    });
     // Conversion: the courriel SUGGESTS the code (its local part, normalized),
     // so the happy path never invents one. The suggestion is remembered in
     // data-auto and only ever replaces itself — a hand-typed code wins, and
@@ -12301,21 +12930,13 @@
       }
       partnerValidateUI();
     });
+    if (pMail) pMail.addEventListener('blur', function () {
+      pMail.setAttribute('aria-invalid', pMail.value.trim() && !D.isEmail(pMail.value.trim()) ? 'true' : 'false');
+    });
     var pForm = $('partner-form'); if (pForm) pForm.addEventListener('submit', onPartnerSubmit);
     var pCopy = $('partner-copy'); if (pCopy) pCopy.addEventListener('click', partnerCopyLink);
     var pShare = $('partner-share'); if (pShare) pShare.addEventListener('click', partnerShareClick);
     var pMsgCopy = $('partner-msg-copy'); if (pMsgCopy) pMsgCopy.addEventListener('click', partnerCopyMessage);
-    // The hero's CTA travels to the claim form — it never submits anything.
-    // The two reward cards take the same trip: on this pane every surface
-    // that sells the program lands the visitor in the form, courriel focused
-    // (three-click rule). The reward cards are plain stats — the CTA is the
-    // one door, for the mouse as for the keyboard and the screen reader.
-    var goPartnerClaim = function () {
-      var panel = document.querySelector('.pr-form-panel');
-      if (panel && panel.scrollIntoView) { try { panel.scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {} }
-      var inp = $('partner-courriel');
-      if (inp) { try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); } }
-    };
     var removeReferral = $('referral-remove');
     if (removeReferral) removeReferral.addEventListener('click', function () {
       flagClear(LS_REF);
@@ -12324,9 +12945,6 @@
       renderReferralStatus();
       var homeTab = $('tab-carnet'); if (homeTab) homeTab.focus();
     });
-    var pHero = $('pr-hero-cta');
-    if (pHero) pHero.addEventListener('click', goPartnerClaim);
-
     $('theme-toggle').addEventListener('click', function () {
       setTheme(effectiveTheme() === 'dark' ? 'light' : 'dark');
     });
@@ -12565,7 +13183,6 @@
         var found = navHistory.findIndex(function (entry) { return entry.url === currentUrl; });
         if (found >= 0) navHistoryIndex = found;
       }
-      syncHistoryControls();
       var h = new URLSearchParams(location.hash.replace(/^#/, ''));
       var t = h.get('t') || 'carnet';
       if (PANES.indexOf(t) < 0) t = 'carnet';
@@ -12666,11 +13283,18 @@
     var dayPick = $('day-date');
     if (dayPick) {
       dayPick.setAttribute('min', todayISO());
-      dayPick.addEventListener('change', function () {
+      dayPick.addEventListener('change', async function () {
         var iso = this.value;
         if (!D.isISODate(iso) || iso < todayISO()) { this.value = state.selectedDate || ''; return; }
         if (iso === state.selectedDate) return;
-        openDay(iso);
+        await openDay(iso, { preview: $('day-dialog').dataset.interaction === 'preview' });
+        if ($('day-date-edit')) $('day-date-edit').open = false;
+        // Later form screens have no visible service chip to focus. Keep the
+        // keyboard at the date control instead of sending it into hidden content.
+        if ($('day-dialog').dataset.interaction === 'offer' && bookAt > 1) {
+          var dateSummary = document.querySelector('#day-date-edit > summary');
+          if (dateSummary) dateSummary.focus();
+        } else focusBookingStart();
       });
     }
 
@@ -12843,11 +13467,27 @@
       ncSheet.addEventListener('close', function () { ncSheetBid = null; });
     }
     var ncFilter = $('notary-open-filter');
+    if ($('notary-filters-toggle')) $('notary-filters-toggle').addEventListener('click', function () {
+      flagSet(LS_NC_FILTERS, ncFiltersExpanded() ? 'closed' : 'open');
+      ncRenderFilterDisclosure();
+    });
+    if ($('notary-open-reset')) $('notary-open-reset').addEventListener('click', ncResetFilters);
+    if ($('notary-open-prefs')) $('notary-open-prefs').addEventListener('click', function () {
+      var panel = $('notary-prefs'); if (panel) panel.open = true;
+      var first = document.querySelector('#pref-lenders button'); if (first) first.focus();
+    });
+    if ($('nc-offer-notice-dismiss')) $('nc-offer-notice-dismiss').addEventListener('click', function () {
+      $('nc-offer-notice').hidden = true;
+      ncResetFilters();
+    });
     if (ncFilter) ncFilter.addEventListener('click', function (e) {
       var c = e.target.closest('.chip'); if (!c) return;
-      if (c.classList.contains('nc-chip-ready')) nc.filter.readyOnly = !nc.filter.readyOnly;
+      var isReady = c.classList.contains('nc-chip-ready');
+      if (isReady) nc.filter.readyOnly = !nc.filter.readyOnly;
       else nc.filter.service = c.dataset.svc || 'all';
       ncRenderOpen();
+      var selected = isReady ? ncFilter.querySelector('.nc-chip-ready') : Array.from(ncFilter.querySelectorAll('[data-svc]')).find(function (x) { return x.dataset.svc === nc.filter.service; });
+      if (selected && !ncFilter.hidden) selected.focus({ preventScroll: true });
     });
     // Disclosure seg (ADR 0019): « L’essentiel » ↔ « Tout afficher ». The
     // choice is per device; folding back to essential drops the hand-opened
@@ -12868,6 +13508,8 @@
         if (tile) {
           nc.filter.day = nc.filter.day === tile.dataset.date ? null : tile.dataset.date;
           ncRenderOpen();
+          var selectedDay = Array.from(ncOpenList.querySelectorAll('.nc-daytile')).find(function (x) { return x.dataset.date === tile.dataset.date; });
+          if (selectedDay && ncFiltersExpanded()) selectedDay.focus({ preventScroll: true });
           return;
         }
         var card = e.target.closest('.nc-card'); if (!card) return;
@@ -12876,11 +13518,12 @@
         // Retenir / Proposer go through the contact gate first (ADR 0033):
         // an incomplete profile opens the form instead of the action.
         if (e.target.closest('.nc-accept')) {
-          if (ncProfilIncomplet()) ncProfilGate(null); else ncOpenRetainSheet(b);
+          if (ncProfilIncomplet()) ncProfilGate(null, b); else ncOpenRetainSheet(b);
         }
         else if (e.target.closest('.nc-decline')) ncDeclineLater(id, b.dateISO);
         else if (e.target.closest('.nc-undo')) ncCancelDecline(id);
         else if (e.target.closest('.nc-propose-btn')) {
+          nc.pendingRetain = null;
           if (ncProfilIncomplet()) ncProfilGate(null);
           else ncToggleForm(card, e.target.closest('.nc-propose-btn'), 'nc-propose', function () { return ncProposeForm(b); });
         }
@@ -12899,6 +13542,24 @@
         var entryOf = function () {
           return ncRetainedFor(nc.email).filter(function (x) { return x.id === card.dataset.id; })[0];
         };
+        if (e.target.closest('.nc-retained-toggle')) {
+          ncSetRetainedExpanded(card, !card.classList.contains('is-expanded'));
+          return;
+        }
+        if (e.target.closest('.nc-contact-start, .nc-contact-open')) {
+          ncSetRetainedExpanded(card, true);
+          var composer = card.querySelector('.chat-input');
+          if (composer) {
+            // Prepare an editable draft; the normal Send button is the only
+            // action that transmits it. Never replace the notary's own draft.
+            if (e.target.closest('.nc-contact-start') && !composer.value.trim()) {
+              composer.value = T('Bonjour, j’ai retenu votre demande dans Nota. Quelle heure vous conviendrait pour la signature ? Nous pouvons aussi préciser les documents à préparer ici.');
+              composer.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            composer.focus();
+          }
+          return;
+        }
         var docsBtn = e.target.closest('.nc-docs-btn');
         if (docsBtn) {
           var entry = entryOf();
@@ -12964,7 +13625,8 @@
       ncRenderOpen();
     });
 
-    // Hero CTAs — orient the buyer immediately
+    // Ordinary booking keeps its existing direct entry. The optional tour
+    // starts only at the end of the product introduction or on replay.
     var ctaR = $('cta-reserver');
     if (ctaR) ctaR.addEventListener('click', openOfferFlow);
     var ctaV = $('cta-voir');
@@ -13083,6 +13745,24 @@
 
   function partnerShareLink(code) { return SITE_ORIGIN + '/?ref=' + code; }
 
+  // The arrival door takes partners straight to the next real action. A
+  // preference never creates a claim: only the existing verified flow does.
+  function partnerStart() {
+    roleSet('partner');
+    onbMarkSeen();
+    closeOpenDialogs();
+    setTab('partenaires', { scroll: false });
+    renderPartnerPane();
+    var confirmed = partnerGet();
+    var details = $('partner-details');
+    if (details) details.open = !confirmed;
+    var region = confirmed ? $('partner-success') : details;
+    var target = confirmed ? $('partner-copy') : (!partnerState.type
+      ? document.querySelector('#partner-type .chip') : $('partner-courriel'));
+    if (region && region.scrollIntoView) region.scrollIntoView({ block: 'start', behavior: 'instant' });
+    if (target) { try { target.focus({ preventScroll: true }); } catch (e) { target.focus(); } }
+  }
+
   // ===== Ambient mark drift — the Nota logo, twenty times, adrift. =====
   // Born on the intro gate (2026-08-27), then promoted the same day to ONE
   // fixed site-wide layer behind all content (the hero's own clipped copy
@@ -13157,6 +13837,158 @@
     host.insertBefore(bg, host.firstChild);
   }
 
+  // --- Le circuit du code (propriétaire, 2026-09-12 soir) --------------------
+  // « Une animation qui explique clairement comment la section partenaire
+  // fonctionne. » Un code, deux voies, une seule fin :
+  //   • la voie du LIEN — le client clique, le champ « Code de référence » de
+  //     la feuille de réservation est DÉJÀ rempli (refPrefillOfferField) ;
+  //   • la voie du CODE DIT — le client tape le même code lui-même, à l'écran 4
+  //     de cette feuille. Le champ montré ici est exactement celui-là, pour
+  //     qu'on le reconnaisse une fois devant.
+  // Les deux voies se rejoignent sur la même chaîne (publiée → retenue →
+  // signée) et la même récompense — jamais « en quelques secondes » : le
+  // versement suit la signature (vignettes-montrees.test.mjs tient la porte).
+  // Rien n'est écrit en dur : le code est celui du visiteur, la récompense
+  // vient du domaine, et le « 0 $ » du client est D.money(0).
+  function makePartnerFlow() {
+    var v = { timers: [], raf: null, running: false, waits: 0 };
+    // Même patience bornée que la vignette de la semaine : la boucle est armée
+    // au rendu, qui peut précéder l'instant où la figure est VISIBLE (film
+    // d'accueil, lien direct). Une figure qu'on ne verra jamais ne sonde pas
+    // indéfiniment.
+    var WAIT_MS = 400, MAX_WAITS = 20;
+    var LIT = ['pr-fl-seed', 'pr-fl-step-lien', 'pr-fl-link', 'pr-fl-card-lien',
+      'pr-fl-step-code', 'pr-fl-said', 'pr-fl-card-code',
+      'pr-fl-beat-publiee', 'pr-fl-beat-retenue', 'pr-fl-beat-signe',
+      'pr-fl-end-vous', 'pr-fl-end-client'];
+
+    function later(fn, ms) { v.timers.push(setTimeout(fn, ms)); }
+    function stop() {
+      v.timers.forEach(clearTimeout); v.timers = [];
+      if (v.raf) cancelAnimationFrame(v.raf); v.raf = null;
+      v.running = false;
+    }
+    function onScreen() {
+      var box = $('pr-flow');
+      return !!(box && !box.hidden && box.offsetParent && !document.hidden);
+    }
+    function lightUp(id, on) { var n = $(id); if (n) n.classList.toggle('is-on', on !== false); }
+
+    // Le code montré est celui que le visiteur a déjà sous les yeux : son code
+    // confirmé, sinon celui qu'il est en train de taper, sinon l'exemple du
+    // champ. Jamais un code inventé à côté du sien.
+    function flowCode() {
+      var rec = partnerGet();
+      if (rec && rec.code) return rec.code;
+      var inp = $('partner-code');
+      var typed = inp ? inp.value.trim() : '';
+      if (D.isReferralCode(typed)) return D.normalizeReferralCode(typed);
+      return (inp && inp.placeholder) || 'EVEROY';
+    }
+
+    // Ce qui ne bouge pas d'un tour à l'autre : le code, le lien, la somme du
+    // client. Rendu aussi en mouvement réduit — la figure n'est jamais vide.
+    function paint(code) {
+      var seed = $('pr-fl-seed-code'); if (seed) seed.textContent = code;
+      var link = $('pr-fl-link');
+      // Le lien sans son protocole : c'est ce qu'on lit dans un message, et
+      // la moitié « https:// » ne dit rien de plus au partenaire.
+      if (link) link.textContent = partnerShareLink(code).replace(/^https?:\/\//, '');
+      var said = $('pr-fl-said'); if (said) said.textContent = '« ' + code + ' »';
+      var cli = $('pr-fl-client-amount'); if (cli) cli.textContent = D.money(0);
+    }
+    function setField(id, text) { var n = $(id); if (n) n.textContent = text; }
+    function reset() {
+      LIT.forEach(function (id) { lightUp(id, false); });
+      setField('pr-fl-field-lien', '');
+      setField('pr-fl-field-code', '');
+      // La récompense reste VIDE jusqu'à la signature : un « 0 $ » en attente,
+      // même éteint, se lit comme une promesse à zéro. Sa place est tenue par
+      // la hauteur minimale du chiffre (.pr-fl-end-amt).
+      setField('pr-fl-amount', '');
+    }
+
+    // La frappe du client, lettre par lettre — la seule différence visible
+    // entre les deux voies, et toute la raison d'en montrer deux.
+    function typeCode(id, code, step) {
+      var i = 0;
+      (function next() {
+        if (!onScreen()) { stop(); return; }
+        i++;
+        setField(id, code.slice(0, i));
+        if (i < code.length) later(next, step);
+      })();
+    }
+
+    // La récompense monte jusqu'au chiffre du domaine ; un minuteur garantit le
+    // chiffre FINAL là où rAF est suspendu (onglet en arrière-plan).
+    function tween(to) {
+      var out = $('pr-fl-amount'); if (!out) return;
+      if (v.raf) cancelAnimationFrame(v.raf);
+      var t0 = performance.now(), dur = 700;
+      (function frame(t) {
+        var k = Math.min(1, ((t || performance.now()) - t0) / dur);
+        k = 1 - Math.pow(1 - k, 3);
+        out.textContent = D.money(Math.round(to * k));
+        v.raf = k < 1 ? requestAnimationFrame(frame) : null;
+      })(t0);
+      later(function () { out.textContent = D.money(to); }, dur + 120);
+    }
+
+    function cycle() {
+      if (!onScreen()) {
+        if (v.waits < MAX_WAITS) { v.waits++; later(cycle, WAIT_MS); return; }
+        stop(); return;
+      }
+      v.waits = 0;
+      var code = flowCode();
+      reset(); paint(code);
+      // Le minutage de la scène, une fois pour toutes : ce que la lecture
+      // demande, pas ce que le code rend facile.
+      lightUp('pr-fl-seed');
+      later(function () { lightUp('pr-fl-step-lien'); }, 500);
+      later(function () { lightUp('pr-fl-link'); }, 850);
+      later(function () { lightUp('pr-fl-card-lien'); setField('pr-fl-field-lien', code); }, 1250);
+      later(function () { lightUp('pr-fl-step-code'); }, 1650);
+      later(function () { lightUp('pr-fl-said'); }, 1950);
+      later(function () { lightUp('pr-fl-card-code'); typeCode('pr-fl-field-code', code, 110); }, 2350);
+      later(function () { lightUp('pr-fl-beat-publiee'); }, 3300);
+      later(function () { lightUp('pr-fl-beat-retenue'); }, 3900);
+      later(function () { lightUp('pr-fl-beat-signe'); }, 4500);
+      later(function () { lightUp('pr-fl-end-vous'); tween(D.REFERRAL.client); }, 5100);
+      later(function () { lightUp('pr-fl-end-client'); }, 5500);
+      // Le temps de lire la fin avant de recommencer.
+      later(cycle, 9500);
+    }
+
+    function render() {
+      var box = $('pr-flow'); if (!box) return;
+      var code = flowCode();
+      // Mouvement réduit : l'état FINAL d'un coup, jamais une bande vide.
+      if (reducedMotion()) {
+        stop(); reset(); paint(code);
+        LIT.forEach(function (id) { lightUp(id); });
+        setField('pr-fl-field-lien', code);
+        setField('pr-fl-field-code', code);
+        var amt = $('pr-fl-amount'); if (amt) amt.textContent = D.money(D.REFERRAL.client);
+        return;
+      }
+      if (v.running) return;
+      v.running = true; v.waits = 0;
+      cycle();
+    }
+
+    var api = { render: render, restart: function () { stop(); render(); }, stop: stop };
+    // Une porte ouverte dans un onglet d'arrière-plan : la boucle épuise sa
+    // patience et se gare, et le visiteur qui revient trouverait une scène à
+    // moitié éteinte. Le retour à l'écran la relance depuis le début.
+    document.addEventListener('visibilitychange', function () {
+      if (!document.hidden && state.tab === 'partenaires') api.restart();
+    });
+    return api;
+  }
+  var partnerFlow = makePartnerFlow();
+
   function renderPartnerPane() {
     // Two tracks, two flat amounts — both DOMAIN data (D.REFERRAL.client /
     // D.REFERRAL.notaire), formatted like every other figure in the app.
@@ -13164,8 +13996,6 @@
     if (amtClient) amtClient.textContent = D.money(D.REFERRAL.client);
     var amtNotaire = $('pr-amount-notaire');
     if (amtNotaire) amtNotaire.textContent = D.money(D.REFERRAL.notaire);
-    partnerEstimatorInit();
-    partnerAudienceInit();
     // One chip per partner category, from the domain.
     var wrap = $('partner-type');
     if (wrap && !wrap.children.length) {
@@ -13183,18 +14013,20 @@
     if (rec) {
       var title = $('partner-form-title');
       if (title) title.textContent = 'Votre code partenaire';
-      // The hero CTA stops promising a claim the partner already made.
-      var heroCta = $('pr-hero-cta');
-      if (heroCta) heroCta.textContent = 'Voir mon code →';
       partnerState.type = rec.type || partnerState.type;
       var onChip = wrap ? wrap.querySelector('.chip[data-type="' + partnerState.type + '"]') : null;
       if (onChip) setGroupActive(wrap, onChip);
-      partnerAudienceSync();
       var mailInp = $('partner-courriel');
       if (mailInp && rec.courriel) mailInp.value = rec.courriel;
       var codeInp = $('partner-code');
       if (codeInp) codeInp.value = rec.code;
       partnerClaimConfirmed(rec, rec);
+    } else {
+      var email = $('partner-courriel');
+      if (email && !email.value && D.isEmail(profileGet().courriel)) {
+        email.value = profileGet().courriel;
+        email.dispatchEvent(new Event('input', { bubbles: true }));
+      }
     }
     // The TOS clause carries the same two amounts — filled here so the legal
     // pane can never drift from the domain's figures.
@@ -13206,76 +14038,46 @@
         + 'Payée par Nota à même ses propres fonds, elle ne change jamais le prix du client ni les honoraires du notaire. '
         + 'Le professionnel encadré (OACIQ notamment) demeure responsable de divulguer cette récompense à son client lorsque son code de déontologie l’exige.';
     }
+    // Le circuit : montré ici, sous la promesse, une fois le code connu.
+    partnerFlow.render();
   }
 
-  // The hero's « Vous êtes… » row: the claim form's first question, asked
-  // early. One button per domain partner category, built once; picking one
-  // shows that profession's own « moment » (domain data) and lights the
-  // form's chip. partnerSetType is the single writer for both surfaces, so
-  // they can never disagree. The glyphs are the site's stroke idiom.
-  var PARTNER_AUD_ICONS = {
-    agent_immobilier: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-6h4v6"/></svg>',
-    courtier_hypothecaire: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8.5 15.5l7-7"/><circle cx="9" cy="9" r="1"/><circle cx="15" cy="15" r="1"/></svg>',
-    autre_professionnel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5h6v2"/><path d="M3 12h18"/></svg>',
-  };
-  function partnerAudienceInit() {
-    var row = document.querySelector('#pr-audience .pr-audience-row');
-    if (!row || row.children.length) return;
-    D.REFERRAL.partners.forEach(function (p) {
-      var b = el('button', 'pr-aud');
-      b.type = 'button'; b.dataset.type = p.id; b.setAttribute('aria-pressed', 'false');
-      var ic = el('span', 'pr-aud-ic'); ic.setAttribute('aria-hidden', 'true'); ic.innerHTML = PARTNER_AUD_ICONS[p.id] || '';
-      b.appendChild(ic); b.appendChild(el('span', null, p.nom));
-      b.addEventListener('click', function () { partnerSetType(p.id); });
-      row.appendChild(b);
-    });
-  }
-  function partnerAudienceSync() {
-    var row = document.querySelector('#pr-audience .pr-audience-row');
-    if (row) {
-      row.querySelectorAll('.pr-aud').forEach(function (b) {
-        b.setAttribute('aria-pressed', b.dataset.type === partnerState.type ? 'true' : 'false');
-      });
-    }
-    var p = D.REFERRAL.partners.find(function (x) { return x.id === partnerState.type; });
-    var m = $('pr-moment'); if (m && p) m.textContent = p.moment;
-  }
   function partnerSetType(id) {
     partnerState.type = id;
     var wrap = $('partner-type');
     var chip = wrap ? wrap.querySelector('.chip[data-type="' + id + '"]') : null;
     if (wrap && chip) setGroupActive(wrap, chip);
-    partnerAudienceSync();
     partnerValidateUI();
-  }
-
-  // The hero estimator: the slider's range and seat are domain data and the
-  // yearly figure is D.referralProjection — the page invents no number.
-  function partnerEstimatorRender() {
-    var range = $('pr-estimate-n');
-    if (!range) return;
-    var p = D.referralProjection(range.value);
-    var nv = $('pr-estimate-n-val'); if (nv) nv.textContent = String(p.clientsParMois);
-    var yr = $('pr-estimate-year'); if (yr) yr.textContent = D.money(p.parAn);
-  }
-  function partnerEstimatorInit() {
-    var range = $('pr-estimate-n');
-    if (!range) return;
-    if (!range.dataset.ready) {
-      range.min = '1'; range.max = String(D.REFERRAL.projectionMax); range.step = '1';
-      range.value = String(D.REFERRAL.projectionDefault);
-      range.addEventListener('input', partnerEstimatorRender);
-      range.dataset.ready = '1';
-    }
-    partnerEstimatorRender();
   }
 
   // The words a partner sends their client once the code is claimed. Client-
   // facing: what the client gets, never the reward (disclosure is the
   // partner's own duty). One sentence in the source language; T() carries it
   // into English; the link is appended, never translated.
-  var PARTNER_MESSAGE = 'Bonjour ! Pour votre refinancement ou votre financement hypothécaire, vous pouvez choisir votre date de signature et voir le prix avant de vous engager, sur Nota. Le notaire reçoit 100 % de votre offre et vous ne payez qu’à la signature. Voici le lien : ';
-  function partnerMessageText(code) { return T(PARTNER_MESSAGE) + partnerShareLink(code); }
+  var PARTNER_MESSAGE = 'Bonjour ! Pour votre refinancement ou votre financement hypothécaire, vous pouvez choisir votre date de signature et voir le prix avant de vous engager, sur Nota. Le notaire reçoit 100 % de votre offre et vous ne payez qu’à la signature. Voici le lien :';
+  function partnerMessageText(code) { return T(PARTNER_MESSAGE) + ' ' + partnerShareLink(code); }
+
+  function partnerNextStepRender() {
+    var hint = $('partner-next-step'), submit = $('partner-submit');
+    if (!hint || !submit) return;
+    var mail = $('partner-courriel'), code = $('partner-code');
+    var message;
+    if (submit.getAttribute('aria-busy')) message = 'Envoi du lien d’activation…';
+    else if (submit.dataset.state === 'sent') message = 'Ouvrez le lien reçu par courriel pour activer votre code.';
+    else if (submit.dataset.state === 'claimed') message = 'Votre lien est prêt à partager.';
+    else if (!partnerState.type) message = 'Choisissez votre métier pour commencer.';
+    else if (!mail || !mail.value.trim()) message = 'Entrez votre courriel professionnel. Votre code sera suggéré automatiquement.';
+    else if (!D.isEmail(mail.value.trim())) message = 'Vérifiez votre adresse courriel pour recevoir le lien d’activation.';
+    else if (!code || !D.isReferralCode(code.value.trim())) message = 'Choisissez un code valide pour créer votre lien Nota.';
+    else message = 'Tout est prêt. Un lien par courriel vous permettra d’activer votre code.';
+    // Avoid reannouncing the same instruction on every keystroke, including
+    // after the DOM has been translated to English.
+    if (hint.dataset.message !== message) {
+      hint.dataset.message = message;
+      hint.textContent = message;
+    }
+    hint.dataset.ready = !submit.disabled && !submit.dataset.state ? 'true' : 'false';
+  }
 
   // The claim form validates live: a chosen type, a valid courriel, and a
   // code the domain accepts. The preview normalizes as the partner types —
@@ -13293,16 +14095,18 @@
       else { prev.dataset.state = 'warn'; prev.textContent = 'Code invalide — entre 4 et 12 lettres ou chiffres.'; }
     }
     var mailOk = !!(mailInp && D.isEmail(mailInp.value.trim()));
+    if (mailInp && mailOk) mailInp.removeAttribute('aria-invalid');
     // Editing after a claim resets the CTA out of its success/pending state.
     // The state rides data-state, never the label — the English layer rewrites
     // labels in place, so a text comparison would misfire in English mode.
     if (!submit.getAttribute('aria-busy') && submit.dataset.state) {
       delete submit.dataset.state;
-      submit.textContent = 'Réclamer mon code →';
+      submit.textContent = 'Recevoir mon lien d’activation →';
       var succ = $('partner-success'); if (succ) succ.hidden = true;
       var pend0 = $('partner-pending'); if (pend0) pend0.hidden = true;
     }
-    submit.disabled = !(partnerState.type && mailOk && okCode);
+    submit.disabled = !!submit.getAttribute('aria-busy') || !(partnerState.type && mailOk && okCode);
+    partnerNextStepRender();
   }
 
   // Claiming a code is EMAIL-VERIFIED (ADR 0011 fraud-hardening): a claim only
@@ -13319,7 +14123,8 @@
     var code = D.normalizeReferralCode($('partner-code').value);
     var courriel = $('partner-courriel').value.trim();
     var type = partnerState.type;
-    submit.disabled = true; submit.setAttribute('aria-busy', 'true'); submit.textContent = 'Réclamation…';
+    submit.disabled = true; submit.setAttribute('aria-busy', 'true'); submit.textContent = 'Envoi du lien d’activation…';
+    partnerNextStepRender();
     var r = null;
     try {
       r = await fetch(API_BASE + '/partenaires', {
@@ -13351,6 +14156,8 @@
     submit.textContent = 'Lien envoyé ✓'; // stays disabled
     var box0 = $('partner-success'); if (box0) box0.hidden = true;
     var pend = $('partner-pending'); if (pend) pend.hidden = false;
+    var destination = $('partner-pending-email'); if (destination) destination.textContent = courriel;
+    partnerNextStepRender();
     // The link's lifetime is the API's (PARTNER_CLAIM_TTL_MS); state it when
     // the answer carries it, and never invent a figure when it does not.
     var ttl = $('partner-pending-ttl');
@@ -13358,6 +14165,7 @@
       var mins = Number(j.ttlMinutes);
       ttl.textContent = mins > 0 ? 'Le lien expire dans ' + Math.round(mins) + ' minutes.' : 'Le lien expire rapidement : ouvrez-le dès sa réception.';
     }
+    if (pend) pend.focus();
   }
 
   // A throttled claim: the window is the API's own — Retry-After when it says
@@ -13401,10 +14209,20 @@
     hint = hint || {};
     var submit = $('partner-submit');
     if (submit) { submit.removeAttribute('aria-busy'); submit.dataset.state = 'claimed'; submit.textContent = 'Code réclamé ✓'; submit.disabled = true; }
+    partnerNextStepRender();
     var errs = $('partner-errors'); if (errs) errs.hidden = true;
     var pend = $('partner-pending'); if (pend) pend.hidden = true;
     var box = $('partner-success'); if (box) box.hidden = false;
     var code = saved.code || hint.code;
+    var activeCode = $('partner-active-code'); if (activeCode) activeCode.textContent = code;
+    var details = $('partner-details'); if (details) details.open = false;
+    var title = $('partner-form-title'); if (title) title.textContent = 'Votre code partenaire';
+    var pane = $('pane-partenaires');
+    if (pane) {
+      pane.dataset.partnerState = 'confirmed';
+      var heading = pane.querySelector('.pr-hero h1'); if (heading) heading.textContent = 'Votre lien est prêt à partager.';
+      var intro = pane.querySelector('.pr-hero-copy > p'); if (intro) intro.textContent = 'Retrouvez votre code et un message à copier.';
+    }
     var link = $('partner-link'); if (link) link.textContent = partnerShareLink(code);
     var msg = $('partner-msg'); if (msg) msg.textContent = partnerMessageText(code);
     // Native share only where the platform has a sheet — everywhere else the
@@ -13417,11 +14235,14 @@
       createdAt: saved.createdAt || new Date().toISOString(),
     });
     if (state.tab === 'profil') renderProfil();
+    // Le circuit rejoue avec le VRAI code, pas l'exemple du champ.
+    partnerFlow.restart();
   }
 
   // Shared failure rendering for both the claim request and the verify step:
   // surface the messages, clear the pending state, and re-arm the CTA.
   function partnerFail(msgs) {
+    var details = $('partner-details'); if (details) details.open = true;
     var errs = $('partner-errors');
     if (errs) {
       clear(errs); errs.hidden = false; msgs.forEach(function (m) { errs.appendChild(el('li', null, m)); });
@@ -13433,7 +14254,7 @@
     }
     var pend = $('partner-pending'); if (pend) pend.hidden = true;
     var submit = $('partner-submit');
-    if (submit) { submit.removeAttribute('aria-busy'); delete submit.dataset.state; submit.textContent = 'Réclamer mon code →'; }
+    if (submit) { submit.removeAttribute('aria-busy'); delete submit.dataset.state; submit.textContent = 'Recevoir mon lien d’activation →'; }
     partnerValidateUI();
   }
 
@@ -13582,6 +14403,27 @@
     return true;
   }
   function igPlay(film) {
+    if (film === 'client') {
+      var dates = $('ig-client-dates');
+      if (dates) {
+        clear(dates);
+        var chosen = firstStandardDate();
+        var first = chosen.slice(0, 8) + '01';
+        var firstDate = new Date(first + 'T00:00:00Z');
+        var start = D.addDays(first, -((firstDate.getUTCDay() + 6) % 7));
+        var end = new Date(Date.UTC(firstDate.getUTCFullYear(), firstDate.getUTCMonth() + 1, 0)).toISOString().slice(0, 10);
+        var count = Math.ceil((D.daysBetween(start, end) + 1) / 7) * 7;
+        $('ig-client-month').textContent = monthTitle(chosen);
+        for (var day = 0; day < 7; day++) dates.appendChild(el('span', 'ig-client-weekday', weekdayShort(D.addDays(start, day))));
+        for (var offset = 0; offset < count; offset++) {
+          var iso = D.addDays(start, offset);
+          var tile = el('span', 'ig-client-date' + (iso === chosen ? ' ig-client-picked' : '')
+            + (monthKey(iso) !== monthKey(chosen) ? ' ig-client-outside' : ''));
+          tile.appendChild(el('strong', '', String(Number(iso.slice(8, 10)))));
+          dates.appendChild(tile);
+        }
+      }
+    }
     var stage = $('ig-stage-' + film);
     var other = $(film === 'client' ? 'ig-stage-notaire' : 'ig-stage-client');
     $('ig-chooser').hidden = true;
@@ -13647,6 +14489,7 @@
     clearTimeout(igTimer);
     var gate = $('intro-gate');
     if (!gate || gate.hidden || gate.classList.contains('ig-out')) return;
+    if (tab === 'carnet' || tab === 'notaires') roleSet(tab === 'notaires' ? 'notary' : 'client');
     if (explicit !== false) flagSet(LS_INTRO, '1');
     else {
       var plays = (parseInt(flagGet(LS_INTRO_PLAYS), 10) || 0) + 1;
@@ -13654,7 +14497,11 @@
       if (plays >= IG_MAX_PLAYS) flagSet(LS_INTRO, '1');
     }
     gate.classList.add('ig-out');
-    setTimeout(function () { gate.hidden = true; gate.classList.remove('ig-out'); }, 320);
+    var guideClient = tab === 'carnet' && igActiveStage && igActiveStage.id === 'ig-stage-client';
+    setTimeout(function () {
+      gate.hidden = true; gate.classList.remove('ig-out');
+      if (guideClient && !$('day-dialog').open) clientWalkStart(false);
+    }, 320);
     document.body.classList.remove('ig-open');
     document.documentElement.classList.remove('ig-open');
     setBackdropInert(false);
@@ -13667,16 +14514,77 @@
       if (h) { h.setAttribute('tabindex', '-1'); try { h.focus({ preventScroll: true }); } catch (e) { try { h.focus(); } catch (e2) {} } }
     }
   }
+  // L'ARRIVÉE MONTRE LE CARNET (propriétaire, 2026-09-12) — « je suis certain
+  // que l'on peut faire beaucoup mieux ». La porte ne promet plus, elle
+  // démontre : une date par palier d'avis du domaine, au prix TOTAL que la
+  // case du calendrier affiche pour le même jour (tierFromLabel, une seule
+  // formule, ADR 0042). L'échelle se lit de gauche à droite — signer demain
+  // coûte ce que coûte demain, et la date calme est marquée comme telle.
+  // Rien n'est écrit à la main : le jour où l'échelle du domaine change, la
+  // vitrine change avec elle.
+  function igCarnetDates() {
+    var today = todayISO();
+    var seen = {};
+    var out = [];
+    // Le premier jour où chaque palier s'applique, lu sur la même échelle que
+    // le calendrier — jamais un compte de jours en dur.
+    for (var n = 0; n <= 400 && out.length < D.TIERS.length; n++) {
+      var id = D.tierForDays(n);
+      if (seen[id]) continue;
+      seen[id] = true;
+      out.push({ iso: D.addDays(today, n), tier: D.tierById(id) });
+    }
+    return out.filter(function (d) { return d.tier; });
+  }
+  function igRenderCarnet() {
+    var row = $('ig-carnet-row'); if (!row) return;
+    clear(row);
+    var svc = carnetService();
+    var anchor = firstStandardDate();
+    igCarnetDates().forEach(function (d) {
+      var cell = el('button', 'ig-cal-cell');
+      cell.type = 'button';
+      cell.dataset.date = d.iso;
+      cell.dataset.tier = d.tier.id;
+      if (d.iso === anchor) cell.dataset.anchor = 'true';
+      var when = el('span', 'ig-cal-when');
+      when.appendChild(el('span', 'ig-cal-dow', weekdayShort(d.iso)));
+      when.appendChild(el('span', 'ig-cal-day', String(Number(d.iso.slice(8, 10)))));
+      when.appendChild(el('span', 'ig-cal-month', monthShort(d.iso)));
+      cell.appendChild(when);
+      cell.appendChild(el('span', 'ig-cal-price', tierFromLabel(d.tier.id, svc)));
+      cell.appendChild(el('span', 'ig-cal-tier', T(tierName(d.tier))));
+      cell.setAttribute('aria-label', dayTitle(d.iso) + ' — ' + tierFromLabel(d.tier.id, svc)
+        + ' en ' + T(svc.nom).toLowerCase() + '.');
+      // Une tuile mène à SA date : le carnet s'ouvre sur ce jour, ce qui met
+      // la première offre à trois gestes de l'arrivée.
+      cell.addEventListener('click', function () {
+        igDismiss('carnet', true);
+        openDay(d.iso);
+      });
+      row.appendChild(cell);
+    });
+    // Les chiffres de la bande sortent de state.monthBids : si le mois est
+    // retombé sur les fixtures, elle le dit comme toutes les autres régions.
+    renderDemoState();
+  }
+
   function igMaybeShow() {
     var gate = $('intro-gate');
     if (!gate || !igShouldShow()) return false;
     $('ig-door-client').addEventListener('click', function () { igPlay('client'); });
     $('ig-door-notaire').addEventListener('click', function () { igPlay('notaire'); });
+    $('ig-door-partner').addEventListener('click', function () {
+      if (gate.hidden || gate.classList.contains('ig-out')) return;
+      igDismiss('partenaires', true);
+      partnerStart();
+    });
+    $('ig-partner-action').textContent = partnerGet() ? 'Partager mon code' : 'Créer et partager mon code';
     $('ig-pause').addEventListener('click', igTogglePause);
     document.addEventListener('visibilitychange', function () {
       if (document.hidden && !gate.hidden && igActiveStage && !igActiveStage.classList.contains('is-paused')) igTogglePause();
     });
-    $('ig-enter').addEventListener('click', function () { igDismiss(null, true); });
+    $('ig-enter').addEventListener('click', function () { igDismiss('carnet', true); });
     $('ig-skip').addEventListener('click', function () { igDismiss($('ig-skip').dataset.tab || null, true); });
     gate.querySelectorAll('[data-ig-goto]').forEach(function (button) {
       button.addEventListener('click', function () { igDismiss(button.dataset.igGoto, true); });
@@ -13718,6 +14626,7 @@
     // earlier field without turning the chooser into wallpaper. Each face is
     // the shared Nota N mark (never a placeholder X); the panel and its
     // decisions remain the foreground.
+    igRenderCarnet();
     gate.hidden = false;
     driftBuild(gate, 'ig-logo-field', 'mark-drift--intro', {
       cols: 6, rows: 3, oMin: 0.038, oRange: 0.05, sMin: 30, sRange: 46
@@ -13725,8 +14634,9 @@
     document.body.classList.add('ig-open');
     document.documentElement.classList.add('ig-open');
     setBackdropInert(true);
-    // A modal takes focus: the first door, so a keyboard user is IN the choice.
-    try { $('ig-door-client').focus(); } catch (e) {}
+    // A known partner can return to their code without repeating the choice.
+    // Everyone else begins at the client door, inside the modal.
+    try { $(roleGet() === 'partner' ? 'ig-door-partner' : 'ig-door-client').focus(); } catch (e) {}
     return true;
   }
 
@@ -13735,16 +14645,16 @@
   // ---------------------------------------------------------------------------
   // A floating chat button; the first message mints a thread on the API and its
   // signed token lives on this device. While the panel is open, the thread is
-  // polled every 8 s so the operator's reply lands live; closed, a thread keeps
+  // polled every 3 s so the operator's reply lands live; closed, a thread keeps
   // a slow 30 s watch for a day so the FAB can light its unread dot. The
-  // operator answers through the emailed link (#reponse=<token>), which opens
-  // the reply dialog below; the visitor's own emailed copy links to
+  // operator answers in the admin inbox or through the optional signed link
+  // (#reponse=<token>); the visitor's optional emailed copy links to
   // #messagerie, which opens the panel itself. Every class here is `sup-*`:
   // the retained-act `.chat-*` rules once reached in and dropped the visitor's
   // bubbles on the wrong side.
   var LS_SUPPORT = 'nota.support.v1';           // { threadId, token, lastAt, seenAt }
   var LS_SUPPORT_OPEN = 'nota.support.open.v1'; // '1' while the panel was left open
-  var CHAT_POLL_MS = 8000;
+  var CHAT_POLL_MS = 3000;
   var CHAT_IDLE_POLL_MS = 30000;
   var CHAT_IDLE_MAX_MS = 24 * 60 * 60 * 1000;
   // The counter shows only near the cap — this many characters before it.
@@ -13757,7 +14667,7 @@
   // vide qu'elle occupait est maintenant rempli par les questions d'amorce,
   // qui disent ce que l'assistant sait vraiment répondre.
   var CHAT_TYPING_TEXT = 'L’assistant écrit…';
-  var CHAT_ESCALADE_TEXT = 'Cette question part à une personne — laissez votre courriel pour recevoir la réponse.';
+  var CHAT_ESCALADE_TEXT = 'Une personne prendra le relais ici. Vous pouvez revenir dans ce navigateur pour lire sa réponse.';
   var chatPollTimer = null, chatPollMs = 0;
   var chatReplyTimer = null, chatReplyMs = 0;
   var chatSending = false, chatRefreshing = false, chatReadVersion = 0;
@@ -13976,12 +14886,7 @@
   function chatEscalade(on) {
     var note = $('chat-escalade');
     if (note) note.hidden = !on;
-    // C'est LE moment où quitter la page coûte la réponse : la porte du
-    // courriel s'ouvre d'elle-même si elle est encore fermée et vide.
-    if (on) {
-      var inp = $('chat-courriel');
-      if (!inp || !inp.value) { chatMailNudged = true; chatMailOpen(true, { noFocus: true }); }
-    }
+
   }
 
   // --- Unread ----------------------------------------------------------------
@@ -14125,9 +15030,7 @@
     c.hidden = !show;
     c.textContent = show ? n + ' / ' + max : '';
   }
-  // La porte du courriel : fermée tant qu'elle ne sert pas, ouverte d'un clic —
-  // ou d'elle-même, une seule fois, juste après le premier message.
-  var chatMailNudged = false;
+  // Email is an explicit optional copy, opened only by the visitor.
   function chatMailOpen(open, opts) {
     var row = $('chat-courriel-row'), btn = $('chat-courriel-open');
     if (!row || !btn) return;
@@ -14312,12 +15215,7 @@
       if (r) arrivee.push(r);
       if (arrivee.length) chatRenderMessages(log, arrivee, D.SUPPORT_FROM.VISITEUR);
     }
-    // Le message est parti : c'est maintenant que quitter la page coûterait la
-    // réponse. La porte s'ouvre une seule fois, et jamais si le courriel est
-    // déjà donné — elle ne reprend pas le focus, la conversation le garde.
-    if (!chatMailNudged && !v.courriel) { chatMailNudged = true; chatMailOpen(true, { noFocus: true }); }
-    // Une escalade se dit : une personne a la question, et le courriel devient
-    // le canal qui compte.
+    // Handoffs continue in the chat; email remains an explicit optional copy.
     chatMailControls();
     if (body.courriel && $('chat-courriel-status') && courrielInp.value.trim().toLowerCase() === body.courriel.toLowerCase()) {
       $('chat-courriel-status').hidden = false;
@@ -14481,6 +15379,17 @@
 
   function supportBoot() {
     var fab = $('chat-fab'); if (!fab) return;
+    var human = $('chat-human');
+    if (human) human.addEventListener('click', function () {
+      var input = $('chat-text');
+      if (chatSending || !input) return;
+      if (input.value.trim()) {
+        var error = $('chat-error'); error.textContent = T('Envoyez ou effacez votre brouillon avant de demander une personne.'); error.hidden = false; input.focus(); return;
+      }
+      var topic = D.SUPPORT_TOPICS.find(function (item) { return item.id === 'humain'; });
+      input.value = LOCALE.indexOf('en') === 0 ? topic.en : topic.fr;
+      chatSend();
+    });
     var emailSave = $('chat-courriel-save');
     if (emailSave) emailSave.addEventListener('click', chatSaveEmail);
     var emailInput = $('chat-courriel');
@@ -14589,6 +15498,9 @@
     renderActiveView();
     await refreshMonthData();
     renderActiveView();
+    // Le mois réel vient d'arriver : la vitrine de la porte se recalibre
+    // dessus, exactement comme le calendrier derrière elle.
+    if (igShown) igRenderCarnet();
     // A #jour= link is a link to a DAY: reopen it, exactly as the sender saw it.
     if (state.selectedDate && state.tab === 'carnet') openDay(state.selectedDate);
 
@@ -14695,6 +15607,7 @@
       prune: ncRetainedPrune,
       whenLabel: whenLabel,
     },
+    contact: { open: openContactDialog, openEmail: openEmailContactDialog },
     // Live support chat (ADR 0026) hooks for tests.
     support: {
       toggle: chatToggle,

@@ -66,6 +66,16 @@ const LIVE = [
     'Refinancement, à partir de ' + D.money(2279) + ', repère du mois ' + D.money(4165) + '. Retirer ce filtre.',
     /^Refinancing, from \$2,279, month’s reference \$4,165\. Remove this filter\.$/,
     /repère|Retirer|filtre/],
+  // The book arrow beside each pulse row. Composed as « Réserver » + the act's
+  // own article + T(nomCourt) lowercased, so BOTH halves have to survive the
+  // crossing: the article (French has two) and the act's name (it reached
+  // English clients as « Book a refinancement » until 2026-09-12).
+  ['pulse book arrow (pulseRow) — masculine act',
+    'Réserver un ' + D.serviceById('refinancement').nomCourtEn.toLowerCase(),
+    /^Book a refinancing$/, /Réserver|refinancement/],
+  ['pulse book arrow (pulseRow) — feminine act',
+    'Réserver une ' + D.serviceById('procuration').nomCourtEn.toLowerCase(),
+    /^Book a power of attorney$/, /Réserver|procuration/],
 ];
 
 for (const [name, fr, mustEn, mustNotFr] of LIVE) {
@@ -97,6 +107,8 @@ test('the cancellation exemplars mirror the fragments app.js composes', () => {
     "', pas assez d’offres ce mois pour un repère'",
     "'Afficher le carnet pour cet acte.'",
     "'Retirer ce filtre.'",
+    // the book arrow's composed label
+    "'Réserver ' + ((svcC && svcC.article) || 'un') + ' ' + T(short).toLowerCase()",
   ]) {
     assert.ok(APP_SRC.includes(frag), 'app.js no longer composes: ' + frag);
   }

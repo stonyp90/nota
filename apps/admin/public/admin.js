@@ -985,7 +985,7 @@
   }
   function supportSchedule(view) {
     clearTimeout(view.timer);
-    if (supportVisible(view)) view.timer = setTimeout(function () { supportRefresh(view, true); }, Math.min(120000, 30000 * Math.pow(2, view.failures)));
+    if (supportVisible(view)) view.timer = setTimeout(function () { supportRefresh(view, true); }, Math.min(120000, 5000 * Math.pow(2, view.failures)));
   }
   async function supportRefresh(view, background) {
     if (!supportVisible(view) || view.refreshing) return;
@@ -1002,7 +1002,7 @@
     }
     renderUserbar();
     var content = el('div', 'admin-content');
-    content.appendChild(buildPageHeader('Soutien', 'Messagerie', 'Répondez aux conversations du site. Le même échange reste visible ici, dans la messagerie et par courriel.'));
+    content.appendChild(buildPageHeader('Soutien', 'Messagerie', 'Répondez en direct aux visiteurs du site. L’assistant vous laisse la main dès que vous répondez.'));
     mountAuthed('support', content); focusTitle();
     if (!canReadSupport()) { content.appendChild(buildDenied('Lire les conversations et voir les renseignements personnels')); return; }
     var view = {
@@ -1028,7 +1028,8 @@
     view.conversation.appendChild(el('p', 'help', 'Choisissez une conversation pour lire les messages et répondre.'));
     layout.appendChild(view.list); layout.appendChild(view.conversation); content.appendChild(layout);
     view.filter.addEventListener('change', function () { supportRenderList(view); supportLoadList(view, false); });
-    await supportRefresh(view, false);
+    supportKnowledgeBuild(view);
+    await Promise.all([supportRefresh(view, false), supportKnowledgeLoad(view)]);
   }
   async function supportLoadList(view, background) {
     if (!supportCurrent(view) || view.listBusy) return;
@@ -1161,11 +1162,114 @@
         var when = el('time', 'ptable-sub', baremeDate(message.createdAt)); if (message.createdAt) when.dateTime = message.createdAt;
         row.appendChild(when); view.log.appendChild(row);
       }
+      if (message.de === 'nota' && canWriteSupport() && !row.querySelector('.support-learn')) {
+        var learn = el('button', 'btn btn-sm support-learn', 'Améliorer l’assistant avec cette réponse'); learn.type = 'button';
+        learn.addEventListener('click', function () {
+          var prior = thread.messages.slice(0, thread.messages.findIndex(function (item) { return item.id === message.id; }));
+          var question = prior.reverse().find(function (item) { return item.de === 'visiteur'; });
+          supportKnowledgeDraft(view, thread.id, message, question);
+        }); row.appendChild(learn);
+      }
       supportMessageDelivery(view, thread.id, message, row);
     });
     if (atBottom) view.log.scrollTop = view.log.scrollHeight;
     supportComposerState(view, draft);
   }
+  function supportKnowledgeBuild(view) {
+    var section = el('details', 'chart-card support-knowledge'); section.id = 'support-knowledge';
+    section.appendChild(el('summary', null, 'Réponses approuvées de l’assistant'));
+    section.appendChild(el('p', 'help', 'Transformez une réponse humaine en explication générale bilingue. Retirez les noms, coordonnées et faits propres au dossier. Les chiffres et les politiques restent dans le catalogue.'));
+    section.appendChild(el('p', 'help', 'Seules les questions complètes correspondantes réutilisent ces réponses. Aucun message client ne réentraîne automatiquement le modèle.'));
+    var refresh = el('button', 'btn btn-sm', 'Actualiser les réponses'); refresh.type = 'button';
+    refresh.addEventListener('click', function () { supportKnowledgeLoad(view); }); section.appendChild(refresh);
+    view.knowledgeStatus = el('p', 'help'); view.knowledgeStatus.id = 'support-knowledge-status'; view.knowledgeStatus.setAttribute('role', 'status'); section.appendChild(view.knowledgeStatus);
+    view.knowledgeList = el('div'); section.appendChild(view.knowledgeList);
+    view.knowledgeSection = section; view.root.appendChild(section);
+    if (!canWriteSupport()) return;
+    var form = el('form', 'support-composer'); form.id = 'support-knowledge-form'; form.hidden = true; view.knowledgeForm = form;
+    view.knowledgeFields = {};
+    [['fr-question', 'Question générale en français'], ['fr-answer', 'Réponse générale en français'], ['en-question', 'Question générale en anglais'], ['en-answer', 'Réponse générale en anglais']].forEach(function (pair) {
+      var label = el('label', null, pair[1]); label.htmlFor = 'knowledge-' + pair[0];
+      var input = el('textarea', 'input'); input.id = label.htmlFor; input.required = true; input.rows = pair[0].endsWith('answer') ? 3 : 2;
+      input.setAttribute('data-i18n-skip', ''); view.knowledgeFields[pair[0]] = input;
+      form.appendChild(label); form.appendChild(input);
+    });
+    var review = el('label'); view.knowledgeApproved = el('input'); view.knowledgeApproved.type = 'checkbox'; view.knowledgeApproved.required = true; view.knowledgeApproved.id = 'knowledge-approved';
+    review.appendChild(view.knowledgeApproved); review.appendChild(el('span', null, 'J’ai vérifié les deux langues et retiré les renseignements personnels.')); form.appendChild(review);
+    view.knowledgeSave = el('button', 'btn btn-primary', 'Approuver cette réponse'); view.knowledgeSave.type = 'submit'; view.knowledgeSave.disabled = true; form.appendChild(view.knowledgeSave);
+    var cancel = el('button', 'btn btn-sm', 'Fermer le brouillon'); cancel.type = 'button'; cancel.addEventListener('click', function () { form.hidden = true; }); form.appendChild(cancel);
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      if (!view.knowledgeSource || !view.knowledgeApproved.checked) return;
+      supportKnowledgeSave(view, Object.assign({}, view.knowledgeSource, {
+        approved: true,
+        fr: { question: view.knowledgeFields['fr-question'].value, answer: view.knowledgeFields['fr-answer'].value },
+        en: { question: view.knowledgeFields['en-question'].value, answer: view.knowledgeFields['en-answer'].value },
+      }));
+    });
+    section.appendChild(form);
+  }
+  function supportKnowledgeDraft(view, id, message, question) {
+    if (!supportCurrent(view) || !view.knowledgeForm) return;
+    if (!view.knowledgeForm.hidden) {
+      view.knowledgeStatus.textContent = 'Terminez ou fermez le brouillon de réponse approuvée avant d’en ouvrir un autre.'; return;
+    }
+    view.knowledgeSource = { threadId: id, messageId: message.id };
+    view.knowledgeFields['fr-question'].value = question ? question.texte : '';
+    view.knowledgeFields['fr-answer'].value = message.texte;
+    view.knowledgeFields['en-question'].value = ''; view.knowledgeFields['en-answer'].value = '';
+    view.knowledgeApproved.checked = false; view.knowledgeForm.hidden = false; view.knowledgeSection.open = true;
+    view.knowledgeFields['fr-question'].focus();
+  }
+  function supportKnowledgeRender(view, data) {
+    view.knowledge = data;
+    if (view.knowledgeSave) view.knowledgeSave.disabled = !!view.knowledgeBusy;
+    if (view.knowledgeFields) Object.values(view.knowledgeFields).forEach(function (input) { input.disabled = !!view.knowledgeBusy; });
+    if (view.knowledgeApproved) view.knowledgeApproved.disabled = !!view.knowledgeBusy;
+    if (data.limites && view.knowledgeFields) Object.keys(view.knowledgeFields).forEach(function (key) {
+      view.knowledgeFields[key].maxLength = key.endsWith('question') ? data.limites.questionMax : data.limites.messageMax;
+    });
+    clear(view.knowledgeList);
+    var entries = data.entries.filter(function (entry) { return entry.active; });
+    if (!entries.length) view.knowledgeList.appendChild(el('p', 'help', 'Aucune réponse approuvée. Choisissez une réponse humaine dans une conversation pour commencer.'));
+    entries.forEach(function (entry) {
+      var row = el('details', 'support-knowledge-entry');
+      var pair = isEnglish() ? entry.en : entry.fr;
+      var title = el('summary', null, pair.question); title.setAttribute('data-i18n-skip', ''); row.appendChild(title);
+      var answer = el('p', 'support-message-text', pair.answer); answer.setAttribute('data-i18n-skip', ''); row.appendChild(answer);
+      if (canWriteSupport()) {
+        var remove = el('button', 'btn btn-sm', 'Retirer cette réponse'); remove.type = 'button'; remove.disabled = !!view.knowledgeBusy;
+        remove.addEventListener('click', function () { supportKnowledgeSave(view, { id: entry.id, active: false }); }); row.appendChild(remove);
+      }
+      view.knowledgeList.appendChild(row);
+    });
+  }
+  async function supportKnowledgeLoad(view) {
+    if (!supportCurrent(view) || view.knowledgeBusy) return;
+    view.knowledgeBusy = true;
+    if (view.knowledgeSave) view.knowledgeSave.disabled = true;
+    var r = await supportRequest(view, 'GET', '/support-knowledge', null, false);
+    view.knowledgeBusy = false;
+    if (!supportCurrent(view)) return;
+    if (r.ok && r.json && Array.isArray(r.json.entries)) { supportKnowledgeRender(view, r.json); view.knowledgeStatus.textContent = ''; }
+    else { view.knowledge = null; view.knowledgeStatus.textContent = 'Impossible de charger les réponses approuvées. Actualisez pour réessayer.'; }
+  }
+  async function supportKnowledgeSave(view, payload) {
+    if (!supportCurrent(view) || !view.knowledge || view.knowledgeBusy) return;
+    view.knowledgeBusy = true; supportKnowledgeRender(view, view.knowledge);
+    var r = await supportRequest(view, 'POST', '/support-knowledge', Object.assign({ revision: view.knowledge.revision }, payload), false);
+    view.knowledgeBusy = false;
+    if (!supportCurrent(view)) return;
+    if (r.ok && r.json && Array.isArray(r.json.entries)) {
+      supportKnowledgeRender(view, r.json);
+      if (payload.active !== false) view.knowledgeForm.hidden = true;
+      view.knowledgeStatus.textContent = payload.active === false ? 'Réponse retirée de l’assistant.' : 'Réponse approuvée. L’assistant peut maintenant la réutiliser.';
+    } else {
+      supportKnowledgeRender(view, view.knowledge);
+      view.knowledgeStatus.textContent = (r.json && r.json.errors && r.json.errors[0] && r.json.errors[0].message) || 'Enregistrement non confirmé. Actualisez les réponses avant de réessayer; votre brouillon est conservé.';
+    }
+  }
+
   function supportMessageDelivery(view, id, message, row) {
     var box = row.querySelector('.support-email-state');
     if (message.notificationPending !== true) { if (box) box.remove(); return; }
@@ -6167,6 +6271,7 @@
     support_inbox_read: 'Boîte de messagerie consultée',
     support_thread_read: 'Conversation consultée',
     support_reply_sent: 'Réponse de soutien envoyée',
+    support_knowledge_reviewed: 'Réponse de soutien révisée',
     support_thread_closed: 'Conversation fermée',
     acte_regle: 'Acte réglé',
     acte_retenu: 'Acte retenu',

@@ -1,0 +1,170 @@
+/* Shared application chrome. Embedded by sync-brand-foundations.mjs so the
+   plan and presentation remain usable as standalone documents. */
+:root {
+  --layout-width: 1600px;
+  --layout-gutter: clamp(16px, 4vw, 28px);
+  --layout-header-height: 52px;
+  --layout-section-gap: 32px;
+  --layout-content-top: clamp(16px, 1.8vw, 24px);
+  --logo-badge-min: 9px;
+  --control-gap: 8px;
+  --control-height: 44px;
+  --type-control: 13px;
+  --header-h: var(--layout-header-height);
+  --admin-topbar-h: var(--layout-header-height);
+  --brand-word-ink: var(--ink);
+}
+
+/* The outer bar spans the viewport. Its contents align with the page rail. */
+.nota-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--surface);
+  border: 0;
+  box-shadow: var(--shadow);
+  backdrop-filter: none;
+}
+.nota-header-inner {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--control-gap);
+  width: 100%;
+  min-height: var(--layout-header-height);
+  height: auto;
+  padding: 0 max(var(--layout-gutter), calc((100% - var(--layout-width)) / 2 + var(--layout-gutter)));
+  margin: 0;
+}
+.site-header.nota-header .nota-header-inner {
+  max-width: var(--layout-width);
+  margin-inline: auto;
+  padding-inline: var(--layout-gutter);
+  height: var(--layout-header-height);
+}
+.nota-header :is(.brand, .admin-brand, .lockup, .plan-brand) {
+  --lockup-tile: var(--logo-tile);
+  color: var(--ink);
+  margin-block: 0;
+  text-decoration: none;
+  flex-shrink: 0;
+  min-height: var(--control-height);
+}
+.nota-header :is(.brand, .admin-brand) {
+  --lockup-word: calc(var(--lockup-tile) * var(--logo-word-ratio));
+  --lockup-gap: calc(var(--lockup-tile) * var(--logo-gap-ratio));
+  --lockup-badge-gap: calc(var(--lockup-tile) * var(--logo-badge-gap-ratio));
+}
+.nota-header :is(.lockup, .plan-brand),
+[data-nota-surface="pitch"] .nota-header .brand {
+  --lockup-word: var(--logo-word-ratio);
+  --lockup-gap: var(--logo-gap-ratio);
+  --lockup-badge-gap: var(--logo-badge-gap-ratio);
+}
+.nota-header :is(.brand-word, .admin-brand-word, .plan-brand-word) { color: var(--ink); }
+.nota-header :is(.brand-sub, .admin-brand-sub, .brand-region, .plan-brand-region) {
+  font-size: max(var(--logo-badge-min), calc(var(--logo-tile) * .16));
+  font-family: var(--font-sans);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: .55em .7em;
+  color: var(--ink-muted);
+  background: var(--logo-badge-bg);
+  border-radius: var(--radius-xs, 3px);
+}
+.nota-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--control-gap);
+  margin-left: auto;
+  min-width: 0;
+}
+.nota-menu { margin-left: auto; }
+.nota-menu > summary { display: none; }
+.nota-menu > .nota-header-actions { display: flex; }
+.nota-header .nota-header-actions :is(a, button):not(.tswitch) {
+  min-height: var(--control-height);
+  font-family: var(--font-sans);
+  font-size: var(--type-control);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+.nota-header .nota-header-actions :is(a, button):hover { color: var(--brand); }
+.nota-header .nota-header-actions [aria-pressed="true"] { color: var(--brand); }
+
+/* Content rails share their outer margins; long prose retains its own measure. */
+[data-nota-surface="brand"] .page,
+[data-nota-surface="plan"] > main,
+[data-nota-surface="pitch"] > main {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--layout-width);
+  margin-inline: auto;
+  padding: var(--layout-content-top) var(--layout-gutter) calc(var(--layout-section-gap) * 2);
+}
+[data-nota-surface="brand"] .hero { padding-top: 0; }
+[data-nota-surface="brand"] .section { margin-top: var(--layout-section-gap); padding-top: var(--layout-section-gap); }
+[data-nota-surface="brand"] .section-head { margin-bottom: 16px; gap: 24px; }
+[data-nota-surface="brand"] .section-head p { font-size: var(--type-body); line-height: var(--type-body-lh); }
+[data-nota-surface="brand"] .lede { max-width: 47ch; }
+[data-nota-surface="pitch"] .deck-head h1 { font-size: var(--type-h1); line-height: var(--type-h1-lh); letter-spacing: var(--type-h1-ls); }
+[data-nota-surface="pitch"] .deck-head p:not(.deck-kicker) { font-size: var(--type-lead); line-height: var(--type-lead-lh); }
+[data-nota-surface="plan"] .language-bar {
+  position: static;
+  padding: 0;
+  margin-block: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+[data-nota-surface="plan"] .language-bar .deck-link,
+[data-nota-surface="plan"] .language-bar [data-plan-focus] { margin-inline: 0; }
+[data-nota-surface="plan"] .language-bar > span { display: none; }
+[data-nota-surface="plan"] :is(.section-body, .french-summary) > :is(p, ul, ol) { max-width: 76ch; }
+
+@media (max-width: 700px) {
+  .nota-header.nota-header-inner { flex-wrap: wrap; }
+  .nota-menu > summary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--control-gap);
+    min-height: var(--control-height);
+    min-width: var(--control-height);
+    padding-inline: 8px;
+    color: var(--ink);
+    cursor: pointer;
+    font: 600 var(--type-control)/1 var(--font-sans);
+    list-style: none;
+  }
+  .nota-menu > summary::-webkit-details-marker { display: none; }
+  .nota-menu:not([open]) > .nota-header-actions { display: none; }
+  .nota-menu > .nota-header-actions {
+    position: absolute;
+    top: 100%;
+    inset-inline: var(--layout-gutter);
+    padding: 16px;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  [data-nota-surface="plan"] .nota-menu > .language-bar { position: absolute; padding: 16px; background: var(--surface); }
+  .nota-header .top-links { flex-direction: row; align-items: center; }
+}
+@media print {
+  .nota-header { position: static; box-shadow: none; }
+  .nota-header-actions { display: none; }
+}
+
+[data-nota-surface="acquisition"] .search-page { max-width: var(--layout-width); padding: var(--layout-content-top) var(--layout-gutter) 64px; }
+[data-nota-surface="acquisition"] .search-page :is(p, ol, ul) { max-width: 76ch; }
+.nota-header > .lang-link { display: inline-flex; align-items: center; min-height: var(--control-height); padding-inline: 12px; color: var(--ink); }

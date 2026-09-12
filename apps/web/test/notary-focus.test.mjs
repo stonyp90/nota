@@ -5,7 +5,7 @@
  *
  * Layout (column order, breakpoints) lives in CSS and is verified visually;
  * what THIS suite locks is the structure that layout depends on:
- *   • signed-out: the live open inventory precedes the console in the pane;
+ *   • signed-out: calendar subscription precedes optional access and inventory;
  *   • signed-in: the open-demands list is the first working block, before
  *     retained files, earnings, preferences and payments;
  *   • each open card leads with Retenir as its one full-size primary action;
@@ -158,18 +158,22 @@ const click = (node) => node.dispatchEvent(new node.ownerDocument.defaultView.Mo
 const input = (node, value) => { node.value = value; node.dispatchEvent(new node.ownerDocument.defaultView.Event('input', { bubbles: true })); };
 const submit = (form) => form.dispatchEvent(new form.ownerDocument.defaultView.Event('submit', { bubbles: true, cancelable: true }));
 
-// Signed OUT: the pane must put the live open inventory before the console —
-// the demands are the pitch; the gate follows them.
-test('signed-out pane: the live open inventory precedes the sign-in console', async () => {
+// Signed OUT: the calendar and inventory are visible without an account;
+// access to the working console remains a secondary disclosure.
+test('signed-out pane: calendar and inventory precede optional account access', async () => {
   const { doc } = await boot();
+  const calendar = $(doc, 'notary-carnet');
   const live = $(doc, 'notary-live');
   const consoleBox = $(doc, 'notary-console');
-  assert.ok(live && consoleBox, 'landing blocks missing');
+  assert.ok(calendar && live && consoleBox, 'landing blocks missing');
   assert.ok(
-    live.compareDocumentPosition(consoleBox) & doc.defaultView.Node.DOCUMENT_POSITION_FOLLOWING,
-    'the console must follow the live inventory in the pane'
+    calendar.compareDocumentPosition(consoleBox) & doc.defaultView.Node.DOCUMENT_POSITION_FOLLOWING,
+    'the console must follow calendar subscription'
   );
-  assert.equal(live.hidden, false, 'the live inventory must be visible signed-out');
+  assert.ok(calendar.compareDocumentPosition(live) & doc.defaultView.Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.equal($(doc, 'notary-calendar-access').open, false);
+  assert.equal($(doc, 'notary-calendar-explore').open, false);
+  assert.equal(live.hidden, false, 'inventory is immediately visible');
   assert.ok(
     doc.querySelectorAll('#notary-live-grid .nc-live-card').length > 0,
     'the live inventory must actually show open demands'
@@ -206,10 +210,8 @@ test('an open demand card leads with a full-size Retenir and a demoted Décliner
   assert.ok(!accept.classList.contains('btn-sm'), 'Retenir must not be shrunk to a small button');
   assert.ok(decline.classList.contains('btn-sm'), 'Décliner stays small');
   assert.ok(!decline.classList.contains('btn-primary'), 'Décliner must not compete as primary');
-  assert.ok(
-    accept.compareDocumentPosition(decline) & doc.defaultView.Node.DOCUMENT_POSITION_FOLLOWING,
-    'Retenir leads the action row'
-  );
+  assert.equal(card.querySelector('.nc-card-actions').firstElementChild, accept, 'Retenir leads the visible action row');
+  assert.ok(card.querySelector('.nc-card-body').contains(decline), 'Décliner is available in the detailed view');
 });
 
 // Zero-state earnings must not stack a grid of "0 $" tiles under the open list.

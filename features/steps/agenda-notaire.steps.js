@@ -275,3 +275,13 @@ Then('le client ne lit du notaire que des faits vérifiables', function () {
   );
   assert.equal(typeof notaire.actes, 'number');
 });
+
+Then('les paramètres de son offre montrent le prêt et les réponses sans complexité', function () {
+  const bid = this.notaryFeed.bids[0];
+  assert.ok(bid);
+  const details = bid.details;
+  assert.equal(details.find(d => d.id === 'valeur_pret').value, this.domain.money(PRICING_REFI.valeur_pret));
+  assert.equal(details.find(d => d.id === 'succession').value, 'Non');
+  assert.ok(details.find(d => d.id === 'approbation_bancaire').value);
+  assert.ok(details.every(d => Object.keys(d).sort().join() === 'id,label,value'));
+});

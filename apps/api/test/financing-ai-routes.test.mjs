@@ -375,7 +375,16 @@ test('entitlement refusals carry the honest code before any provider call', asyn
   assert.equal(fresh.data.errors[0].code, 'ai_access_required');
   assert.equal(fresh.data.errors[0].message, 'Activez la bêta IA ou choisissez une formule pour continuer.');
 
+  // ADR 0052 — inscrite à la bêta mais sans avoir accepté l'échange : le quota
+  // existe, et le refus le dit sans mentir sur ce qui manque.
   await access.enroll('owner');
+  const sansEchange = await a.request();
+  assert.equal(sansEchange.statusCode, 402);
+  assert.equal(sansEchange.data.errors[0].code, 'contribution_requise');
+  assert.match(sansEchange.data.errors[0].message, /révisions/);
+  assert.equal((await access.get('owner')).beta.remaining, D.NOTARY_AI_BETA_TRIAL_USES);
+
+  await access.setContribution('owner', true);
   for (let i = 0; i < D.NOTARY_AI_BETA_TRIAL_USES; i += 1) assert.equal((await access.consume('owner')).ok, true);
   assert.equal((await access.get('owner')).reason, 'quota_epuise');
   const spent = await a.request();
