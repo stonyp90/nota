@@ -34,8 +34,8 @@ function fixturePort(transform = fields => fields) {
   };
 }
 
-test('eight unreviewed synthetic development cases satisfy the shared domain contract', () => {
-  assert.equal(inventory().cases, 8);
+test('nine unreviewed synthetic development cases satisfy the shared domain contract', () => {
+  assert.equal(inventory().cases, 9);
   assert.equal(dataset.origin, 'wholly_synthetic');
   assert.equal(dataset.split, 'development');
   assert.equal(dataset.reviewStatus, 'not_notary_reviewed');
@@ -63,7 +63,7 @@ test('evaluate uses the real engine with an offline port and records actual prom
   const port = fixturePort();
   const report = await evaluate(port, 'offline-fixture-double');
   assert.equal(report.pass, true, JSON.stringify(report.results.filter(r => !r.pass)));
-  assert.equal(report.passed, 8);
+  assert.equal(report.passed, 9);
   assert.equal(report.failed, 0);
   assert.equal(report.refusals, 0);
   assert.equal(report.falseSupportedClaims, 0);
@@ -117,7 +117,7 @@ test('a literal purchase price is a false supported claim when labeled as a loan
   }), 'offline-role-decoy');
   const failed = report.results.find(r => r.id === 'financement-en-role-decoys');
   assert.equal(report.pass, false);
-  assert.equal(report.passed, 7);
+  assert.equal(report.passed, 8);
   assert.equal(failed.refused, false, 'syntactically supported wrong roles can survive the domain');
   assert.equal(failed.metrics.falseSupportedClaims, 1);
   assert.ok(failed.failures.some(f => f.code === 'unexpected_field_value'));
@@ -214,15 +214,40 @@ test('expired rate remains a literal date without a legal validity finding', () 
   assert.equal(result.metrics.falseSupportedClaims, 1);
 });
 
-test('blanket empty extraction only passes the deliberately empty case', async () => {
+test('client offer and statement dates fail scoring as instruction and official payout dates', async t => {
+  const c = caseById('client-document-date-decoys-fr');
+  assert.deepEqual(c.expected.fields, []);
+  assert.equal(scoreCase(c, answerFor(c)).pass, true, 'abstention preserves missing official evidence');
+  for (const [fieldId, documentId, value, quote] of [
+    ['lender_instruction_version', 'synth-client-offer-09', '2026-09-01', 'Version : 2026-09-01.'],
+    ['payout_valid_through', 'synth-client-statement-09', '2026-09-30', 'Solde au 2026-09-30.'],
+  ]) await t.test(fieldId, () => {
+    assert.ok(c.expected.missing.includes(fieldId));
+    const answer = answerFor(c);
+    answer.preparation.fields.push({ fieldId, value, evidence: [{ documentId, page: 1, quote }] });
+    answer.preparation.missing = answer.preparation.missing.filter(id => id !== fieldId);
+    // Literal validation does not establish the document's role. This regression
+    // checks the evaluation oracle; it adds no runtime document-role enforcement.
+    const result = scoreCase(c, answer);
+    assert.equal(result.pass, false);
+    assert.equal(result.metrics.evidencedFields, 1, 'the wrong-role date has literal page evidence');
+    assert.equal(result.metrics.falseSupportedClaims, 1);
+    assert.ok(result.failures.some(f => f.code === 'unexpected_field_value' && f.fieldId === fieldId && f.value === value));
+    assert.ok(result.failures.some(f => f.code === 'missing_set_mismatch'));
+  });
+});
+
+test('blanket empty extraction only passes the deliberately empty cases', async () => {
   const report = await evaluate(fixturePort(() => []), 'offline-empty');
   assert.equal(report.pass, false);
-  assert.equal(report.passed, 1);
+  assert.equal(report.passed, 2);
   assert.equal(report.refusals, 0);
-  assert.equal(report.results.find(r => r.pass).id, 'no-extractable-data-fr');
+  assert.deepEqual(report.results.filter(r => r.pass).map(r => r.id), [
+    'no-extractable-data-fr', 'client-document-date-decoys-fr',
+  ]);
   assert.equal(report.performance.successfulScoredCases.count, cases.length,
     'a valid empty extraction is scored even when it does not match the oracle');
-  assert.equal(report.performance.failures.scoredFailures, cases.length - 1);
+  assert.equal(report.performance.failures.scoredFailures, cases.length - 2);
   assert.equal(report.performance.successfulScoredCases.usage.tokens.output.total, 12 * cases.length);
 });
 
@@ -234,7 +259,7 @@ test('performance separates case/provider latency and includes usage returned wi
   t.mock.method(D, 'validateFinancingAIInput', (...args) => { clock += 5; return validateInput(...args); });
   t.mock.method(D, 'validateFinancingAIExtraction', (...args) => { clock += 10; return validateExtraction(...args); });
   const secret = 'SYNTHETIC_PRIVATE_PROVIDER_TEXT';
-  const durations = [800, 1000, 70, 20, 60, 30, 50, 40];
+  const durations = [800, 1000, 70, 20, 60, 30, 50, 40, 45];
   const fixture = fixturePort((fields, c) => c === cases[3] ? [] : fields);
   let index = 0;
   const report = await evaluate({ async extract(request) {
@@ -246,37 +271,37 @@ test('performance separates case/provider latency and includes usage returned wi
     return fixture.extract(request);
   } }, 'offline-performance');
   const p = report.performance;
-  assert.deepEqual(report.results.map(r => r.latencyMs), [805, 1015, 95, 45, 85, 55, 75, 65]);
-  assert.deepEqual(p.allAttempts, { count: 8, latencyMs: { p50: 75, p95: 1015, max: 1015 } });
-  assert.equal(p.successfulScoredCases.count, 6);
-  assert.deepEqual(p.successfulScoredCases.latencyMs, { p50: 65, p95: 95, max: 95 });
-  assert.equal(p.providerAttempts.count, 8);
-  assert.equal(p.providerAttempts.returned, 7);
+  assert.deepEqual(report.results.map(r => r.latencyMs), [805, 1015, 95, 45, 85, 55, 75, 65, 70]);
+  assert.deepEqual(p.allAttempts, { count: 9, latencyMs: { p50: 75, p95: 1015, max: 1015 } });
+  assert.equal(p.successfulScoredCases.count, 7);
+  assert.deepEqual(p.successfulScoredCases.latencyMs, { p50: 70, p95: 95, max: 95 });
+  assert.equal(p.providerAttempts.count, 9);
+  assert.equal(p.providerAttempts.returned, 8);
   assert.equal(p.providerAttempts.threw, 1);
   assert.deepEqual(p.providerAttempts.latencyMs, { p50: 50, p95: 1000, max: 1000 });
   assert.deepEqual(p.providerAttempts.usage, {
-    reportedAttempts: 7, unknownAttempts: 1, legacyAttempts: 0,
+    reportedAttempts: 8, unknownAttempts: 1, legacyAttempts: 0,
     tokens: {
-      input: { total: 286, knownAttempts: 7, unknownAttempts: 1 },
-      output: { total: 112, knownAttempts: 7, unknownAttempts: 1 },
-      cacheRead: { total: 10, knownAttempts: 7, unknownAttempts: 1 },
-      cacheWrite: { total: 5, knownAttempts: 7, unknownAttempts: 1 },
+      input: { total: 317, knownAttempts: 8, unknownAttempts: 1 },
+      output: { total: 124, knownAttempts: 8, unknownAttempts: 1 },
+      cacheRead: { total: 10, knownAttempts: 8, unknownAttempts: 1 },
+      cacheWrite: { total: 5, knownAttempts: 8, unknownAttempts: 1 },
     },
   });
   assert.deepEqual(p.successfulScoredCases.usage, {
-    reportedAttempts: 6, unknownAttempts: 0, legacyAttempts: 0,
+    reportedAttempts: 7, unknownAttempts: 0, legacyAttempts: 0,
     tokens: {
-      input: { total: 186, knownAttempts: 6, unknownAttempts: 0 },
-      output: { total: 72, knownAttempts: 6, unknownAttempts: 0 },
-      cacheRead: { total: 0, knownAttempts: 6, unknownAttempts: 0 },
-      cacheWrite: { total: 0, knownAttempts: 6, unknownAttempts: 0 },
+      input: { total: 217, knownAttempts: 7, unknownAttempts: 0 },
+      output: { total: 84, knownAttempts: 7, unknownAttempts: 0 },
+      cacheRead: { total: 0, knownAttempts: 7, unknownAttempts: 0 },
+      cacheWrite: { total: 0, knownAttempts: 7, unknownAttempts: 0 },
     },
   });
   assert.deepEqual(p.failures, {
     unscoredCases: 2, scoredFailures: 1, withoutProviderAttempt: 0, evaluationErrors: 0, invalidResults: 0,
     refusalsByCode: { invalid_input: 0, unavailable: 1, invalid_output: 1, refused: 0, refusal: 0, unknown_refusal: 0 },
   });
-  assert.equal(report.passed, 5);
+  assert.equal(report.passed, 6);
   assert.equal(report.results[2].preparation.fields.length, 0);
   assert.equal(report.results[2].pass, true);
   assert.equal(report.results[1].usage, null, 'existing rejected-result reporting stays unchanged');
@@ -294,6 +319,7 @@ test('usage coverage distinguishes missing, invalid, legacy and explicitly repor
     { in: 5, out: 2, reported: true },
     { in: 9, out: '4', cacheRead: 6, cacheWrite: 2, reported: true },
     { in: 7, out: 3, cacheRead: -1, cacheWrite: NaN, reported: true },
+    undefined,
   ];
   const fixture = fixturePort();
   let index = 0;
@@ -303,12 +329,12 @@ test('usage coverage distinguishes missing, invalid, legacy and explicitly repor
   assert.equal(report.pass, true, 'usage reporting must not change exact scoring');
   const usage = report.performance.providerAttempts.usage;
   assert.deepEqual(usage, {
-    reportedAttempts: 4, unknownAttempts: 4, legacyAttempts: 2,
+    reportedAttempts: 4, unknownAttempts: 5, legacyAttempts: 2,
     tokens: {
-      input: { total: 23, knownAttempts: 4, unknownAttempts: 4 },
-      output: { total: 9, knownAttempts: 4, unknownAttempts: 4 },
-      cacheRead: { total: 3, knownAttempts: 2, unknownAttempts: 6 },
-      cacheWrite: { total: 2, knownAttempts: 2, unknownAttempts: 6 },
+      input: { total: 23, knownAttempts: 4, unknownAttempts: 5 },
+      output: { total: 9, knownAttempts: 4, unknownAttempts: 5 },
+      cacheRead: { total: 3, knownAttempts: 2, unknownAttempts: 7 },
+      cacheWrite: { total: 2, knownAttempts: 2, unknownAttempts: 7 },
     },
   });
   assert.deepEqual(report.performance.successfulScoredCases.usage, usage);
@@ -389,7 +415,7 @@ test('a rejected invented quote is reported as a refusal, not a false claim acce
     if (fields.length) fields[0].evidence[0].quote = 'Not on the page';
     return fields;
   }), 'offline-bad-evidence');
-  assert.equal(report.passed, 1);
+  assert.equal(report.passed, 2);
   assert.equal(report.refusals, 7);
   assert.equal(report.falseSupportedClaims, 0, 'rejected raw output is unavailable to the evaluator');
   assert.ok(report.results.filter(r => r.refused).every(r => r.refusalCode === 'invalid_output'));
@@ -640,7 +666,7 @@ test('live CLI honors both key names/model override and exits nonzero for every 
     assert.ok(!JSON.stringify(output).includes('synthetic-fallback'));
   }
   for (const failure of [
-    { ...success, pass: false, passed: 7, failed: 1 },
+    { ...success, pass: false, passed: 8, failed: 1 },
     { ...success, failures: [{ code: 'prompt_changed_during_run' }] },
     { ...success, total: 0, passed: 0 },
   ]) {

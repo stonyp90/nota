@@ -1,6 +1,6 @@
 # Financing extraction evaluation and reviewed learning
 
-This scaffold checks proposed financing fields against eight wholly synthetic
+This scaffold checks proposed financing fields against nine wholly synthetic
 development fixtures. It is separate from the support-answer keyword checks in
 `apps/api/scripts/evaluate-financing.js`. The fixtures contain fictional people,
 addresses, institutions, documents and amounts. Their labels are engineering
@@ -137,6 +137,14 @@ repeated field IDs to satisfy these fixtures.
 | `expired-rate-fr` | Copy the stated past expiry, not the preparation date; make no finding about validity, renewal or ability to sign. |
 | `multiple-secured-loans-fr` | Return two borrowers and three distinct debt entries from the original page references; calculate no total or official payout. |
 | `bilingual-unicode-pages` | Preserve French accents, English source amounts, punctuation and separate names across documents; a no-debt declaration remains a declaration. |
+| `client-document-date-decoys-fr` | Do not treat a client offer's version as `lender_instruction_version` or a monthly statement's balance date as `payout_valid_through`; keep official-evidence fields missing. |
+
+The date-decoy case was added in dataset version `2026-09-12.1`. It checks a
+known limitation: literal quotation validation alone cannot establish the source
+document's role. Constructed wrong-role dates still satisfy the runtime's literal
+evidence validation, but the evaluation oracle rejects them. This is detection
+coverage, not a runtime fix or proof of live-model behavior. The professional
+instruction, payout and closing checks continue to require notary review.
 
 The name-conflict case intentionally exposes a contract limitation: the domain
 treats borrower names as multivalued, so it does not flag inconsistent sole-
@@ -144,10 +152,10 @@ borrower declarations as a `borrower_names` conflict. Recording both source name
 does not reconcile the identities. A notary must assess the discrepancy. This
 suite does not claim semantic conflict detection beyond the stated expectations.
 
-All eight inputs are valid extraction requests. An engine refusal on any of them
+All nine inputs are valid extraction requests. An engine refusal on any of them
 fails that case, including an adversarial page with otherwise extractable data.
 Missing individual fields are handled by omission and the exact `missing` set.
-A blanket empty extraction passes only the cover-sheet case. A blanket refusal
+A blanket empty extraction passes only the cover-sheet and date-decoy cases. A blanket refusal
 cannot pass. Rejection of invalid provider output remains safe engine behavior,
 but it is not a successful extraction for this evaluation.
 
@@ -232,7 +240,7 @@ a false declaration. Passing requires notary review to remain outstanding.
    split manifest keyed by a protected case-group identifier. Do not split pages
    or fields from one case across partitions. Check exact/near duplicates and
    distribution coverage for service, language, missingness and document type.
-   These eight public-to-development synthetic cases are not the heldout set.
+   These nine public-to-development synthetic cases are not the heldout set.
 5. **Make heldout immutable.** After authorization and review, seal the heldout
    snapshot and hashes with access restricted to evaluation custodians. Never
    use its pages, labels, detailed failures or derivatives in prompts, examples,

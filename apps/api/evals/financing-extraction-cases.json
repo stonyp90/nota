@@ -1,6 +1,6 @@
 {
   "datasetId": "nota-financing-extraction-development",
-  "version": "2026-09-09.3",
+  "version": "2026-09-12.1",
   "split": "development",
   "origin": "wholly_synthetic",
   "reviewStatus": "not_notary_reviewed",
@@ -772,6 +772,54 @@
           "loan_purpose",
           "lender_instruction_version",
           "property_changes",
+          "payout_valid_through"
+        ],
+        "conflicts": []
+      }
+    },
+    {
+      "id": "client-document-date-decoys-fr",
+      "locale": "fr-CA",
+      "tags": [
+        "document-role-decoys",
+        "date-decoy",
+        "missing-data",
+        "multiple-documents"
+      ],
+      "behavior": "Return no fields. The client offer version is not a lender instruction version, and the monthly statement balance date is not an official payout valid-through date. Keep lender_instruction_version and payout_valid_through missing; neither page establishes instruction currency, payout validity or discharge.",
+      "input": {
+        "serviceId": "refinancement",
+        "pages": [
+          {
+            "documentId": "synth-client-offer-09",
+            "page": 1,
+            "text": "EXEMPLE ENTIÈREMENT FICTIF.\nOffre de financement destinée au client.\nVersion : 2026-09-01.\nCeci ne constitue pas les instructions au notaire."
+          },
+          {
+            "documentId": "synth-client-statement-09",
+            "page": 1,
+            "text": "EXEMPLE ENTIÈREMENT FICTIF.\nRelevé hypothécaire mensuel.\nSolde au 2026-09-30.\nCeci ne constitue pas un état officiel de remboursement."
+          }
+        ]
+      },
+      "expected": {
+        "status": "needs_notary_review",
+        "fields": [],
+        "missing": [
+          "property_address",
+          "borrower_names",
+          "signing_parties",
+          "property_identifier",
+          "property_type",
+          "lender_name",
+          "lender_contact",
+          "loan_amount",
+          "purchase_price",
+          "loan_purpose",
+          "lender_instruction_version",
+          "property_changes",
+          "rate_expiry",
+          "secured_debts",
           "payout_valid_through"
         ],
         "conflicts": []
