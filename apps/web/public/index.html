@@ -741,6 +741,17 @@
                  the carnet fell back to fixtures. Empty otherwise. -->
             <div class="nc-live-head"></div>
             <div class="nc-live-grid" id="notary-live-grid"></div>
+            <!-- Zero state: an empty carnet must still lead somewhere. The grid
+                 stays pure inventory — nothing clickable at zero — so the two
+                 real next steps sit beside it, not inside it. Shown by
+                 renderNotaryLive() only when no demand is open. -->
+            <div class="nc-live-next" id="notary-live-next" hidden>
+              <p class="nc-live-next-lede">Les demandes de Québec arrivent ici dès qu’un client publie sa date et son prix. En attendant, gardez le carnet à l’œil sans revenir sur le site.</p>
+              <div class="nc-live-next-actions">
+                <button type="button" class="btn btn-primary" id="notary-live-next-agenda">Recevoir les demandes dans mon agenda</button>
+                <button type="button" class="btn" id="notary-live-next-account">Créer mon compte gratuit</button>
+              </div>
+            </div>
           </section>
 
           </div>
@@ -1723,8 +1734,6 @@
           <a href="#t=notaires" class="goto-link" data-goto="notaires">Espace notaire</a>
           <a href="#t=partenaires" class="goto-link" data-goto="partenaires">Partenaires</a>
           <a href="#t=beta" class="goto-link" data-goto="beta">Signature électronique · Bêta</a>
-          <a href="/notaire-refinancement-quebec.html">Notaire pour un refinancement hypothécaire à Québec</a>
-          <a href="/notaire-financement-quebec.html">Notaire pour un financement hypothécaire à Québec</a>
           <!-- Opens the guide dialog: an action, so a button — not a link to nowhere. -->
           <button type="button" class="footer-link" id="footer-guide">Comment ça marche</button>
           <a href="https://www.youtube.com/@gonotaca" target="_blank" rel="noopener">Vidéos Nota</a>

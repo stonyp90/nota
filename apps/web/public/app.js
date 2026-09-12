@@ -8454,6 +8454,9 @@
   // panel covers the compact footprint.
   var NC_LIVE_MAX = 12;
   var NC_LIVE_MIN_SLOTS = 6;
+// At zero there is no inventory to reserve room for: the band shrinks and
+// the next-step block under the grid carries the page instead.
+var NC_LIVE_EMPTY_SLOTS = 3;
   function ncFocusGate() {
     // Land on whichever gate step is showing: the signup CTA mid-branch,
     // otherwise the email field.
@@ -8462,6 +8465,25 @@
     if (!inp) return;
     if (inp.scrollIntoView) { try { inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
     try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); }
+  }
+  // The two zero-state actions are bound once, the first time the landing
+  // renders an empty carnet: the agenda card already on the page, and the same
+  // sign-in gate every live card focuses.
+  var ncNextWired = false;
+  function ncWireNextSteps() {
+    if (ncNextWired) return;
+    var agenda = $('notary-live-next-agenda');
+    var account = $('notary-live-next-account');
+    if (!agenda || !account) return;
+    agenda.addEventListener('click', function () {
+      var card = $('notary-carnet');
+      if (!card) return;
+      if (card.scrollIntoView) { try { card.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {} }
+      var first = card.querySelector('.sub-btn, button, a');
+      if (first) { try { first.focus({ preventScroll: true }); } catch (e) { first.focus(); } }
+    });
+    account.addEventListener('click', ncFocusGate);
+    ncNextWired = true;
   }
   function ncLiveCard(b) {
     var svc = D.serviceById(b.serviceId);
@@ -8507,7 +8529,8 @@
       more.addEventListener('click', ncFocusGate);
       grid.appendChild(more);
     }
-    var slotCount = Math.min(NC_LIVE_MAX, Math.max(NC_LIVE_MIN_SLOTS, grid.children.length));
+    var floor = open.length ? NC_LIVE_MIN_SLOTS : NC_LIVE_EMPTY_SLOTS;
+    var slotCount = Math.min(NC_LIVE_MAX, Math.max(floor, grid.children.length));
     for (var i = grid.children.length; i < slotCount; i++) {
       var slot = el('div', 'nc-live-slot', T('Pas d’offre'));
       // These visual spaces carry no inventory or action. Avoid announcing
@@ -8519,10 +8542,14 @@
     if (!open.length) {
       var empty = el('div', 'nc-live-empty');
       empty.setAttribute('role', 'status');
-      empty.appendChild(el('strong', null, T('Pas d’offres')));
-      empty.appendChild(el('span', null, T('Les offres disponibles s’afficheront ici.')));
+      empty.appendChild(el('strong', null, T('Aucune demande ouverte')));
+      empty.appendChild(el('span', null, T('Personne n’a publié de date pour ce mois-ci.')));
       grid.appendChild(empty);
     }
+    // The grid carries inventory only. The way out of an empty carnet lives
+    // under it, so a zero state never reads as a dead end.
+    var next = $('notary-live-next');
+    if (next) { ncWireNextSteps(); next.hidden = !!open.length; }
     box.hidden = false;
   }
 

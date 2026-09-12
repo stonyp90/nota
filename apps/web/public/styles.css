@@ -3754,6 +3754,11 @@ dialog:focus, dialog:focus-visible { outline: none; }
 .nc-live-empty { position: absolute; inset: 0; gap: var(--space-4); }
 .nc-live-empty strong { color: var(--ink); font-size: 24px; letter-spacing: -0.02em; }
 .nc-live-empty span { max-width: 28ch; font-size: 14px; }
+/* The way out of an empty carnet. Deliberately not a card: a quiet band under
+   the grid, so it reads as guidance and not as one more piece of inventory. */
+.nc-live-next { display: flex; flex-direction: column; gap: var(--space-5); margin-top: var(--space-7); }
+.nc-live-next-lede { max-width: 62ch; margin: 0; color: var(--ink-muted); font-size: 14px; line-height: 1.55; }
+.nc-live-next-actions { display: flex; flex-wrap: wrap; gap: var(--space-5); }
 /* The act's name never shares a line with the tier pill. It used to: at four
    up on a desktop the name had ~84px and read « Refinance… », at two up on a
    phone ~60px and read « Refin… » — refinancement and financement became the
