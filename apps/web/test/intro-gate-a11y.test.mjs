@@ -155,7 +155,16 @@ for (const [film, tab] of [['client', 'carnet'], ['notaire', 'notaires']]) {
     for (const sel of BEHIND) {
       assert.ok(!doc.querySelector(sel).hasAttribute('inert'), sel + ' is interactive again');
     }
-    assert.equal(doc.activeElement, $(doc, 'pane-' + tab).querySelector('h1'), 'focus follows the CTA into the product');
+    if (film === 'client') {
+      const target = doc.querySelector('#cal-grid .client-walk-target');
+      assert.ok(target, 'the client enters the optional date guide');
+      assert.equal(doc.activeElement, target, 'focus follows the client CTA to its date');
+      assert.equal(Nota.state.focusDate, target.dataset.date, 'keyboard navigation starts from the visible target');
+      assert.equal(target.tabIndex, 0, 'the target is the keyboard entry point');
+      assert.equal(doc.querySelectorAll('#cal-grid .cal-cell[tabindex="0"]').length, 1, 'the grid retains one keyboard entry point');
+    } else {
+      assert.equal(doc.activeElement, $(doc, 'pane-' + tab).querySelector('h1'), 'focus follows the CTA into the product');
+    }
   });
 }
 

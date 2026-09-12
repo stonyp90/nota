@@ -84,18 +84,18 @@ const PALETTE = {
   card: '#fbfdfd', // --surface
   border: '#c5d8df', // --border
   brand: '#386888', // --brand (Nota blue-teal) — fills, rules, links
-  brandDark: '#274a62', // --brand-hover = --nota-blue-800 — the button's edge, the QUÉBEC badge text
+  brandDark: '#274a62', // --brand-hover = --nota-blue-800 — the button's edge
   markBg: '#264961', // --nota-blue-900 — the lockup's deep blue-teal tile
-  brandBright: '#407598', // --nota-blue-500 — the lockup's signal dot
-  brandInk: '#ffffff', // --brand-ink — text on the brand fill, the N in the tile
-  tint: '#ebf1f5', // --nota-blue-50 — the callout wash, the QUÉBEC badge ground
+  brandBright: '#407598', // --nota-blue-500 — the signal square, and the QUÉBEC badge ground (design 02)
+  brandInk: '#ffffff', // --brand-ink / --on-accent — text on a saturated fill: the N in the tile, QUÉBEC on the badge
+  tint: '#ebf1f5', // --nota-blue-50 — the callout wash (the pale badge it once served is retired)
 };
 // The dark layer — the web's dark tokens, verbatim (apps/web/public/styles.css,
 // `@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) {…} }`),
 // emitted ONLY inside the <style> block that darkStyle() writes, so a client
 // that strips <style> keeps the inline light card intact. The tile
-// (--nota-blue-900), its white N and the QUÉBEC badge (--nota-blue-50 ground on
-// --nota-blue-800 text) are constants of the mark and do not flip.
+// (--nota-blue-900), its white N and the QUÉBEC badge (--nota-blue-500 ground,
+// white text — design 02) are constants of the mark and do not flip.
 // emails-brand.test.mjs pins every key here to that dark block.
 const DARK = {
   bg: '#101820', // --bg (dark) — the product canvas; NOT --nota-blue-950 (#101b26), which is the wordmark ink
@@ -282,16 +282,16 @@ function languageCopy(lang, fr, en, separator = ' / ') {
 }
 
 // Variant C · design 02 · layout 16 (ADR 0048, 2026-09-11) at a 40 px tile:
-// the SAME five ratios styles.css declares as --lockup-* (word caps .60 × tile,
-// centred; tile→word gap .12; word→badge gap .16; badge font-size .16), as one
+// the SAME five ratios styles.css declares as --lockup-* (word caps .50 × tile,
+// centred; tile→word gap .08; word→badge gap .16; badge font-size .16), as one
 // set of px constants — the chosen layout is a value change here, not a redraw.
-// Text can only approximate a cap height: Inter's caps are ≈ 0.73 em, so 24 px
-// of caps (.60 × 40) is a 33 px font on the tile's 40 px line, centred by the
+// Text can only approximate a cap height: Inter's caps are ≈ 0.73 em, so 20 px
+// of caps (.50 × 40) is a 28 px font on the tile's 40 px line, centred by the
 // line box itself. The tile's radius is the square 6 px step (7/64 of 40 px).
 // Of the drawing's two letter details, the period (« 27 · Le point final », a
 // signal square after the A) IS typeset — a « . » in the signal colour, weight
 // 800 — while the bevelled T stem (« 22 · Le T signé ») cannot be: text has no bevel.
-const LOCKUP = { tile: 40, word: 33, gap: 5, badgeGap: 6, badgeSize: 7, badgeLine: 9, badgePad: '4px 5px' };
+const LOCKUP = { tile: 40, word: 27, gap: 5, badgeGap: 6, badgeSize: 7, badgeLine: 9, badgePad: '4px 5px' };
 function logoHeader(lang) {
   const L = LOCKUP;
   return (
@@ -304,13 +304,13 @@ function logoHeader(lang) {
     PALETTE.markBg +
     ';border-radius:' + RADIUS.panel + ';font-family:' +
     FONT +
-    ';font-size:24px;line-height:' + L.tile + 'px;font-weight:800;color:' +
+    ';font-size:29px;line-height:' + L.tile + 'px;font-weight:900;color:' +
     PALETTE.brandInk +
     ';text-align:center;">N<span style="display:inline-block;margin-left:-4px;vertical-align:top;font-size:11px;line-height:14px;color:' + PALETTE.brandBright + ';">■</span></td>' +
-    // The word: O T A, solid, heavy, tight — centred on the tile, .60 of it tall.
+    // The word: O T A, solid, bold, optically spaced — centred on the tile, approximating the .48 vector cap ratio.
     '<td valign="middle" class="nm-ink" style="padding-left:' + L.gap + 'px;font-family:' +
     FONT +
-    ';font-size:' + L.word + 'px;line-height:' + L.tile + 'px;font-weight:800;letter-spacing:-0.07em;color:' +
+    ';font-size:' + L.word + 'px;line-height:' + L.tile + 'px;font-weight:800;letter-spacing:-0.02em;color:' +
     PALETTE.ink +
     ';white-space:nowrap;">OTA<span style="color:' + PALETTE.brandBright + ';">.</span></td>' +
     // The badge: QUÉBEC on the signal colour, white text, centred on the tile.

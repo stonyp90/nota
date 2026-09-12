@@ -1,5 +1,10 @@
 # `demo/` — la vidéo de démonstration de la salle de signature
 
+Pour l’animation Gmail / Google Agenda / Outlook et l’ajout de Nota, voir
+[`video-calendrier-notaire.md`](../docs/go-to-market/video-calendrier-notaire.md).
+Son export se lance avec `node demo/render-calendar.mjs`.
+
+
 Un seul geste :
 
 ```sh

@@ -3,6 +3,7 @@
  * No price duplication: the current quote remains authoritative in the carnet.
  */
 import { readFileSync } from 'node:fs';
+import { foundationsStyle } from './scripts/sync-brand-foundations.mjs';
 const mod = { exports: {} };
 new Function('module', 'exports', readFileSync(new URL('./public/i18n.js', import.meta.url), 'utf8'))(mod, mod.exports);
 const I18N = mod.exports;
@@ -52,15 +53,13 @@ export function renderPage(page, lang = 'fr') {
 <meta property="og:url" content="${url}"><meta property="og:locale" content="${lang}_CA">
 <meta property="og:image" content="${origin}/og.png"><meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@700;800&display=swap">
 <link rel="stylesheet" href="/styles.css">
 <style>.search-page{max-width:760px;margin:auto;padding:24px 20px 60px}.search-page header{display:flex;justify-content:space-between;align-items:center;gap:20px;margin-bottom:40px}.search-page header .brand{min-height:44px;text-decoration:none}.search-page header .lang-link{display:inline-flex;align-items:center;min-height:44px;padding:0 12px;border:1px solid var(--border);border-radius:var(--radius, 8px);color:var(--brand);text-decoration:none}.search-page p,.search-page li{font-size:var(--type-lead);line-height:var(--type-lead-lh)}.search-page section{margin:32px 0}.search-page h2{margin-top:0}.search-page .btn{white-space:normal;text-align:center;margin:12px 0}.search-page footer{border-top:1px solid var(--border);padding-top:24px}.search-page nav{display:flex;gap:16px;flex-wrap:wrap}.search-page nav a{display:inline-flex;align-items:center;min-height:44px}.search-page a:focus-visible{outline:3px solid var(--ring);outline-offset:4px}</style>
 <script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org', '@type': 'WebPage', '@id': url, url, name: lang === 'en' ? I18N.tEn(page.title) : page.title, description: lang === 'en' ? I18N.tEn(page.description) : page.description, inLanguage: lang + '-CA', isPartOf: { '@id': origin + '/#website' } }).replaceAll('<', '\\u003c')}</script>
 <script src="/landing.js" defer></script>
-</head><body>${BRAND_SYMBOLS}<div class="search-page">
-<header><a class="brand" href="${cta}" data-acquisition-link aria-label="${lang === 'en' ? 'Nota, home' : 'Nota, accueil'}">${LOCKUP}</a><a class="lang-link" href="${pagePath(page, lang === 'en' ? 'fr' : 'en')}" lang="${lang === 'en' ? 'fr' : 'en'}" hreflang="${lang === 'en' ? 'fr' : 'en'}-CA" data-acquisition-link>${lang === 'en' ? 'Français' : 'English'}</a></header>
-<main><h1>${t(page.title)}</h1><p>${t(page.description)}</p>
+${foundationsStyle()}</head><body data-nota-surface="acquisition">${BRAND_SYMBOLS}
+<header class="nota-header nota-header-inner"><a class="brand" href="${cta}" data-acquisition-link aria-label="${lang === 'en' ? 'Nota, home' : 'Nota, accueil'}">${LOCKUP}</a><a class="lang-link" href="${pagePath(page, lang === 'en' ? 'fr' : 'en')}" lang="${lang === 'en' ? 'fr' : 'en'}" hreflang="${lang === 'en' ? 'fr' : 'en'}-CA" data-acquisition-link>${lang === 'en' ? 'Français' : 'English'}</a></header>
+<div class="search-page"><main><h1>${t(page.title)}</h1><p>${t(page.description)}</p>
 <a class="btn btn-primary btn-lg" href="${cta}" data-acquisition-link>${t('Voir les dates et proposer mon offre')}</a>
 <p>${t('Publier une demande est gratuit. La date reste à confirmer avec le notaire.')}</p>
 <section><h2>${t('Comment trouver votre notaire')}</h2><ol>${['Choisissez le service et votre date souhaitée dans le carnet.', 'Consultez le prix présenté et proposez votre offre.', 'Un notaire peut accepter, faire une contre-offre ou passer. Vous préparez ensuite le dossier ensemble.'].map(s => `<li>${t(s)}</li>`).join('')}</ol></section>

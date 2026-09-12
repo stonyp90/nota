@@ -15,7 +15,8 @@ const path = require('node:path');
 const PORT = Number(process.env.PORT || 4313);
 const ROOT = path.join(__dirname, '..', '..', 'docs');
 const TYPES = {
-  '.html': 'text/html; charset=utf-8', '.png': 'image/png', '.svg': 'image/svg+xml', '.css': 'text/css',
+  '.html': 'text/html; charset=utf-8',
+  '.pdf': 'application/pdf', '.png': 'image/png', '.svg': 'image/svg+xml', '.css': 'text/css',
   '.js': 'text/javascript', '.json': 'application/json', '.md': 'text/plain; charset=utf-8', '.webp': 'image/webp',
   '.jpg': 'image/jpeg', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 };

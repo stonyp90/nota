@@ -27,7 +27,7 @@ resource "aws_cloudfront_response_headers_policy" "signing" {
       override        = true
     }
     content_security_policy {
-      content_security_policy = "default-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' https://rsms.me; font-src 'self' https://rsms.me; script-src 'self'; connect-src 'self'"
+      content_security_policy = "default-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self'; font-src 'self'; script-src 'self'; connect-src 'self'"
       override                = true
     }
   }

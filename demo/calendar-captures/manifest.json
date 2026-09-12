@@ -1,0 +1,96 @@
+{
+  "fr": {
+    "offer": {
+      "action": {
+        "x": 114.4140625,
+        "y": 225.1953125
+      },
+      "height": 257.1953125,
+      "width": 388,
+      "x": 846,
+      "y": 320.078125,
+      "file": "offer-fr.jpg"
+    },
+    "confirm": {
+      "action": {
+        "x": 516.78515625,
+        "y": 653
+      },
+      "footer": {
+        "height": 69,
+        "y": 618
+      },
+      "height": 688,
+      "width": 880,
+      "x": 200,
+      "y": 16,
+      "file": "confirm-fr.jpg"
+    },
+    "retained": {
+      "action": null,
+      "height": 583.9453125,
+      "width": 1224,
+      "x": 28,
+      "y": 76.140625,
+      "file": "retained-fr.jpg"
+    },
+    "subscribe": {
+      "action": {
+        "x": 45.1953125,
+        "y": 114.890625
+      },
+      "height": 326.078125,
+      "width": 504.5078125,
+      "x": 28,
+      "y": 202.4765625,
+      "file": "subscribe-fr.jpg"
+    }
+  },
+  "en": {
+    "offer": {
+      "action": {
+        "x": 113.671875,
+        "y": 192.4453125
+      },
+      "height": 224.4453125,
+      "width": 388,
+      "x": 846,
+      "y": 334.078125,
+      "file": "offer-en.jpg"
+    },
+    "confirm": {
+      "action": {
+        "x": 489.8828125,
+        "y": 653
+      },
+      "footer": {
+        "height": 69,
+        "y": 618
+      },
+      "height": 688,
+      "width": 880,
+      "x": 200,
+      "y": 16,
+      "file": "confirm-en.jpg"
+    },
+    "retained": {
+      "action": null,
+      "height": 565.9453125,
+      "width": 1224,
+      "x": 28,
+      "y": 76.140625,
+      "file": "retained-en.jpg"
+    },
+    "subscribe": {
+      "action": {
+        "x": 45.1953125,
+        "y": 114.890625
+      },
+      "height": 305.28125,
+      "width": 504.5078125,
+      "x": 28,
+      "y": 202.4765625,
+      "file": "subscribe-en.jpg"
+    }
+  }
+}

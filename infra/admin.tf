@@ -226,6 +226,19 @@ data "aws_iam_policy_document" "admin_lambda" {
     }
   }
 
+  # Reviewed support knowledge is configuration, with no access to other items.
+  statement {
+    sid       = "SupportKnowledgeWrite"
+    effect    = "Allow"
+    actions   = ["dynamodb:GetItem", "dynamodb:PutItem"]
+    resources = [aws_dynamodb_table.main.arn]
+    condition {
+      test     = "ForAllValues:StringEquals"
+      variable = "dynamodb:LeadingKeys"
+      values   = ["CONFIG#SUPPORT"]
+    }
+  }
+
   # The SECOND write door on the MAIN table: targeted campaigns
   # (apps/api/src/segments.js + the /admin/campaigns routes). Three fixed
   # partitions, and the same LeadingKeys confinement as the configuration door

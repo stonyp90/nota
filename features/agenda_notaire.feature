@@ -81,3 +81,9 @@ Fonctionnalité: L'agenda du notaire, le rythme de ses alertes et son registre d
     Quand le client consulte son offre
     Alors rien de la cote ni des évaluations du notaire ne parvient au client
     Et le client ne lit du notaire que des faits vérifiables
+
+  Scénario: Lire tous les paramètres de l’offre avant de la retenir
+    Étant donné un client publie une demande de 2400 $ dans 8 jours
+    Quand le notaire "agenda@etude.ca" lit son agenda une seule fois
+    Alors les paramètres de son offre montrent le prêt et les réponses sans complexité
+    Et aucune demande de son agenda ne porte le courriel ni le dossier du client

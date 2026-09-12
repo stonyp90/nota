@@ -68,8 +68,8 @@ a:hover { text-decoration: underline; }
    the carnet's styles.css and the signing room's signature.css (ADR 0048,
    design 02 / layout 16). ux-nav.test.mjs pins the five across the three. */
 .admin-brand {
-  --lockup-tile: 30px;
-  --lockup-word: calc(var(--lockup-tile) * .60);
+  --lockup-tile: 28px;
+  --lockup-word: calc(var(--lockup-tile) * .48);
   --lockup-gap: calc(var(--lockup-tile) * .12);
   --lockup-badge-gap: calc(var(--lockup-tile) * .16);
   --lockup-badge-size: max(9px, calc(var(--lockup-tile) * .16)); /* .16 of the tile, never under 9px: a 30px header tile gave 4.8px caps */
@@ -81,7 +81,7 @@ a:hover { text-decoration: underline; }
 }
 .admin-brand-mark { width: var(--lockup-tile); height: var(--lockup-tile); display: block; flex: none; }
 .admin-brand-mark img { display: block; width: 100%; height: 100%; }
-.admin-brand-word { display: inline-flex; align-items: center; width: calc(var(--lockup-word) * 91.8 / 28); height: var(--lockup-word); color: var(--brand); line-height: 1; }
+.admin-brand-word { display: inline-flex; align-items: center; width: calc(var(--lockup-word) * 91.8 / 28); height: var(--lockup-word); color: var(--brand-word-ink); line-height: 1; }
 .admin-brand-word-svg { display: block; width: 100%; height: 100%; overflow: visible; }
 /* The badge takes the signal colour (design 02): --nota-blue-500, white text. */
 .admin-brand-sub {
@@ -90,8 +90,12 @@ a:hover { text-decoration: underline; }
 }
 .admin-spacer { flex: 1; }
 .lang-btn { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-inset); }
-.lang-choice { appearance: none; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); padding: 5px 7px; font: 700 10px/1 var(--font-sans); letter-spacing: .06em; cursor: pointer; }
-.lang-choice[aria-pressed="true"] { background: var(--brand); color: var(--brand-ink); }
+.lang-choice { appearance: none; border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent; color: var(--ink-muted); padding: 5px 7px; font: 700 10px/1 var(--font-sans); letter-spacing: .06em; cursor: pointer; }
+/* La langue retenue se lit à la marque, pas à un aplat de marque : le carnet
+   compose exactement cette cellule (.seg-btn.is-on), une teinte plus claire
+   que le rail encastré plus un filet franc, encre --brand-on-surface (jamais
+   --brand nu, qui tombe à 2,5:1 sur fond de nuit). */
+.lang-choice[aria-pressed="true"] { background: var(--surface-hover); color: var(--brand-on-surface); border-color: var(--border-strong); box-shadow: var(--shadow-sm); }
 .lang-choice:focus-visible { outline: 2px solid var(--brand-bright); outline-offset: 2px; }
 
 .admin-userbar { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -107,11 +111,11 @@ a:hover { text-decoration: underline; }
 }
 /* Outline accent (never a solid brand fill) to mark elevated access. */
 .role-pill[data-role='super_admin'] {
-  background: var(--brand-wash); color: var(--brand); border-color: var(--brand);
+  background: var(--brand-tint-solid); color: var(--brand); border-color: var(--brand);
 }
 
 .icon-btn {
-  appearance: none; border: 1px solid transparent; background: transparent; color: var(--ink);
+  appearance: none; font: inherit; border: 1px solid transparent; background: transparent; color: var(--ink);
   width: 36px; height: 36px; border-radius: var(--radius); cursor: pointer;
   display: grid; place-items: center; flex: none;
   transition: background .14s, transform .06s;
@@ -140,8 +144,8 @@ a:hover { text-decoration: underline; }
 .btn svg { flex: none; }
 /* Primary = Nota blue-teal ink + blue-teal border, transparent background. */
 .btn-primary { background: transparent; color: var(--brand); border-color: var(--brand); font-weight: 600; }
-.btn-primary:not(:disabled):hover { background: var(--brand-wash); }
-.btn-primary:not(:disabled):active { background: var(--brand-wash-strong); }
+.btn-primary:not(:disabled):hover { background: var(--brand-tint-solid); }
+.btn-primary:not(:disabled):active { background: var(--brand-tint-solid-strong); }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--ink-muted); }
 .btn-ghost:hover { background: var(--neutral-wash); color: var(--ink); }
 .btn-ghost:active { background: var(--neutral-wash); }
@@ -165,6 +169,23 @@ a:hover { text-decoration: underline; }
 select.input { height: 44px; }
 .input:focus { border-color: var(--ring); outline: none; box-shadow: 0 0 0 3px var(--focus-ring); }
 
+/* Le champ mot de passe et son bouton « Afficher ». Ni l'enveloppe ni le bouton
+   n'avaient de règle : le navigateur peignait sa propre gélule grise sous le
+   champ, sur le premier écran que quiconque voit de la console. Le bouton se
+   loge DANS le champ et prend le registre fantôme des autres boutons — fond
+   transparent, encre --brand-on-surface, coin --radius-sm. */
+.password-control { position: relative; display: flex; align-items: center; min-width: 0; }
+.password-control .input { padding-right: 84px; }
+.password-toggle {
+  appearance: none; position: absolute; right: 5px; cursor: pointer;
+  padding: 6px 9px; border: 1px solid transparent; border-radius: var(--radius-sm);
+  background: transparent; color: var(--brand-on-surface);
+  font: 700 11.5px/1 var(--font-sans); letter-spacing: .02em;
+  transition: background .12s, border-color .12s;
+}
+.password-toggle:hover { background: var(--brand-tint-solid); border-color: var(--brand); }
+.password-toggle:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
 /* --- Segmented control (date-range presets) -------------------------------
    Outline pills — the active preset is marked with Nota blue-teal ink + border,
    never a filled segment. */
@@ -176,7 +197,7 @@ select.input { height: 44px; }
   transition: background .15s, color .15s, border-color .15s;
 }
 .seg-btn:hover { background: var(--neutral-wash); color: var(--ink); }
-.seg-btn.is-on { background: var(--brand-wash); color: var(--brand); border-color: var(--brand); }
+.seg-btn.is-on { background: var(--brand-tint-solid); color: var(--brand-on-surface); border-color: var(--brand); }
 
 /* --- App shell (top bar already above; this is the rail + content grid) ---- */
 .admin-shell {
@@ -205,7 +226,7 @@ select.input { height: 44px; }
 }
 .admin-rail-link:hover:not(:disabled) { background: var(--neutral-wash); color: var(--ink); }
 .admin-rail-link[aria-current='page'] {
-  background: var(--brand-wash); color: var(--brand); border-color: var(--brand);
+  background: var(--brand-tint-solid); color: var(--brand); border-color: var(--brand);
 }
 .admin-rail-link:disabled { cursor: default; color: var(--ink-muted); }
 .admin-rail-link svg { flex: none; }
@@ -352,7 +373,7 @@ select.input { height: 44px; }
   padding: 2px 8px; border-radius: var(--radius-sm); white-space: nowrap;
   border: 1px solid var(--border-strong); color: var(--ink-muted); background: transparent;
 }
-.tpl-badge.is-custom { color: var(--brand); border-color: var(--brand); background: var(--brand-wash); }
+.tpl-badge.is-custom { color: var(--brand); border-color: var(--brand); background: var(--brand-tint-solid); }
 .tpl-badge.is-off { color: var(--danger); border-color: var(--danger); }
 .tpl-subjects { margin-top: 4px; display: flex; flex-direction: column; gap: 2px; }
 .tpl-subject { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; min-width: 0; }
@@ -474,7 +495,7 @@ select.input { height: 44px; }
   padding: 2px 8px; border-radius: var(--radius-sm);
   border: 1px solid var(--border-strong); color: var(--ink-muted); background: transparent;
 }
-.nstatut.is-active { color: var(--ok); border-color: var(--ok); background: var(--brand-wash); }
+.nstatut.is-active { color: var(--ok); border-color: var(--ok); background: var(--brand-tint-solid); }
 .nstatut.is-onboarding { color: var(--warn); border-color: var(--warn); }
 .nstatut.is-en_attente { color: var(--warn); border-color: var(--warn); }
 .nstatut.is-restricted { color: var(--danger); border-color: var(--danger); }
@@ -652,6 +673,9 @@ select.input { height: 44px; }
    an iPad). */
 @media (pointer: coarse) {
   .btn, .seg-btn, .admin-rail-link, .password-toggle { min-height: 44px; }
+  /* Le choix de langue est un bouton comme un autre : 30 × 22 px ne se vise pas.
+     Le rail qui l'entoure garde sa hauteur, donc seule la cellule grandit. */
+  .lang-choice { min-height: 44px; min-width: 44px; }
   /* Un lien de section dans l'inventaire est une cible de doigt comme une
      autre : 24 px de texte ne se visent pas sur un écran tactile. */
   .feature-row a { display: inline-flex; align-items: center; min-height: 44px; }
@@ -877,7 +901,7 @@ select.input { height: 44px; }
 }
 .usr-badge-regle { color: var(--ok); border-color: var(--ok); }
 .usr-badge-efface, .usr-badge-manque { color: var(--warn); border-color: var(--warn); }
-.usr-badge-masque { color: var(--brand); border-color: var(--brand); background: var(--brand-wash); }
+.usr-badge-masque { color: var(--brand); border-color: var(--brand); background: var(--brand-tint-solid); }
 
 /* --- La fenêtre d'effacement ------------------------------------------------
    Le moule commun de Nota : un form.dlg-x-form qui porte le ✕ collant en haut
@@ -1000,7 +1024,7 @@ select.input { height: 44px; }
 .crm-bar-row { display: grid; gap: 6px; margin-top: 18px; }
 .crm-bar-label { display: flex; justify-content: space-between; gap: 12px; color: var(--ink); font-size: 12.5px; }
 .crm-bar-label strong { font-variant-numeric: tabular-nums; }
-.crm-bar-track { height: 9px; overflow: hidden; border-radius: 99px; background: var(--surface-inset); }
+.crm-bar-track { height: 9px; overflow: hidden; border-radius: var(--radius-xs); background: var(--surface-inset); }
 .crm-bar-fill { height: 100%; min-width: 0; border-radius: inherit; background: var(--status-retenue); transition: width .18s ease; }
 .crm-bar-fill.is-source { background: var(--brand); }
 .crm-source-sub { color: var(--ink-muted); font-size: 11px; }
@@ -1009,7 +1033,7 @@ select.input { height: 44px; }
 .crm-contact-detail { display: block; margin-top: 3px; overflow-wrap: anywhere; }
 .crm-chip, .crm-ready, .crm-not-ready, .crm-overdue {
   display: inline-block; padding: 3px 7px; border: 1px solid var(--border-strong);
-  border-radius: 99px; font-size: 11px; font-weight: 700; white-space: nowrap;
+  border-radius: var(--radius-sm); font-size: 11px; font-weight: 700; white-space: nowrap;
 }
 .crm-chip-nouveau { color: var(--ink-muted); }
 .crm-chip-contacte { color: var(--brand); }
@@ -1048,3 +1072,10 @@ select.input { height: 44px; }
     display: flex; flex-direction: row; flex-wrap: wrap; gap: 6px;
   }
 }
+
+/* Reviewed support answers share the inbox; drafts survive thread polling. */
+.support-knowledge { margin-top: var(--s-4, 24px); }
+.support-knowledge > summary, .support-knowledge-entry > summary { cursor: pointer; font-weight: 600; padding: 12px 0; }
+.support-knowledge-entry { border-top: 1px solid var(--border, #d8d8d4); }
+.support-knowledge .input { width: 100%; box-sizing: border-box; }
+.support-learn { margin-top: 8px; }

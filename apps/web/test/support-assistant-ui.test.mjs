@@ -138,7 +138,7 @@ test('la ligne d’entête dit ce que la messagerie FAIT, et le dit une fois', a
   const { doc } = await boot(assistedStub());
   $(doc, 'chat-fab').click();
   const txt = FLAT($(doc, 'chat-panel').textContent);
-  const ligne = 'Explorez les sujets d’aide ou posez votre question. Une personne peut reprendre la conversation.';
+  const ligne = 'Posez votre question ici, en tout temps. Un assistant IA peut vous guider; une personne peut prendre le relais dans cette conversation.';
   assert.equal(txt.split(ligne).length - 1, 1);
 });
 
@@ -191,12 +191,12 @@ test('l’écho local ne double pas la bulle quand le serveur répond', async ()
   assert.ok(!$(doc, 'chat-log').querySelector('.sup-msg[data-id^="local-"]'), 'l’id provisoire a cédé la place');
 });
 
-test('une escalade se DIT au visiteur, et ouvre la porte du courriel', async () => {
+test('une escalade reste dans le chat et le courriel reste un choix', async () => {
   const { doc } = await boot(assistedStub({ escalade: true, texte: 'Je passe la question à Anthony.' }));
   await ask(doc, 'Où en est mon dossier ?');
   assert.equal($(doc, 'chat-escalade').hidden, false, 'l’avis d’escalade est visible');
-  assert.match(FLAT($(doc, 'chat-escalade').textContent), /part à une personne/);
-  assert.equal($(doc, 'chat-courriel-row').hidden, false, 'et le courriel devient le canal qui compte');
+  assert.match(FLAT($(doc, 'chat-escalade').textContent), /personne prendra le relais ici/);
+  assert.equal($(doc, 'chat-courriel-row').hidden, true, 'le courriel n’est pas demandé automatiquement');
 });
 
 test('une réponse ordinaire ne montre PAS l’avis d’escalade', async () => {
@@ -261,4 +261,23 @@ test('help topics remain available after a reply and prepare a question without 
   topics[1].click();
   assert.equal($(doc, 'chat-text').value, 'Ma question en cours');
   assert.ok($(doc, 'chat-text').getAttribute('aria-describedby').includes('chat-privacy'));
+});
+
+test('contact opens the conversation directly and an explicit human request preserves unfinished drafts', async () => {
+  const { doc, stub } = await boot(assistedStub({ escalade: true, texte: 'Une personne prend le relais ici.' }));
+  $(doc, 'mnav-contact').click();
+  assert.equal($(doc, 'chat-panel').hidden, false);
+  assert.equal($(doc, 'contact-dialog').open, false);
+  assert.equal(doc.activeElement, $(doc, 'chat-text'));
+  $(doc, 'chat-text').value = 'Mon brouillon';
+  $(doc, 'chat-human').click();
+  assert.equal($(doc, 'chat-text').value, 'Mon brouillon');
+  assert.equal(stub.calls.filter(c => c.path.includes('/support/messages')).length, 0);
+  $(doc, 'chat-text').value = '';
+  $(doc, 'chat-human').click();
+  await wait(80);
+  const post = stub.calls.find(c => c.method === 'POST' && c.path.includes('/support/messages'));
+  assert.equal(post.body.texte, D.SUPPORT_TOPICS.find(t => t.id === 'humain').fr);
+  assert.ok(!post.body.courriel);
+  assert.equal($(doc, 'chat-courriel-row').hidden, true);
 });

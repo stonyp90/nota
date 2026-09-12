@@ -59,23 +59,27 @@ jobs:
         run: |
           set -euo pipefail
           npm run build --workspace @nota/web
-          cp docs/business-plan.html apps/web/dist/business-plan.html
-          cp docs/pitch-deck.html apps/web/dist/pitch-deck.html
-          cp -R docs/pitch-deck apps/web/dist/pitch-deck
-          cp docs/plan-affaires-sommaire.md apps/web/dist/plan-affaires-sommaire.md
-          cp docs/nota-pitch-deck-legal.pptx apps/web/dist/nota-pitch-deck-legal.pptx
-          mkdir -p apps/web/dist/planning
-          cp docs/planning/business-plan-model.json docs/planning/business-plan-review-2026-09-09.md apps/web/dist/planning/
           grep -q '<title>Nota Business Plan</title>' apps/web/dist/business-plan.html
           grep -qi '#386888' apps/web/dist/business-plan.html
-          grep -q 'Slide 1 of 16' apps/web/dist/pitch-deck.html
+          node <<'NODE'
+          const fs = require('node:fs');
+          const assert = require('node:assert/strict');
+          const html = fs.readFileSync('apps/web/dist/pitch-deck.html', 'utf8');
+          const match = html.match(/<script type="application\/json" id="deck-data">([\s\S]*?)<\/script>/);
+          assert.ok(match, 'The native investor deck data must be shipped');
+          const data = JSON.parse(match[1]);
+          for (const lang of ['fr', 'en']) {
+            assert.equal(data.editions[lang].length, 9, 'The investor story has nine slides');
+            for (let n = 1; n <= 9; n++) {
+              assert.ok(fs.existsSync('apps/web/dist/pitch-deck/dark-slide-' + (lang === 'fr' ? 'fr-' : '') + n + '.png'));
+            }
+          }
+          NODE
           if grep -qiE 'Version[[:space:]]+1\.6|Reviewed[[:space:]]+2026' apps/web/dist/pitch-deck.html; then
             echo 'Pitch deck must not expose internal version metadata' >&2
             exit 1
           fi
-          test -f apps/web/dist/pitch-deck/dark-slide-16.png
-          test -f apps/web/dist/pitch-deck/dark-slide-fr-16.png
-          unzip -tq apps/web/dist/nota-pitch-deck-legal.pptx >/dev/null
+          head -c 5 apps/web/dist/nota-pitch-deck.pdf | grep -q '%PDF-'
 
       - name: Upload business plan bundle
         uses: actions/upload-artifact@v4
@@ -86,7 +90,8 @@ jobs:
             apps/web/dist/pitch-deck.html
             apps/web/dist/pitch-deck/
             apps/web/dist/plan-affaires-sommaire.md
-            apps/web/dist/nota-pitch-deck-legal.pptx
+            apps/web/dist/nota-pitch-deck.pdf
+            apps/web/dist/nota-pitch-deck-fr.pdf
             apps/web/dist/planning/
           if-no-files-found: error
           retention-days: 14
@@ -145,7 +150,7 @@ jobs:
           npx playwright install --with-deps chromium firefox webkit
 
       - name: Run critical journeys (client booking, notary sign-in, partner claim, home numbers)
-        run: npm run test:e2e
+        run: npm run test:e2e:all
 
       - name: Upload Playwright report on failure
         if: failure()

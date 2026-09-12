@@ -3083,6 +3083,55 @@ function createAdmin({
       duplicate: result.duplicate, notification, thread, limites: { messageMax: domain.SUPPORT_MESSAGE_MAX },
     };
   }
+  async function getSupportKnowledge(token, { ip } = {}) {
+    const gate = await supportPrincipal(token, 'support:read', ip, 'getSupportKnowledge');
+    if (gate.error) return gate.error;
+    try {
+      const knowledge = await repo.getSupportKnowledge();
+      return { ok: true, ...knowledge, limites: { entriesMax: domain.SUPPORT_KNOWLEDGE_MAX, questionMax: domain.SUPPORT_KNOWLEDGE_QUESTION_MAX, messageMax: domain.SUPPORT_MESSAGE_MAX } };
+    } catch { return supportUnavailable(); }
+  }
+  async function saveSupportKnowledge(token, payload, { ip } = {}) {
+    const gate = await supportPrincipal(token, 'support:write', ip, 'saveSupportKnowledge');
+    if (gate.error) return gate.error;
+    const invalid = (code, message, status = 422) => ({ ok: false, status, errors: [{ code, message }] });
+    if (!Number.isSafeInteger(payload.revision) || payload.revision < 0) return invalid('revision_requise', 'Actualisez les réponses approuvées avant de les modifier.');
+    try {
+      const current = await repo.getSupportKnowledge();
+      if (current.revision !== payload.revision) return invalid('revision_conflit', 'Les réponses ont changé. Actualisez avant de réessayer.', 409);
+      let entry;
+      if (payload.active === false) {
+        const previous = current.entries.find(item => item.id === payload.id);
+        if (!previous) return invalid('introuvable', 'Réponse approuvée introuvable.', 404);
+        entry = { ...previous, active: false, updatedAt: clockIso(), reviewedBy: gate.principal.adminId };
+      } else {
+        const validation = require('./support-knowledge').validateKnowledge(payload);
+        if (!validation.ok) return { ok: false, status: 422, errors: validation.errors };
+        if (typeof payload.threadId !== 'string' || typeof payload.messageId !== 'string') return invalid('source_requise', 'Choisissez une réponse humaine dans la conversation.');
+        const thread = await repo.getSupportThread(payload.threadId);
+        const source = thread && (thread.messages || []).find(item => item.id === payload.messageId && item.de === domain.SUPPORT_FROM.NOTA);
+        if (!source) return invalid('source_requise', 'Choisissez une réponse humaine dans la conversation.');
+        // Stable, bounded ID: retries cannot create duplicate entries.
+        const id = require('node:crypto').createHash('sha256').update(JSON.stringify([thread.id, source.id])).digest('hex');
+        entry = { id, ...validation.value, active: true, threadId: thread.id, messageId: source.id, updatedAt: clockIso(), reviewedBy: gate.principal.adminId };
+      }
+      const entries = current.entries.filter(item => item.id !== entry.id);
+      entries.push(entry);
+      if (entries.length > domain.SUPPORT_KNOWLEDGE_MAX) {
+        // Inactive entries may be replaced; an active answer is never evicted.
+        const inactive = entries.findIndex(item => !item.active && item.id !== entry.id);
+        if (inactive < 0) return invalid('limite_connaissances', 'La base est pleine. Retirez une réponse avant d’en ajouter une.');
+        entries.splice(inactive, 1);
+      }
+      // Leave room below DynamoDB's item limit, including multibyte text.
+      if (Buffer.byteLength(JSON.stringify(entries), 'utf8') > 300000) return invalid('limite_connaissances', 'La base est pleine. Retirez une réponse avant d’en ajouter une.');
+      const saved = await repo.putSupportKnowledge({ entries }, { expectedRevision: current.revision });
+      if (!saved) return invalid('revision_conflit', 'Les réponses ont changé. Actualisez avant de réessayer.', 409);
+      await appendAudit('support_knowledge_reviewed', { adminId: gate.principal.adminId, email: gate.principal.email, ip, meta: { knowledgeId: entry.id, active: entry.active, revision: saved.revision } });
+      return { ok: true, ...saved };
+    } catch { return supportUnavailable(); }
+  }
+
   async function closeSupport(token, id, { ip } = {}) {
     const gate = await supportPrincipal(token, 'support:write', ip, 'closeSupport');
     if (gate.error) return gate.error;
@@ -3096,7 +3145,7 @@ function createAdmin({
   }
 
   return {
-    listSupport, getSupport, replySupport, closeSupport,
+    listSupport, getSupport, replySupport, closeSupport, getSupportKnowledge, saveSupportKnowledge,
     // L'entonnoir des refus (ADR 0036, 2026-09-11) : exposé pour que les portes
     // que admin-handler.js garde lui-même (groupes, utilisateurs, permissions,
     // tableaux de bord) puissent laisser la même trace.

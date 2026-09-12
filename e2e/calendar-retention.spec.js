@@ -4,7 +4,7 @@
 // No provider is mocked in the browser. The E2E server still uses memory storage,
 // dev login and fake billing: this does NOT prove external calendar ingestion.
 const { test, expect } = require('@playwright/test');
-const { gotoHome } = require('./helpers');
+const { gotoHome, chooseFinancingLenderAndTravel } = require('./helpers');
 const { NOTARY_CONTACT } = require('../apps/api/test-support/notary-fixture');
 
 const unfold = text => text.replace(/\r\n[ \t]/g, '');
@@ -22,8 +22,7 @@ test('partner booking → calendar link → ' + (counterOffer ? 'counter-offer a
   await sheet.locator('#crit-valeur_pret').fill('350000');
   await sheet.locator('#crit-contexte__propriete_detenue').click();
   await sheet.locator('#crit-approbation_bancaire__obtenue').click();
-  await sheet.locator('#crit-preteur').selectOption('banque_nationale');
-  await sheet.locator('#crit-deplacement').selectOption('client_50');
+  await chooseFinancingLenderAndTravel(sheet);
   await next.click();
   await next.click();
   await sheet.locator('#o-prefix').fill('G1R');
@@ -55,6 +54,7 @@ test('partner booking → calendar link → ' + (counterOffer ? 'counter-offer a
     await notary.goto(link);
     await expect(notary.locator('#pane-notaires')).toBeVisible();
     const verified = notary.waitForResponse(r => r.url().endsWith('/notary/session/verify'));
+    await notary.locator('#notary-calendar-access > summary').click();
     await notary.locator('#nc-email').fill('calendar-notary-' + Date.now() + '@example.test');
     await notary.locator('#notary-console-signin').click();
     const session = await (await verified).json();

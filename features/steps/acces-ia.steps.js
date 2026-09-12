@@ -198,14 +198,23 @@ When('le notaire {string} consulte son accès IA', async function (email) {
   await lireAcces(this, email);
 });
 
+// ADR 0052 — à l'écran, « activer mes essais » EST l'acceptation de l'échange :
+// la voie gratuite est payée en révisions. L'inscription ordinaire porte donc
+// le consentement ; le scénario qui l'omet a sa propre étape, plus bas.
 When('le notaire {string} s\'inscrit à la bêta IA', async function (email) {
-  const token = await notarySession(this, email);
-  await this.request({
-    method: 'POST', path: '/notary/ai-beta/enroll',
-    headers: { authorization: 'Bearer ' + token }, body: JSON.stringify({}),
-  });
-  assert.equal(this.response.statusCode, 200, 'inscription bêta: ' + this.response.body);
-  this.iaVue = this.responseJson.access;
+  await inscrireBeta(this, email, true);
+});
+
+When('le notaire {string} s\'inscrit à la bêta IA sans accepter de contribuer', async function (email) {
+  await inscrireBeta(this, email, false);
+});
+
+When('le notaire {string} accepte de contribuer ses révisions', async function (email) {
+  await reglerContribution(this, email, true);
+});
+
+When('le notaire {string} retire son consentement à contribuer', async function (email) {
+  await reglerContribution(this, email, false);
 });
 
 When('le notaire {string} prépare le dossier avec l\'IA', async function (email) {
@@ -241,6 +250,26 @@ When('Stripe confirme la formule {string} pour {string}', async function (planId
   assert.equal(result.handled, true, 'l’événement Stripe doit être appliqué');
 });
 
+async function inscrireBeta(world, email, contribue) {
+  const token = await notarySession(world, email);
+  await world.request({
+    method: 'POST', path: '/notary/ai-beta/enroll',
+    headers: { authorization: 'Bearer ' + token }, body: JSON.stringify({ contribue }),
+  });
+  assert.equal(world.response.statusCode, 200, 'inscription bêta: ' + world.response.body);
+  world.iaVue = world.responseJson.access;
+}
+
+async function reglerContribution(world, email, contribue) {
+  const token = await notarySession(world, email);
+  await world.request({
+    method: 'POST', path: '/notary/ai-contribution',
+    headers: { authorization: 'Bearer ' + token }, body: JSON.stringify({ contribue }),
+  });
+  assert.equal(world.response.statusCode, 200, 'contribution: ' + world.response.body);
+  world.iaVue = world.responseJson.access;
+}
+
 // --- Then -------------------------------------------------------------------
 
 Then('l\'accès IA est fermé, motif {string}', function (motif) {
@@ -260,6 +289,29 @@ Then('le refus IA porte le motif {string} et son message', function (code) {
   assert.ok(erreur, 'aucune erreur dans la réponse: ' + this.response.body);
   assert.equal(erreur.code, code, this.response.body);
   assert.equal(erreur.message, 'Votre quota de préparation IA est épuisé. Choisissez une formule ou achetez des unités.');
+});
+
+// ADR 0052 — les deux voies, vues du serveur. « Requise » ne veut pas dire que
+// le quota est vide : il est là, c'est l'échange qui n'a pas été accepté.
+Then('la contribution est {word}', function (mode) {
+  assert.equal(this.iaVue.contribution.mode, mode, JSON.stringify(this.iaVue.contribution));
+  assert.equal(this.iaVue.contribution.requise, mode === 'requise');
+});
+
+Then('le refus IA porte le motif {string} et parle de révisions', function (code) {
+  const erreur = this.responseJson.errors && this.responseJson.errors[0];
+  assert.ok(erreur, 'aucune erreur dans la réponse: ' + this.response.body);
+  assert.equal(erreur.code, code, this.response.body);
+  assert.match(erreur.message, /révisions/);
+});
+
+// Le secret professionnel appartient au CLIENT (art. 14 C. déont.) : aucun
+// consentement de notaire ne peut le lever, et le serveur dit exactement ce
+// qu'il prend — le jugement du notaire, jamais la matière du dossier.
+Then('ce qui est donné se borne aux jugements du notaire', function () {
+  assert.deepEqual(this.iaVue.contribution.donne, ['notary_review', 'notary_question']);
+  assert.ok(this.iaVue.contribution.jamais.length >= 3, JSON.stringify(this.iaVue.contribution));
+  assert.equal(this.iaVue.contribution.refusConserve, 'marche_complet');
 });
 
 Then('aucun essai de bêta n\'est entamé', function () {

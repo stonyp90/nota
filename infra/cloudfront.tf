@@ -73,13 +73,13 @@ resource "aws_cloudfront_response_headers_policy" "security" {
       override        = true
     }
 
-    # Content-Security-Policy. Tuned to NOT break the app: it loads the Inter
-    # stylesheet + font from https://rsms.me, the Sora wordmark stylesheet from
-    # https://fonts.googleapis.com (font files from https://fonts.gstatic.com),
-    # external app.js/domain.js on 'self', inline JSON-LD + inline styles, and
-    # fetches /api on 'self'.
+    # Content-Security-Policy. Tuned to NOT break the app: fonts and stylesheets
+    # are served by Nota itself since 2026-09-12 (apps/web/public/fonts, OFL) —
+    # no font host is named here any more, so a third-party stylesheet added by
+    # accident is simply blocked. External app.js/domain.js on 'self', inline
+    # JSON-LD + inline styles, and fetches /api on 'self'.
     content_security_policy {
-      content_security_policy = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline' https://rsms.me https://fonts.googleapis.com; font-src 'self' https://rsms.me https://fonts.gstatic.com data:; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://${aws_s3_bucket.documents.bucket}.s3.${var.region}.amazonaws.com${local.csp_ice_sources}"
+      content_security_policy = "default-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com; connect-src 'self' https://www.google-analytics.com https://region1.google-analytics.com https://analytics.google.com https://${aws_s3_bucket.documents.bucket}.s3.${var.region}.amazonaws.com${local.csp_ice_sources}"
       override                = true
     }
   }

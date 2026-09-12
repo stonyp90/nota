@@ -7,6 +7,7 @@ const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const PORT = Number(process.env.PORT || 4175);
 const MIME = {
   '.html': 'text/html; charset=utf-8',
+  '.pdf': 'application/pdf',
   '.md': 'text/markdown; charset=utf-8',
   '.json': 'application/json; charset=utf-8',
   '.css': 'text/css; charset=utf-8',

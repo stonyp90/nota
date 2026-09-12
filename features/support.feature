@@ -50,3 +50,10 @@ Fonctionnalité: Messagerie en direct — une question tombe live chez l'opérat
     Quand un client envoie "Pouvez-vous me rappeler demain ?" par le formulaire Nous joindre avec le courriel "eve@exemple.ca"
     Alors la boîte de soutien liste 1 fil au statut "a_repondre"
     Et le fil de la messagerie compte 1 message
+
+  Scénario: une réponse générale ne devient réutilisable qu’après une révision bilingue
+    Étant donné une réponse de soutien générale dans les deux langues
+    Alors cette réponse de soutien exige une approbation explicite
+    Quand cette réponse de soutien est approuvée
+    Alors une question correspondante reçoit la réponse approuvée sans appel au modèle
+    Et une question différente ne réutilise pas cette réponse

@@ -268,6 +268,68 @@ test('one type chip per domain partner category', async () => {
   assert.equal(chips.map((c) => c.textContent).join(','), D.REFERRAL.partners.map((p) => p.nom).join(','));
 });
 
+// Le métier n'est demandé QU'UNE fois (2026-09-12) : le héros posait la même
+// question que le formulaire, puis le formulaire se refermait sur un reçu et
+// un bouton « Modifier ». Les puces restent visibles et restent la réponse.
+test('the profession is asked once, in the form, and stays editable', async () => {
+  const { doc, D, Nota } = await boot();
+  Nota.setTab('partenaires');
+  const [first, second] = D.REFERRAL.partners;
+  assert.equal(doc.querySelector('#pr-audience'), null, 'the hero no longer asks it a second time');
+  const chips = $(doc, 'partner-type');
+  chips.querySelector('[data-type="' + first.id + '"]').click();
+  assert.equal(chips.hidden, false, 'the choices stay on screen');
+  assert.equal(chips.querySelector('[aria-pressed="true"]').dataset.type, first.id);
+  chips.querySelector('[data-type="' + second.id + '"]').click();
+  assert.equal(chips.querySelectorAll('[aria-pressed="true"]').length, 1);
+  assert.equal(chips.querySelector('[aria-pressed="true"]').dataset.type, second.id);
+});
+
+test('the activation form explains what is missing and when it is ready', async () => {
+  const { win, doc, Nota } = await boot();
+  Nota.setTab('partenaires');
+  const hint = $(doc, 'partner-next-step'), submit = $(doc, 'partner-submit');
+  assert.equal(submit.getAttribute('aria-describedby'), hint.id);
+  assert.match(hint.textContent, /métier/);
+  doc.querySelector('#partner-type .chip').click();
+  assert.match(hint.textContent, /courriel professionnel/);
+  const mail = $(doc, 'partner-courriel');
+  mail.value = 'eve.roy@'; fire(win, mail, 'input'); fire(win, mail, 'blur');
+  assert.equal(submit.disabled, true);
+  assert.equal(mail.getAttribute('aria-invalid'), 'true');
+  assert.match(hint.textContent, /Vérifiez votre adresse/);
+  mail.value = 'eve.roy@agence.ca'; fire(win, mail, 'input');
+  assert.equal(mail.hasAttribute('aria-invalid'), false);
+  assert.equal(submit.disabled, false, 'the suggested code completes the form');
+  assert.equal(hint.dataset.ready, 'true');
+  assert.match(hint.textContent, /activer votre code/);
+  const code = $(doc, 'partner-code'); code.value = 'x'; fire(win, code, 'input');
+  assert.equal(submit.disabled, true);
+  assert.equal(hint.dataset.ready, 'false');
+  assert.match(hint.textContent, /code valide/);
+});
+
+test('editing during activation cannot send a second request and the receipt names the submitted address', async () => {
+  let finish;
+  const response = new Promise(resolve => { finish = resolve; });
+  const { win, doc, Nota, calls } = await boot({ routes: [{
+    match: (u, init) => u.endsWith('/partenaires') && init.method === 'POST',
+    reply: () => response,
+  }] });
+  Nota.setTab('partenaires');
+  doc.querySelector('#partner-type .chip').click();
+  const mail = $(doc, 'partner-courriel');
+  mail.value = 'eve.roy@agence.ca'; fire(win, mail, 'input');
+  fire(win, $(doc, 'partner-form'), 'submit');
+  mail.value = 'autre@agence.ca'; fire(win, mail, 'input');
+  assert.equal($(doc, 'partner-submit').disabled, true, 'the in-flight request owns the button');
+  fire(win, $(doc, 'partner-form'), 'submit');
+  assert.equal(calls.filter(c => c.url.endsWith('/partenaires')).length, 1);
+  finish(jsonRes(200, { ok: true }));
+  await wait(20);
+  assert.equal($(doc, 'partner-pending-email').textContent, 'eve.roy@agence.ca');
+});
+
 test('the claim form previews the normalized shareable link as the partner types', async () => {
   const { win, doc, Nota } = await boot();
   Nota.setTab('partenaires');
@@ -382,6 +444,15 @@ test('a pending claim (production, no dev echo) shows the "check your email" sta
   assert.equal($(doc, 'partner-pending').hidden, false, 'the pending state is shown until the link is opened');
   assert.equal($(doc, 'partner-success').hidden, true, 'no shareable link before confirmation');
   assert.equal($(doc, 'partner-errors').hidden, true, 'pending is not an error');
+  assert.equal(doc.activeElement, $(doc, 'partner-pending'), 'the activation receipt is brought into view');
+  assert.equal($(doc, 'partner-pending-email').textContent, 'eve@agence.ca', 'the actual destination is visible');
+  $(doc, 'partner-email-edit').click();
+  assert.equal(doc.activeElement, mail, 'correction returns directly to the email');
+  assert.equal($(doc, 'partner-submit').disabled, true, 'focusing alone does not resend');
+  mail.value = 'eve.roy@agence.ca'; fire(win, mail, 'input');
+  assert.equal($(doc, 'partner-pending').hidden, true, 'the previous receipt clears after correction');
+  assert.equal(code.value, 'eve-roy', 'the chosen code survives the correction');
+  assert.equal($(doc, 'partner-submit').disabled, false);
 });
 
 test('a #pauth= confirmation link is consumed on boot: it verifies and reveals the link', async () => {
@@ -480,6 +551,50 @@ const CLAIMED = JSON.stringify({
   createdAt: '2026-08-01T12:00:00.000Z',
 });
 
+test('the arrival partner door opens the real activation form without a client guide or a claim', async () => {
+  const { doc, win, Nota, calls } = await boot({ url: '?intro=1' });
+  const door = $(doc, 'ig-door-partner');
+  assert.match(door.textContent, /Créer et partager mon code/);
+  door.click();
+  await wait(400);
+  assert.equal($(doc, 'intro-gate').hidden, true);
+  assert.equal(Nota.state.tab, 'partenaires');
+  assert.equal($(doc, 'partner-details').open, true);
+  assert.equal(doc.activeElement, doc.querySelector('#partner-type .chip'));
+  assert.equal($(doc, 'partner-success').hidden, true, 'nothing can be shared before confirmation');
+  assert.equal($(doc, 'partner-submit').disabled, true, 'the actual required fields still apply');
+  assert.equal($(doc, 'onboarding-dialog').open, false);
+  assert.equal(doc.querySelector('#client-walkthrough'), null);
+  assert.equal(win.localStorage.getItem('nota.role.v1'), 'partner');
+  assert.equal(win.localStorage.getItem('nota.introSeen'), '1');
+  assert.equal(Nota.onboarding.seen(), true, 'the client guide cannot reopen on the next visit');
+  assert.ok(!calls.some(c => /\/partenaires(?:\/|$)/.test(c.url)), 'choosing a role never claims a code');
+  assert.equal(win.localStorage.getItem('nota.partner.v1'), null);
+});
+
+test('a returning partner can share their verified code from the arrival door and the guide link', async () => {
+  const { doc, Nota, calls } = await boot({ url: '?intro=1', seed: {
+    'nota.partner.v1': CLAIMED, 'nota.role.v1': 'partner', 'nota.introSeen': '1',
+  } });
+  assert.equal($(doc, 'intro-gate').hidden, false, 'the review URL still opens the arrival');
+  assert.equal(doc.activeElement, $(doc, 'ig-door-partner'), 'their remembered door is focused');
+  assert.equal($(doc, 'ig-partner-action').textContent, 'Partager mon code');
+  $(doc, 'ig-door-partner').click();
+  await wait(400);
+  assert.equal(Nota.state.tab, 'partenaires');
+  assert.equal($(doc, 'partner-success').hidden, false);
+  assert.equal($(doc, 'partner-details').open, false);
+  assert.equal($(doc, 'partner-link').textContent, SITE + '/?ref=EVEROY');
+  assert.equal(doc.activeElement, $(doc, 'partner-copy'));
+  assert.match($(doc, 'partner-msg').textContent, /\?ref=EVEROY/);
+  Nota.setTab('carnet');
+  Nota.onboarding.open();
+  assert.equal(Nota.state.tab, 'partenaires', 'reopening help returns to the partner’s action');
+  assert.equal($(doc, 'onboarding-dialog').open, false);
+  assert.equal(doc.activeElement, $(doc, 'partner-copy'));
+  assert.ok(!calls.some(c => /\/partenaires(?:\/|$)/.test(c.url)), 'a return does not register the code again');
+});
+
 test('a returning partner lands on their code — never a blank claim form', async () => {
   const { doc, Nota } = await boot({ seed: { 'nota.partner.v1': CLAIMED } });
   Nota.setTab('partenaires');
@@ -502,7 +617,7 @@ test('editing a field re-arms the returning partner’s form for a fresh claim',
   Nota.setTab('partenaires');
   const code = $(doc, 'partner-code'); code.value = 'eve-roy-2'; fire(win, code, 'input');
   assert.equal($(doc, 'partner-success').hidden, true, 'the share box folds away');
-  assert.equal($(doc, 'partner-submit').textContent.trim(), 'Réclamer mon code →');
+  assert.equal($(doc, 'partner-submit').textContent.trim(), 'Recevoir mon lien d’activation →');
   assert.equal($(doc, 'partner-submit').disabled, false, 'type + courriel carry over — ready to resubmit');
 });
 
@@ -510,24 +625,35 @@ test('editing a field re-arms the returning partner’s form for a fresh claim',
 // 3. The pane stays strict
 // ---------------------------------------------------------------------------
 
-test('the pane stays strict: no per-card mechanics, one guarantee, no vignette', async () => {
-  // Owner's ask (2026-08-25): thin and focused. The pitch is the two amounts,
-  // the action is the claim form — repetition stays gone.
+test('the pane says one thing: two amounts and the form that gives the code', async () => {
+  // Propriétaire, 2026-09-12, devant la page : « beaucoup trop de texte ».
+  // Tout ce qui racontait le programme une deuxième fois est parti — le
+  // sélecteur de métier du héros, l'estimateur annuel, la vignette en trois
+  // temps, la bande d'étapes et la FAQ.
   const { doc } = await boot();
-  assert.equal(doc.querySelector('#pane-partenaires .pr-how'), null,
-    'a card is kicker + amount + when — the mechanics live in the three steps');
-  // The guarantee is stated ONCE: the fine-print line, never again in the
-  // hero's pitch line (the 2026-08-27 hero band replaced the plain .intro).
-  const pitch = doc.querySelector('#pane-partenaires .pr-hero-copy p').textContent;
-  assert.ok(!/prix du client/.test(pitch), 'the hero pitch no longer duplicates the guarantee');
-  assert.ok(doc.querySelector('#pane-partenaires .nota-guarantee'), 'the guarantee stays in the fine print');
-  // The RETIRED vignettes' classes never come back from the dead — neither the
-  // 2026-08-25 scene nor the 2026-08-27 animated strip (owner's call: removed).
-  assert.equal(doc.querySelector('#pane-partenaires .pr-vig'), null, 'the animated strip is gone from the pane');
-  assert.ok(!/pr-vignette|pr-scene|pr-w[1-4]|pr-vig/.test(CSS_SRC), 'no dead vignette CSS');
-  assert.ok(!/pr-vig/.test(HTML_SRC), 'no dead vignette markup');
-  // The fine-print note reads as a quiet line, not another boxed card.
-  assert.match(CSS_SRC, /\.pr-pitch \.note\s*\{[^}]*border-left:\s*0/,
+  const pane = doc.querySelector('#pane-partenaires');
+  for (const sel of ['.pr-audience', '.pr-estimate', '.pr-vig', '.pr-steps', '.pr-faq', '.pr-pitch', '.pr-hero-cta']) {
+    assert.equal(pane.querySelector(sel), null, sel + ' no longer exists on the pane');
+  }
+  // Le CSS part avec le balisage : pas de règle orpheline.
+  for (const dead of ['pr-vignette', 'pr-scene', 'pr-w1', 'pr-aud', 'pr-moment', 'pr-estimate', 'pr-vig', 'pr-steps', 'pr-faq', 'pr-pitch', 'pr-when', 'pr-hero-cta']) {
+    assert.ok(!CSS_SRC.includes('.' + dead), 'no dead CSS for .' + dead);
+  }
+  // Une carte = intitulé, montant, cadence. La règle d'acquisition est dite
+  // UNE fois, sous la paire — elle vaut pour les deux voies.
+  for (const id of ['pr-card-client', 'pr-card-notaire']) {
+    const card = $(doc, id);
+    assert.deepEqual([...card.children].map((c) => c.className), ['pr-kicker', 'pr-amount', 'pr-freq']);
+  }
+  const earned = pane.querySelector('.pr-offer .pr-earned');
+  assert.ok(earned, 'the acquisition rule is stated once under the pair');
+  assert.equal(pane.querySelectorAll('.pr-earned').length, 1);
+  assert.ok(!/\d\s*\$/.test(earned.textContent), 'no hardcoded amount in that line');
+  // La garantie reste dite UNE fois, en bas, jamais dans la promesse du héros.
+  const pitch = pane.querySelector('.pr-hero-copy p').textContent;
+  assert.ok(!/prix du client/.test(pitch), 'the hero pitch does not duplicate the guarantee');
+  assert.equal(pane.querySelectorAll('.nota-guarantee').length, 1);
+  assert.match(CSS_SRC, /\.pr-grid \.note \{[^}]*border-left:\s*0/,
     'the guarantee sheds the boxed .note chrome inside the pane');
 });
 
@@ -540,38 +666,6 @@ test('the hero rides the site-wide drift — no private backdrop of its own', as
   assert.equal(doc.querySelector('#pane-partenaires .pr-hero .mark-drift'), null,
     'one scene: no second layer clipped inside the hero');
   assert.ok($(doc, 'site-bg'), 'the site-wide layer carries this pane too');
-});
-
-test('the FAQ fills the story column: collapsed disclosures, no literal amounts', async () => {
-  // 2026-08-27 follow-up: the pitch column ran dry after three steps while
-  // the sticky form ran tall. The pre-claim questions a courtier or agent
-  // actually has (tracking, payout moment, limits, OACIQ disclosure) fill it —
-  // as native <details> in the existing .disclosure idiom, collapsed so the
-  // pane stays thin.
-  const { doc } = await boot();
-  const faq = doc.querySelector('#pane-partenaires .pr-faq');
-  assert.ok(faq, 'the FAQ block exists in the Partenaires pane');
-  assert.ok(faq.closest('.pr-pitch'), 'it lives in the story column, beside the form');
-  const items = [...faq.querySelectorAll('details.disclosure')];
-  assert.ok(items.length >= 3, 'at least three questions');
-  for (const d of items) {
-    assert.ok(d.querySelector('summary'), 'each item is a native disclosure');
-  }
-  // Owner (2026-09-05): « les mettre fermés par défaut ». The 2026-08-27 pass
-  // opened the first two so the column would read as content; in one
-  // full-width column that is no longer needed — the questions ARE the
-  // content, and five closed rows read as a list one can scan. With nothing
-  // open on arrival, the exclusive-accordion idiom becomes correct too: one
-  // answer at a time, so the block never grows past the height of one.
-  for (const d of items) {
-    assert.equal(d.open, false, 'every answer is closed on arrival');
-    assert.equal(d.getAttribute('name'), 'pr-faq', 'one answer at a time');
-  }
-  // The two reward figures render from D.REFERRAL — never a literal in copy.
-  assert.ok(!/\d\s*\$/.test(faq.textContent), 'no hardcoded dollar amount in the FAQ');
-  // The guarantee keeps its place as the quiet closing line, under the FAQ.
-  const note = doc.querySelector('#pane-partenaires .pr-pitch .nota-guarantee');
-  assert.ok(faq.compareDocumentPosition(note) & 4, 'the fine print still closes the column');
 });
 
 test('the reward cards stay transparent and use a quiet outline', () => {
@@ -601,68 +695,28 @@ test('the hero dissolves: soft gradients, no boxed surface, no seam', () => {
   assert.match(m[0], /radial-gradient|var\(--wash-glow\)/, 'the band is painted with gradients');
   assert.ok(!/var\(--surface\)/.test(m[0]), 'no opaque surface backing — nothing to draw a seam');
   assert.ok(!/box-shadow/.test(m[0]), 'no shadow — a shadow re-draws the box');
-  // The FAQ opens smoothly (progressive enhancement), guarded for motion.
-  assert.match(CSS_SRC, /::details-content/, 'the disclosure body animates open');
-  assert.match(CSS_SRC, /prefers-reduced-motion[^{]*\{[^]*?::details-content/,
-    'the animation lives behind the motion preference');
 });
 
-test('wide screens densify the story column: steps 3-up, FAQ 2-up', () => {
-  // The follow-up to the FAQ (owner, 2026-08-27): beside the tall form the
-  // column's content huddled top-left — steps and FAQ stacked in one narrow
-  // strip, dead space everywhere else. Wide screens reflow the timeline to a
-  // 3-across row and the FAQ to two columns; narrow screens keep the stack.
-  assert.match(CSS_SRC, /\.pr-steps\s*\{[^}]*repeat\(3,\s*minmax\(0,\s*1fr\)\)/,
-    'the three steps ride one row on wide screens');
-  // 2026-09-05, owner: « je n'aime pas les espaces qu'il laisse ». In two
-  // columns the two open answers fell on the same side and the other column
-  // stayed 180 px tall — ~520 px of emptiness nothing could fill, since the
-  // height depends on what the reader opens. One full-width column leaves no
-  // hole at all.
-  assert.match(CSS_SRC, /\.pr-faq \{ display: flex; flex-direction: column;/,
-    'the FAQ is one full-width column');
-  assert.ok(!/\.pr-faq-col/.test(CSS_SRC), 'the column boxes are gone with it');
-});
-
-test('the page reads hero → story beside the form', async () => {
-  // Owner (2026-08-27, evening pass): the full-width steps band spread three
-  // short lines across the whole page and pushed the claim form below the
-  // fold, dead space beside the FAQ. The pane folds to TWO regions: the hero,
-  // then one grid — the story column (steps, FAQ, fine print) on the left,
-  // the claim form docked top-right like the notary gate. Nothing sticky and
-  // no CSS order juggling: phones read the markup as written (story, then
-  // form), and the hero CTA still jumps straight to the form.
+test('under the hero there is the circuit, then the claim form', async () => {
+  // Owner, 2026-09-12 evening: an animation « qui explique clairement comment
+  // la section partenaire fonctionne ». It shows the mechanism between the
+  // promise and the form — it does not RE-SAY either of them, which is what
+  // the earlier three-beat strip did (and why it went).
   const { doc } = await boot();
   const bands = [...doc.querySelectorAll('#pane-partenaires .wrap > *')];
-  assert.deepEqual(bands.map((e) => e.classList[0]), ['pr-hero', 'pr-grid'],
-    'two regions in reading order');
-  const grid = bands[1];
+  assert.deepEqual(bands.map((e) => e.classList[0]), ['pr-hero', 'pr-flow', 'pr-grid'],
+    'three regions in reading order: the promise, the circuit, the form');
+  const grid = bands[2];
   assert.equal(grid.firstElementChild.id, 'partner-success', 'confirmed sharing precedes the signup');
   assert.equal(grid.firstElementChild.hidden, true, 'no empty success row before confirmation');
-  assert.ok([...grid.children].filter((child) => !child.hidden)[0].classList.contains('pr-pitch'),
-    'the story leads the grid in DOM order');
-  assert.ok(grid.querySelector('.pr-pitch .pr-steps'), 'the timeline opens the story column');
-  assert.ok(grid.lastElementChild.classList.contains('pr-form-panel'),
-    'the form closes the grid — the right column on wide screens');
+  const visible = [...grid.children].filter((child) => !child.hidden);
+  assert.ok(visible[0].classList.contains('pr-form-panel'), 'the claim leads the grid');
+  assert.deepEqual(visible.slice(1).map((e) => e.classList[0]), ['note'],
+    'only the fine print follows it');
   assert.ok(!/\.pr-form-panel\s*\{[^}]*((?<!b)order:|position:\s*sticky)/.test(CSS_SRC),
     'no order swap, no sticky — the grid reads as written');
-  assert.match(CSS_SRC, /\.pr-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+minmax\(min\(340px,\s*100%\),\s*440px\)/,
-    'the story keeps the wide left track, the form a tight right one');
-  assert.ok(grid.querySelector('.pr-pitch .pr-faq'), 'the FAQ fills the story column under the steps');
-});
-
-test('the hero carries one CTA that lands the visitor on the claim form', async () => {
-  // On a phone the form sits below the steps AND the FAQ — the hero needs its
-  // own door to the action (three-click rule). Clicking it must put the
-  // visitor IN the form: first field focused, ready to type.
-  const { doc } = await boot();
-  const cta = doc.querySelector('#pane-partenaires .pr-hero .pr-hero-cta');
-  assert.ok(cta, 'the hero offers « Réclamer mon code → »');
-  assert.equal(cta.tagName, 'BUTTON');
-  assert.equal(cta.type, 'button', 'never a submit — it only travels');
-  cta.click();
-  assert.equal(doc.activeElement, $(doc, 'partner-courriel'),
-    'the visitor lands in the form, courriel focused');
+  assert.match(CSS_SRC, /\.pr-grid\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*560px\)/,
+    'one column, bounded to the measure of a form');
 });
 
 // ---------------------------------------------------------------------------
@@ -784,20 +838,15 @@ test('P1-7: the pane says notaries are excluded before anyone submits (art. 33)'
   const hero = doc.querySelector('#pane-partenaires .pr-hero');
   const line = hero.querySelector('.pr-eligibility');
   assert.ok(line, 'the caveat is in the hero');
-  // 2026-09-05 — it moved from under the reward cards to under the CTA that
-  // proposes the claim: that is where the decision is taken, and the copy
-  // column was ending 172 px short of the money column.
+  // 2026-09-12 — la FAQ qui reposait la question a disparu avec le reste du
+  // texte : cette ligne est désormais le SEUL endroit où l'exclusion est dite,
+  // et elle est dite sous la promesse, avant tout formulaire.
   assert.ok(line.closest('.pr-hero-copy'), 'it sits in the copy column');
-  assert.ok($(doc, 'pr-hero-cta').compareDocumentPosition(line) & 4, 'directly under the CTA');
   assert.ok(line.compareDocumentPosition(doc.querySelector('#pane-partenaires .pr-form-panel')) & 4,
-    'and still said BEFORE the claim form');
+    'said BEFORE the claim form');
   assert.match(line.textContent, /art\. 33/i);
   assert.match(line.textContent, /notaire/);
-  const faq = [...doc.querySelectorAll('#pane-partenaires .pr-faq details')]
-    .find((d) => /notaire/i.test(d.querySelector('summary').textContent));
-  assert.ok(faq, 'the FAQ asks the question outright');
-  assert.match(faq.textContent, /33/);
-  assert.match(faq.textContent, /Code de déontologie/);
+  assert.match(line.textContent, /Code de déontologie/);
 });
 
 test('P1-8: the share link is built on the declared public origin, and falls back to location.origin without it', async () => {
@@ -845,46 +894,15 @@ test('P2-15: the code field’s maxlength is the domain’s cap', async () => {
   assert.equal($(doc, 'partner-code').getAttribute('maxlength'), String(cap));
 });
 
-test('P2-16: the hero CTA and the form’s submit carry distinct accessible names', async () => {
+test('P2-16: the claim form carries the pane’s only action', async () => {
+  // Le héros portait un bouton « Obtenir mon code → » qui ne faisait que
+  // descendre jusqu'au formulaire. Le formulaire est maintenant juste là :
+  // une seule action nommée sur toute la page.
   const { doc } = await boot();
-  const hero = $(doc, 'pr-hero-cta').textContent.trim(), submit = $(doc, 'partner-submit').textContent.trim();
-  assert.ok(hero && submit);
-  assert.notEqual(hero, submit, 'two controls named alike confuse a screen-reader user');
-  assert.equal(submit, 'Réclamer mon code →', 'the action keeps the claim verb');
-});
-
-// --- 2026-09-03: the pane sells harder without getting thicker ---------------
-// An estimator in the hero (the one figure a courtier actually wants: a year
-// of referrals), and a ready-to-send message once the code is claimed (the
-// step that turns a claimed code into a real referral).
-
-test('the hero estimates a year of client referrals from the domain — slider and figure agree', async () => {
-  const { win, doc, D, Nota } = await boot();
-  Nota.setTab('partenaires');
-  const range = $(doc, 'pr-estimate-n');
-  assert.ok(range, 'a « clients par mois » slider in the hero');
-  assert.equal(Number(range.min), 1);
-  assert.equal(Number(range.max), D.REFERRAL.projectionMax, 'the cap is domain data');
-  assert.equal(Number(range.value), D.REFERRAL.projectionDefault, 'so is the default seat');
-  const p0 = D.referralProjection(D.REFERRAL.projectionDefault);
-  assert.equal($(doc, 'pr-estimate-n-val').textContent, String(p0.clientsParMois));
-  assert.equal($(doc, 'pr-estimate-year').textContent, D.money(p0.parAn));
-  range.value = '7'; fire(win, range, 'input');
-  const p7 = D.referralProjection(7);
-  assert.equal($(doc, 'pr-estimate-n-val').textContent, '7');
-  assert.equal($(doc, 'pr-estimate-year').textContent, D.money(p7.parAn));
-  // The figure is computed — never a literal in the markup.
-  const at = HTML_SRC.indexOf('id="pr-estimate"');
-  assert.ok(at > 0 && !/\d\s*\$/.test(HTML_SRC.slice(at, at + 1600)), 'no hardcoded dollar amount in the estimator markup');
-  // 2026-09-05 — it moved UNDER the two cards it computes from: the copy
-  // column ran 179 px past the money column, so the right half of the hero
-  // ended on emptiness while « combien de clients par mois ? » sat far from
-  // the two amounts that answer it.
-  const hero = doc.querySelector('#pane-partenaires .pr-hero');
-  const est = $(doc, 'pr-estimate');
-  assert.equal(est.parentNode, hero, 'the estimator is a hero track of its own');
-  assert.ok(hero.querySelector('.pr-rewards').compareDocumentPosition(est) & 4, 'it follows the two reward cards');
-  assert.equal(est.previousElementSibling, hero.querySelector('.pr-rewards'), 'directly under them — the question and its two amounts read as one');
+  const pane = doc.querySelector('#pane-partenaires');
+  assert.equal(pane.querySelector('.pr-hero button'), null, 'the hero proposes no button of its own');
+  assert.equal($(doc, 'partner-submit').textContent.trim(), 'Recevoir mon lien d’activation →',
+    'the action names the email activation step');
 });
 
 test('a confirmed claim hands the partner a ready-to-send message carrying their link', async () => {
@@ -968,59 +986,6 @@ test('a copy that fails never claims success on the button', async () => {
 // three seconds that the programme is for THEM and WHEN, in their own work,
 // a referral happens. The audience row in the hero is the form's « Vous êtes »
 // question asked early — the two stay in sync both ways.
-
-test('the hero names its audiences from the domain and shows each profession its moment', async () => {
-  const { win, doc, D, Nota } = await boot();
-  Nota.setTab('partenaires');
-  const auds = [...doc.querySelectorAll('#pr-audience .pr-aud')];
-  assert.equal(auds.map((b) => b.dataset.type).join(','), D.REFERRAL.partners.map((p) => p.id).join(','));
-  assert.equal(auds.map((b) => b.textContent.trim()).join(','), D.REFERRAL.partners.map((p) => p.nom).join(','));
-  for (const b of auds) assert.equal(b.getAttribute('aria-pressed'), 'false', 'nothing picked on arrival');
-  const moment = $(doc, 'pr-moment');
-  assert.ok(moment.textContent.trim().length > 20, 'a resting sentence, never an empty slot');
-  for (const p of D.REFERRAL.partners) assert.ok(!moment.textContent.includes(p.moment), 'no profession assumed on arrival');
-  // Picking the mortgage broker: their moment, their form chip, nothing else pressed.
-  auds[1].click();
-  assert.equal(auds[1].getAttribute('aria-pressed'), 'true');
-  assert.equal(auds[0].getAttribute('aria-pressed'), 'false');
-  assert.equal(moment.textContent, D.REFERRAL.partners[1].moment);
-  const chip = doc.querySelector('#partner-type .chip[data-type="courtier_hypothecaire"]');
-  assert.ok(chip.classList.contains('is-on'), 'the form’s « Vous êtes » chip follows the hero');
-  // The other way round: picking a form chip lights the hero audience too.
-  doc.querySelector('#partner-type .chip[data-type="agent_immobilier"]').click();
-  assert.equal(auds[0].getAttribute('aria-pressed'), 'true');
-  assert.equal(auds[1].getAttribute('aria-pressed'), 'false');
-  assert.equal(moment.textContent, D.REFERRAL.partners[0].moment);
-  // The pitch line names the professions in their Québec titles.
-  const pitch = doc.querySelector('#pane-partenaires .pr-hero-copy > p').textContent;
-  assert.match(pitch, /Courtiers immobiliers/);
-  assert.match(pitch, /courtiers hypothécaires/);
-  assert.ok(!/agent/i.test(pitch), 'never « agent » — the OACIQ title is courtier');
-  // Every label and every moment has its English twin in the web dictionary,
-  // equal to the domain’s own English.
-  // The dictionary itself (the boot harness does not load i18n.js): evaluated
-  // as a plain script, the way i18n.test.mjs does.
-  const I = (() => {
-    const src = readFileSync(fileURLToPath(new URL('../public/i18n.js', import.meta.url)), 'utf8');
-    const mod = { exports: {} };
-    new Function('module', 'exports', src)(mod, mod.exports);
-    return mod.exports;
-  })();
-  for (const p of D.REFERRAL.partners) {
-    assert.equal(I.tEn(p.nom), p.nomEn, `${p.id} nom`);
-    assert.equal(I.tEn(p.moment), p.momentEn, `${p.id} moment`);
-  }
-});
-
-test('a returning partner sees their own profession lit in the hero', async () => {
-  const REC = { code: 'EVEROY', type: 'courtier_hypothecaire', courriel: 'eve@agence.ca', createdAt: '2026-09-01T00:00:00.000Z' };
-  const { doc, D, Nota } = await boot({ seed: { 'nota.partner.v1': JSON.stringify(REC) } });
-  Nota.setTab('partenaires');
-  const on = doc.querySelector('#pr-audience .pr-aud[aria-pressed="true"]');
-  assert.ok(on && on.dataset.type === 'courtier_hypothecaire');
-  assert.equal($(doc, 'pr-moment').textContent, D.REFERRAL.partners[1].moment);
-});
-
 
 test('the referral field is visible at conversion without opening privacy options', async () => {
   const { doc } = await boot();

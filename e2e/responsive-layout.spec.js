@@ -147,6 +147,7 @@ test.describe('responsive layout', () => {
     await settled(page);
       await settled(page);
       await openPane(page, 'notaires', '#pane-notaires');
+      await page.locator('#notary-calendar-explore > summary').click();
       const teaser = page.locator('#notary-live-grid .nc-live-card').first();
       await expect(teaser).toBeVisible();
 
@@ -174,85 +175,38 @@ test.describe('responsive layout', () => {
     });
   }
 
-  test('the compliance band spans both columns and closes them (never back inside the gate)', async ({ page }) => {
-    // Its home is the pane, not the console: inside the gate card it made the
-    // rail ~400px taller than the demand grid and opened the 586px hole.
+  test('professional obligations expand below the calendar and access', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await gotoHome(page, { suppressOnboarding: true });
-    await settled(page);
     await openPane(page, 'notaires', '#pane-notaires');
-
-    expect(await page.locator('#notary-console #nc-conformite').count(),
-      'the band is a child of the pane, never of the gate card').toBe(0);
-
+    await expect(page.locator('#nc-conformite')).not.toBeVisible();
+    await page.locator('#notary-calendar-obligations > summary').click();
     const band = await boxOf(page, '#nc-conformite');
-    const live = await boxOf(page, '#notary-live');
-    const rail = await boxOf(page, '#notary-console');
-    const agenda = await boxOf(page, '#notary-carnet');
-    expect(band && live && rail, 'the landing shows demands, a gate and the band').toBeTruthy();
-
-    // Full width: wider than the demand grid alone, and reaching the rail's edge.
-    expect(band.width, 'the band runs across both columns').toBeGreaterThan(live.width + 100);
-    expect(band.right).toBeGreaterThanOrEqual(rail.right - 2);
-
-    // And it CLOSES them: below both, with no dead band before it.
-    const columnsEnd = Math.max(live.bottom, rail.bottom, agenda ? agenda.bottom : 0);
-    expect(band.top, 'the band sits under both columns').toBeGreaterThanOrEqual(columnsEnd - 1);
-    expect(band.top - columnsEnd, 'no dead band between the columns and the compliance strip').toBeLessThan(48);
+    const calendar = await boxOf(page, '#notary-carnet');
+    expect(band.top).toBeGreaterThan(calendar.bottom);
+    expect(band.width).toBeGreaterThan(0);
   });
 
-  test('two columns only where the content column holds more than one tile per row', async ({ page }) => {
+  test('tablet and desktop keep subscription before optional access', async ({ page }) => {
     await gotoHome(page, { suppressOnboarding: true });
-    await settled(page);
-
-    // A tablet in portrait: one centred column — gate under the demands.
-    await page.setViewportSize({ width: 768, height: 1024 });
     await openPane(page, 'notaires', '#pane-notaires');
-    let live = await boxOf(page, '#notary-live');
-    let rail = await boxOf(page, '#notary-console');
-    expect(rail.top, 'stacked: the gate follows the demands').toBeGreaterThan(live.bottom - 1);
-
-    // A desktop: two columns — the gate opens level with the hero, so expanding
-    // the beta disclosure cannot create a blank right rail.
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await settled(page);
-    const hero = await boxOf(page, '#pane-notaires .intro--hero');
-    live = await boxOf(page, '#notary-live');
-    rail = await boxOf(page, '#notary-console');
-    expect(Math.abs(rail.top - hero.top), 'side by side: the gate seats on the hero top line').toBeLessThan(4);
-    expect(rail.left, 'the gate is the right-hand rail').toBeGreaterThan(live.right - 1);
-
-    // Read the grid's own used track list, not the tiles' measured tops: a
-    // hovered tile lifts 2px and would otherwise read as a row of its own.
-    // auto-fit collapses the tracks a sparse month leaves empty, so the
-    // non-zero tracks are exactly the columns actually in use.
-    const { tiles, columns } = await page.evaluate(() => {
-      const grid = document.querySelector('#notary-live-grid');
-      const tracks = getComputedStyle(grid).gridTemplateColumns.split(' ').filter((t) => parseFloat(t) > 0);
-      return { tiles: grid.querySelectorAll('.nc-live-card').length, columns: tracks.length };
-    });
-    // Fixtures are randomized per server boot: a month can legitimately open
-    // with a single demand, and one tile cannot fill a row.
-    if (tiles > 1) {
-      expect(columns, 'a two-column landing never files the tiles one under the other').toBeGreaterThan(1);
+    for (const width of [768, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      const calendar = await boxOf(page, '#notary-carnet');
+      const access = await boxOf(page, '#notary-console');
+      expect(access.top).toBeGreaterThanOrEqual(calendar.bottom);
+      await expect(page.locator('#nc-email')).not.toBeVisible();
     }
   });
 
-  test('opening the beta disclosure keeps the access card beside the hero', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
+  test('opening notary access leaves calendar choices above the form', async ({ page }) => {
     await gotoHome(page, { suppressOnboarding: true });
-    await settled(page);
     await openPane(page, 'notaires', '#pane-notaires');
-
-    await page.locator('#notary-ai-beta-toggle').click();
-    await expect(page.locator('#notary-ai-beta-details')).toBeVisible();
-    await settled(page);
-
-    const hero = await boxOf(page, '#pane-notaires .intro--hero');
-    const rail = await boxOf(page, '#notary-console');
-    const live = await boxOf(page, '#notary-live');
-    expect(Math.abs(rail.top - hero.top), 'expanded beta: the gate stays beside the hero').toBeLessThan(4);
-    expect(rail.top, 'expanded beta: the gate remains above the inventory').toBeLessThan(live.top - 100);
+    await page.locator('#notary-calendar-access > summary').click();
+    await expect(page.locator('#nc-email')).toBeVisible();
+    const calendar = await boxOf(page, '#notary-carnet');
+    const form = await boxOf(page, '#notary-auth-form');
+    expect(form.top).toBeGreaterThan(calendar.bottom);
   });
 });
 
@@ -284,6 +238,10 @@ test.describe('notary inventory keeps its footprint', () => {
         for (count of [12, 0, 1, 5, 13]) {
           if (count === 12) await page.goto(`/?lang=${lang}#t=notaires`);
           else await page.reload();
+          await expect(page.locator('#sub-google')).toBeVisible();
+          await expect(page.locator('#nc-email')).not.toBeVisible();
+          await page.locator('#notary-calendar-explore > summary').click();
+          await page.locator('#notary-calendar-obligations > summary').click();
           await expect(page.locator('#notary-live')).toBeVisible();
           await expect(page.locator('#notary-live-grid .nc-live-card')).toHaveCount(Math.min(count, 12));
           // At zero the footprint shrinks to NC_LIVE_EMPTY_SLOTS: the next-step
@@ -296,19 +254,10 @@ test.describe('notary inventory keeps its footprint', () => {
           for (const id of ['notary-live-grid', 'notary-console', 'notary-carnet', 'nc-conformite']) {
             geometry[id] = await boxOf(page, '#' + id);
           }
-          const stacked = vp.width <= 1200;
-          if (stacked) {
-            expect(geometry['notary-console'].top, `${count} offers: gate follows inventory`).toBeGreaterThanOrEqual(geometry['notary-live-grid'].bottom - 1);
-          } else {
-            expect(Math.abs(geometry['notary-console'].top - geometry.hero.top), `${count} offers: gate aligns with the hero`).toBeLessThan(2);
-            expect(geometry['notary-console'].left, `${count} offers: gate stays in the right rail`).toBeGreaterThan(geometry['notary-live-grid'].right - 1);
-          }
-          expect(geometry['notary-carnet'].top, `${count} offers: agenda follows the inventory`).toBeGreaterThanOrEqual(Math.max(geometry['notary-live-grid'].bottom, geometry['notary-console'].bottom) - 1);
-          expect(geometry['nc-conformite'].top, `${count} offers: compliance follows the columns`).toBeGreaterThanOrEqual(Math.max(geometry['notary-carnet'].bottom, geometry['notary-console'].bottom) - 1);
-          if (!stacked) {
-            expect(Math.abs(geometry['notary-carnet'].left - geometry['notary-live-grid'].left), `${count} offers: agenda starts on the landing rail`).toBeLessThan(2);
-            expect(Math.abs(geometry['notary-carnet'].right - geometry['nc-conformite'].right), `${count} offers: agenda closes the full content rail`).toBeLessThan(2);
-          }
+          expect(geometry['notary-carnet'].top, `${count} offers: calendar follows the hero`).toBeGreaterThanOrEqual(geometry.hero.bottom - 1);
+          expect(geometry['notary-live-grid'].top, `${count} offers: optional inventory follows subscription`).toBeGreaterThanOrEqual(geometry['notary-carnet'].bottom - 1);
+          expect(geometry['notary-console'].top, `${count} offers: optional access follows subscription`).toBeGreaterThanOrEqual(geometry['notary-carnet'].bottom - 1);
+          expect(geometry['nc-conformite'].top, `${count} offers: obligations stay secondary`).toBeGreaterThanOrEqual(geometry['notary-console'].bottom - 1);
           if (count === 0) {
             const empty = page.locator('.nc-live-empty');
             await expect(empty.locator('strong')).toHaveText(lang === 'fr' ? 'Aucune demande ouverte' : 'No open request');
@@ -335,7 +284,7 @@ test.describe('notary inventory keeps its footprint', () => {
 // a new partner type cannot create a blank rail or a clipped action.
 test.describe('partners pane at every supported resolution', () => {
   for (const vp of VIEWPORTS) {
-    test(`${vp.name}: reward hero, story and claim form keep one readable flow`, async ({ page }) => {
+    test(`${vp.name}: the two amounts and the claim form keep one readable flow`, async ({ page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await gotoHome(page, { suppressOnboarding: true });
       await openPane(page, 'partenaires', '#pane-partenaires');
@@ -350,43 +299,43 @@ test.describe('partners pane at every supported resolution', () => {
         const hero = rect('.pr-hero');
         const copy = rect('.pr-hero-copy');
         const rewards = rect('.pr-rewards');
-        const grid = rect('.pr-grid');
-        const pitch = rect('.pr-pitch');
-        const form = rect('.pr-form-panel');
+        const earned = rect('.pr-earned');
+        const headingRange = document.createRange();
+        headingRange.selectNodeContents(document.querySelector('.pr-hero h1'));
+        const headingRight = headingRange.getBoundingClientRect().right;
         const cards = [...document.querySelectorAll('.pr-card')].map((el) => {
           const r = el.getBoundingClientRect();
           return { top: r.top + scrollY, bottom: r.bottom + scrollY, left: r.left, right: r.right, width: r.width };
         });
-        const chips = [...document.querySelectorAll('.pr-aud')].map((el) => {
+        const chips = [...document.querySelectorAll('#partner-type .chip')].map((el) => {
           const r = el.getBoundingClientRect();
           return { right: r.right, width: r.width, height: r.height };
         });
-        const columns = getComputedStyle(document.querySelector('.pr-grid')).gridTemplateColumns
-          .split(' ').filter(Boolean).length;
         return {
           viewport: { width: innerWidth, scrollWidth: document.documentElement.scrollWidth },
-          hero, copy, rewards, grid, pitch, form, cards, chips, columns,
-          cta: rect('#pr-hero-cta'), submit: rect('#partner-submit'),
+          hero, copy, rewards, earned, headingRight, cards, chips,
+          grid: rect('.pr-grid'), form: rect('.pr-form-panel'), note: rect('.pr-grid .note'),
+          submit: rect('#partner-submit'),
         };
       });
 
       expect(geometry.viewport.scrollWidth, 'partners never scrolls sideways').toBeLessThanOrEqual(geometry.viewport.width + 1);
       expect(geometry.cards.length).toBe(2);
       expect(geometry.cards.every((c) => c.width > 0 && c.right <= geometry.hero.right + 1), 'reward cards stay inside the hero').toBe(true);
-      expect(geometry.chips.every((c) => c.width > 0 && c.right <= geometry.hero.right + 1), 'audience chips stay inside the hero').toBe(true);
-      expect(geometry.cta.width, 'the hero action remains a real touch target').toBeGreaterThanOrEqual(120);
+      expect(geometry.chips.every((c) => c.width > 0 && c.right <= geometry.form.right + 1), 'the profession chips stay inside the form').toBe(true);
       expect(geometry.submit.width, 'the claim action remains visible').toBeGreaterThanOrEqual(160);
-      expect(geometry.grid.top - geometry.hero.bottom, 'no empty band opens between hero and story').toBeLessThanOrEqual(32);
+      expect(geometry.grid.top - geometry.hero.bottom, 'no empty band opens between the offer and the form').toBeLessThanOrEqual(48);
+      expect(geometry.earned.top - geometry.rewards.bottom, 'the acquisition rule stays under its two amounts').toBeLessThanOrEqual(24);
+      // Sous le héros il n'y a plus qu'une colonne : le formulaire, puis la
+      // mention du prix du client — jamais côte à côte.
+      expect(geometry.note.top, 'the fine print stacks under the form').toBeGreaterThanOrEqual(geometry.form.bottom - 1);
+      expect(geometry.form.left).toBeCloseTo(geometry.note.left, 0);
 
       if (vp.width < 901) {
-        expect(geometry.columns, 'narrow layouts use one story/form column').toBe(1);
-        expect(geometry.form.left).toBeCloseTo(geometry.pitch.left, 0);
-        expect(geometry.form.width).toBeCloseTo(geometry.pitch.width, 0);
         expect(geometry.rewards.top).toBeGreaterThanOrEqual(geometry.copy.bottom - 1);
       } else {
-        expect(geometry.columns, 'wide layouts keep the claim form beside the story').toBe(2);
-        expect(geometry.form.left).toBeGreaterThan(geometry.pitch.right - 1);
         expect(geometry.copy.right).toBeLessThanOrEqual(geometry.rewards.left + 1);
+        expect(geometry.rewards.left - geometry.headingRight, 'measure the gap from visible headline text, not an empty grid track').toBeLessThanOrEqual(140);
       }
     });
   }
@@ -397,12 +346,12 @@ test.describe('partners pane at every supported resolution', () => {
 // no sideways scroll with it open, the dialog stays inside the viewport, the
 // Envoyer button can be reached, and nom + courriel share a row only where
 // the dialog column can hold two fields.
-test.describe('the contact dialog at every size', () => {
+test.describe('the legacy email contact dialog at every size', () => {
   for (const vp of VIEWPORTS) {
     test(`${vp.name}: « Nous joindre » fits, never scrolls sideways, and its fields re-flow`, async ({ page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await gotoHome(page);
-      await page.evaluate(() => document.getElementById('mnav-contact').click());
+      await page.evaluate(() => window.Nota.contact.openEmail());
       const dlg = page.locator('#contact-dialog');
       await expect(dlg).toBeVisible();
       await settled(page);

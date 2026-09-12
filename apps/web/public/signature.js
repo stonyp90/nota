@@ -233,12 +233,25 @@
     });
   }
   async function sendSignal(type, description) {
-    var current = await request('/sessions' + query()); if (!current.session || current.session.id !== joinedSession) throw new Error('session_changed'); session = current.session;
+    var sessionId = joinedSession, connection = pc;
     var signalDigest = await digest(description.sdp);
-    var signalProof = D.signalMessage(session.id,role,type,signalDigest);
+    var signalProof = D.signalMessage(sessionId,role,type,signalDigest);
     var signature = await signBytes(signalProof);
-    var result = await request('/sessions/' + encodeURIComponent(session.id) + '/signal',{ method:'POST',body:JSON.stringify(body({ revision:session.revision,type:type,sdp:description.sdp,signature:signature })) });
-    if (result.session) session = result.session;
+    // Presence heartbeats also increment the revision. Retry this same signed
+    // transport message, but never carry it into a replacement session/offer.
+    for (var attempt = 0; attempt < 4; attempt++) {
+      var current = await request('/sessions' + query());
+      if (!current.session || current.session.id !== sessionId || joinedSession !== sessionId || pc !== connection || connection.signalingState === 'closed') throw new Error('session_changed');
+      if (type === 'answer' && (!current.session.peerSignal || !connection.remoteDescription || current.session.peerSignal.sdp !== connection.remoteDescription.sdp)) throw new Error('session_changed');
+      session = current.session;
+      try {
+        var result = await request('/sessions/' + encodeURIComponent(sessionId) + '/signal',{ method:'POST',body:JSON.stringify(body({ revision:current.session.revision,type:type,sdp:description.sdp,signature:signature })) });
+        if (result.session && joinedSession === sessionId) session = result.session;
+        return;
+      } catch (error) {
+        if (error.status !== 409 || error.code !== 'conflit_revision' || attempt === 3) throw error;
+      }
+    }
   }
   async function advanceConnection() {
     if (signaling || !entered || !localStream || !session || !['admitted','paused','reviewed','released'].includes(session.status)) return;
@@ -328,6 +341,22 @@
   document.addEventListener('visibilitychange',function () { if (document.hidden && entered) { fingerprintVerified = false; $('peer-verified').checked = false; $('sign-consent').checked = false; mediaChanged(); } });
   async function init() {
     var theme = readText('nota.theme'); if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme;
+    // The head script settled the theme before first paint; this keeps the room
+    // following a viewer who flips their system theme WHILE it is open. An
+    // explicit choice made here wins from then on, so the follow stops as soon
+    // as `nota.theme` holds one.
+    try {
+      var sys = window.matchMedia('(prefers-color-scheme: dark)');
+      var follow = function (e) {
+        var chosen = readText('nota.theme');
+        if (chosen === 'light' || chosen === 'dark') return;
+        document.documentElement.dataset.theme = e.matches ? 'dark' : 'light';
+        themeLabel();
+      };
+      if (sys.addEventListener) sys.addEventListener('change', follow);
+      else if (sys.addListener) sys.addListener(follow);
+    } catch (_) {}
+    themeLabel();
     token = getToken(); applyLanguage();
     if (!bidId || !/^\d{4}-\d{2}-\d{2}$/.test(dateISO) || !token) { showSignIn(); return; }
     $('welcome').hidden = true; $('workspace').hidden = false;

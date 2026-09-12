@@ -20,6 +20,7 @@ test('gate form: request a link and the console opens (devToken echoed)', async 
 
   // Enter the notary space and submit the professional email.
   await page.locator('#tab-notaires').click();
+  await page.locator('#notary-calendar-access > summary').click();
   await page.locator('#nc-email').fill(NOTARY_EMAIL);
 
   // Capture the /notary/session/request response so we assert on the real dev
@@ -40,6 +41,10 @@ test('gate form: request a link and the console opens (devToken echoed)', async 
   // hidden account panel; toHaveText reads textContent without visibility).
   await expect(page.locator('#notary-authed')).toBeVisible();
   await expect(page.locator('#acct-name')).toHaveText(NOTARY_EMAIL);
+  await expect(page.locator('#notary-page-title')).toHaveText('Notary space');
+  const consoleBox = await page.locator('#notary-console').boundingBox();
+  const calendarBox = await page.locator('#notary-carnet').boundingBox();
+  expect(calendarBox.y).toBeGreaterThanOrEqual(consoleBox.y + consoleBox.height - 1);
 
   // The open agenda is the point of the console: real demands in one
   // chronological grid (ADR 0020), each funnelling into a retain control
@@ -75,4 +80,13 @@ test('magic link: booting with #nauth=<token> opens the console', async ({ page 
   await expect(page.locator('#acct-name')).toHaveText(NOTARY_EMAIL);
   // The single-use token is stripped from the URL so a refresh can't replay it.
   await expect.poll(() => page.evaluate(() => location.hash)).not.toContain('nauth');
+});
+
+test('an expired magic link expands account access and leaves calendar subscription available', async ({ page }) => {
+  await gotoHome(page, { suppressOnboarding: true });
+  await page.goto('/?lang=en&expired-calendar-link=1#nauth=expired-calendar-link');
+  await expect(page.locator('#notary-console-errors')).toBeVisible();
+  await expect(page.locator('#nc-email')).toBeVisible();
+  await expect(page.locator('#sub-google')).toBeVisible();
+  await expect(page.locator('#notary-authed')).not.toBeVisible();
 });

@@ -11,7 +11,7 @@ const HOME_EN = '/?lang=en';
 /**
  * Navigate to the home page in English.
  * @param {import('@playwright/test').Page} page
- * @param {{ suppressOnboarding?: boolean }} [opts]
+ * @param {{ suppressOnboarding?: boolean, lang?: 'fr' | 'en' }} [opts]
  *   suppressOnboarding pre-seeds the "already onboarded" flag so the first-visit
  *   guide never auto-opens — for the journeys that don't test the guide itself.
  */
@@ -30,7 +30,7 @@ async function gotoHome(page, opts = {}) {
       } catch (e) {}
     });
   }
-  await page.goto(HOME_EN);
+  await page.goto(opts.lang === 'fr' ? '/?lang=fr' : HOME_EN);
   // The pulse is rendered by app.js after the first /bids fetch resolves; wait
   // for it so the home is genuinely interactive before a spec asserts on it.
   await page.locator('#pulse-rows .pulse-row').first().waitFor({ state: 'visible' });
@@ -72,4 +72,13 @@ async function visibleAmounts(page, scope = '#main') {
   return out;
 }
 
-module.exports = { HOME_EN, gotoHome, parseMoney, visibleAmounts };
+/** Exercise the branded controls, not their hidden native state mirrors. */
+async function chooseFinancingLenderAndTravel(scope) {
+  const label = await scope.locator('#crit-preteur option[value="banque_nationale"]').textContent();
+  await scope.locator('#crit-preteur__btn').click();
+  await scope.locator('#crit-preteur__list').getByRole('option', { name: label.trim(), exact: true }).click();
+  await scope.locator('#crit-deplacement__qui_client').click();
+  await scope.locator('#crit-deplacement__client_50').click();
+}
+
+module.exports = { HOME_EN, gotoHome, parseMoney, visibleAmounts, chooseFinancingLenderAndTravel };

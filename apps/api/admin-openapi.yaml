@@ -131,6 +131,38 @@ components:
             source: { type: string, enum: [persisted_bids_and_act_ledger] }
             ga4: { type: string, enum: [supplementary_only] }
             completionAvailable: { type: boolean }
+    SupportKnowledgePair:
+      type: object
+      required: [question, answer]
+      properties:
+        question: { type: string, minLength: 1, maxLength: 500 }
+        answer: { type: string, minLength: 1, maxLength: 2000 }
+    SupportKnowledge:
+      type: object
+      required: [ok, revision, entries]
+      properties:
+        ok: { type: boolean }
+        revision: { type: integer, minimum: 0 }
+        entries:
+          type: array
+          maxItems: 40
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              active: { type: boolean }
+              fr: { $ref: '#/components/schemas/SupportKnowledgePair' }
+              en: { $ref: '#/components/schemas/SupportKnowledgePair' }
+              threadId: { type: string }
+              messageId: { type: string }
+              updatedAt: { type: string, format: date-time }
+              reviewedBy: { type: string }
+        limites:
+          type: object
+          properties:
+            entriesMax: { type: integer }
+            questionMax: { type: integer }
+            messageMax: { type: integer }
     SupportMessage:
       type: object
       required: [id, de, texte, createdAt]
@@ -1151,6 +1183,61 @@ components:
               - code: modele_inconnu
                 message: "Modèle de courriel inconnu : nope."
 paths:
+  /admin/support-knowledge:
+    get:
+      operationId: getAdminSupportKnowledge
+      summary: Read reviewed bilingual support answers and their revision.
+      description: Requires support:read and pii:read. Private configuration; no public transcript export.
+      security: [{ adminSession: [] }]
+      responses:
+        "200":
+          description: Reviewed entries, revision and authoring limits.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SupportKnowledge' }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "503": { description: Knowledge storage unavailable. }
+    post:
+      operationId: saveAdminSupportKnowledge
+      summary: Approve a general answer derived from a human reply, or withdraw it.
+      description: >-
+        Requires support:write and pii:read. Revision is mandatory; stale writes return 409.
+        Publishing requires a stored human message, both languages, and approved=true.
+        Rejects recognizable personal data, links, numbers, unsafe answers and instructions.
+        One entry per source message, at most 40 entries. Inactive entries can be replaced.
+        Set id and active=false to withdraw. Raw transcripts never train a model.
+        Audit records contain IDs and revisions, not answer text.
+      security: [{ adminSession: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [revision]
+              properties:
+                revision: { type: integer, minimum: 0 }
+                threadId: { type: string }
+                messageId: { type: string }
+                id: { type: string }
+                active: { type: boolean }
+                approved: { type: boolean }
+                fr: { $ref: '#/components/schemas/SupportKnowledgePair' }
+                en: { $ref: '#/components/schemas/SupportKnowledgePair' }
+      responses:
+        "200":
+          description: Updated entries and revision.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SupportKnowledge' }
+        "400": { description: Invalid JSON. }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "403": { $ref: '#/components/responses/Forbidden' }
+        "404": { description: Answer to withdraw not found. }
+        "409": { description: Concurrent modification; reload the current revision. }
+        "422": { $ref: '#/components/responses/ValidationError' }
+        "503": { description: Knowledge storage unavailable. }
   /admin/support:
     get:
       operationId: listAdminSupport

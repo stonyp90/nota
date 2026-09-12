@@ -9,7 +9,9 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync, rmSync, statSync, 
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHash } from 'node:crypto';
+import { syncBrandFoundations } from './scripts/sync-brand-foundations.mjs';
 import { pages, pagePath, renderPage } from './seo-pages.mjs';
+import { writeBrandKit } from './scripts/brand-kit.mjs';
 
 const analyticsId = process.env.NOTA_GA4_ID || '';
 if (analyticsId && !/^G-[A-Z0-9]+$/.test(analyticsId)) throw new Error('Invalid NOTA_GA4_ID');
@@ -39,7 +41,22 @@ function copyTree(src, dst) {
   }
 }
 
+writeBrandKit();
+syncBrandFoundations();
 copyTree(publicDir, distDir);
+const docsDir = join(here, '..', '..', 'docs');
+for (const name of ['business-plan.html', 'pitch-deck.html', 'plan-affaires-sommaire.md', 'nota-pitch-deck.pdf', 'nota-pitch-deck-fr.pdf']) {
+  writeFileSync(join(distDir, name), readFileSync(join(docsDir, name)));
+}
+mkdirSync(join(distDir, 'pitch-deck'), { recursive: true });
+for (const name of readdirSync(join(docsDir, 'pitch-deck')).filter(name => /\.(png|svg)$/.test(name))) {
+  writeFileSync(join(distDir, 'pitch-deck', name), readFileSync(join(docsDir, 'pitch-deck', name)));
+}
+mkdirSync(join(distDir, 'planning'), { recursive: true });
+for (const name of ['business-plan-model.json', 'business-plan-review-2026-09-09.md']) {
+  writeFileSync(join(distDir, 'planning', name), readFileSync(join(docsDir, 'planning', name)));
+}
+
 for (const page of pages) {
   for (const lang of ['fr', 'en']) writeFileSync(join(distDir, pagePath(page, lang)), renderPage(page, lang));
 }
@@ -54,7 +71,7 @@ writeFileSync(join(distDir, 'signing-domain.js'), readFileSync(join(dirname(doma
 // files be cached immutably forever. index.html (and sw.js) stay unhashed and
 // no-cache; they are the single source that points at the current hashes.
 const hash = (buf) => createHash('sha256').update(buf).digest('hex').slice(0, 10);
-const HASHED = ['app.js', 'styles.css', 'domain.js', 'i18n.js', 'landing.js', 'acquisition.js', 'analytics.js', 'signature.js', 'signature.css', 'signing-domain.js', 'salle.js'];
+const HASHED = ['app.js', 'styles.css', 'domain.js', 'i18n.js', 'landing.js', 'acquisition.js', 'analytics.js', 'signature.js', 'signature.css', 'theme-boot.js', 'signing-domain.js', 'salle.js', 'agenda-demo-render.js', 'agenda-demo.js', 'agenda-demo.css', 'media/nota-agenda-fr.mp4', 'media/nota-agenda-en.mp4', 'media/nota-agenda-fr.png', 'media/nota-agenda-en.png'];
 const manifest = {}; // original name -> hashed name
 for (const name of HASHED) {
   const p = join(distDir, name);

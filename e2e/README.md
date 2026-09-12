@@ -1,7 +1,7 @@
 # E2E tests (Playwright)
 
-Fast browser tests over the critical Nota journeys, meant to gate a push to
-live. The whole suite runs in a single headless Chromium in well under a minute.
+Browser tests over the critical Nota journeys, meant to gate a push to live.
+The suite includes Chromium, Firefox, WebKit and mobile viewport projects.
 
 ## Run it
 
@@ -11,11 +11,23 @@ npx playwright install chromium
 
 # run the suite (boots the demo API + web servers automatically)
 npm run test:e2e
+
+# standalone two-party media and mailbox-return journeys (node:test)
+npm run test:e2e:signing
+
+# both runners, sequentially
+npm run test:e2e:all
 ```
 
-That's it. `npm run test:e2e` (→ `playwright test`) boots **both** demo servers
+That's it. `npm run test:e2e` boots the four Playwright demo servers
 itself via the config's `webServer`, waits for them, runs the specs, and — on a
-fresh boot — shuts them down afterwards. No manual server juggling.
+fresh boot — shuts them down afterwards. `test:e2e:all` then runs the two
+standalone signing journeys sequentially with Node's test runner and their own fixtures.
+Playwright only discovers `*.spec.js`; importing `*.test.mjs` would start
+untracked browsers during discovery. No manual server juggling.
+The default is one worker to keep media tests and browser startup within the
+local machine's resources. Use `npm run test:e2e -- --workers=2` to opt into
+parallel execution.
 
 Useful variants:
 

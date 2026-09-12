@@ -142,7 +142,7 @@ test('an unknown pane in the hash falls back to the carnet', async () => {
   assert.equal(activePane(doc), 'pane-carnet');
 });
 
-test('setTab records the pane in the hash and the Back button returns to the previous pane', async () => {
+test('setTab records the pane in the hash and the Back button returns to the previous pane', { timeout: 10_000 }, async () => {
   const { win, doc, Nota } = await boot();
   assert.equal(activePane(doc), 'pane-carnet');
 
@@ -152,12 +152,14 @@ test('setTab records the pane in the hash and the Back button returns to the pre
   Nota.setTab('charte');
   assert.match(win.location.hash, /t=charte/);
 
+  let navigated = new Promise(resolve => win.addEventListener('popstate', resolve, { once: true }));
   win.history.back();
-  await wait(30);
+  await navigated;
   assert.equal(activePane(doc), 'pane-conditions', 'Back walks panes instead of leaving the site');
 
+  navigated = new Promise(resolve => win.addEventListener('popstate', resolve, { once: true }));
   win.history.back();
-  await wait(30);
+  await navigated;
   assert.equal(activePane(doc), 'pane-carnet', 'Back reaches the landing pane');
 });
 
@@ -287,6 +289,11 @@ test('desktop nav: marketplace and Beta flat doors, and no submenu machinery sur
   assert.equal(doc.querySelector('.nav-more'), null, 'no chevron toggles');
   assert.equal(doc.querySelector('.nav-history'), null, 'the header has no back/forward arrow rail');
   assert.equal(doc.querySelector('.mnav-history'), null, 'the drawer has no back/forward arrow rail');
+  // Owner, 2026-09-12: « enlever les 2 flèches » — the narrow header's own
+  // back/forward pair is gone too. The browser button and the phone's back
+  // gesture already walk the panes; the header is brand, then burger.
+  assert.equal(doc.querySelector('[data-history]'), null, 'no back/forward arrow anywhere in the shell');
+  assert.equal(doc.querySelector('.mobile-history'), null, 'the narrow header has no history pair');
   assert.equal(doc.querySelector('[id^="submenu-"]'), null, 'no desktop submenus');
   assert.equal(doc.querySelector('.mnav-more'), null, 'no drawer accordions');
   assert.equal(doc.querySelector('#mobile-nav [id^="msub-"]:not(#msub-legal)'), null,
@@ -471,7 +478,7 @@ test('the three doors and the partner claim form carry English entries', () => {
   for (const fr of [
     'Espace notaire',
     'Partenaires',
-    'Référez, et soyez récompensé.',
+    'Un code. Deux récompenses.',
     'Réclamez votre code',
     'Votre code partenaire',
     'Code souhaité',
@@ -660,12 +667,12 @@ test('P2-19: the lockup is drawn once as <symbol>s; every inline copy is a <use>
   // not return anywhere.
   const C = {
     tile: '<rect width="64" height="64" rx="7" fill="#264961"/>',
-    stems: ['<rect x="16" y="15" width="7.5" height="34" rx="1"/>', '<rect x="40.5" y="15" width="7.5" height="34" rx="1"/>'],
-    n: '<polygon points="16,15 24,15 48,49 40,49"/>',
+    stems: ['<rect x="16" y="15" width="9.5" height="34" rx="1"/>', '<rect x="38.5" y="15" width="9.5" height="34" rx="1"/>'],
+    n: '<polygon points="16,15 26.2,15 48,49 37.8,49"/>',
     signal: '<rect x="40" y="8" width="16" height="16" rx="3" fill="#407598" stroke="#264961" stroke-width="3"/>',
-    o: 'M0 8.5a5 5 0 0 1 5-5H22a5 5 0 0 1 5 5V26.5a5 5 0 0 1-5 5H5a5 5 0 0 1-5-5ZM7.3 12.3v10.4a1.5 1.5 0 0 0 1.5 1.5h9.4a1.5 1.5 0 0 0 1.5-1.5V12.3a1.5 1.5 0 0 0-1.5-1.5H8.8a1.5 1.5 0 0 0-1.5 1.5Z',
-    t: 'M28.4 3.5H55V10.8H45.35V27.3L38.05 31.5V10.8H28.4Z',
-    a: 'M66.5 3.5H72.5L84.1 31.5H76.3L74.68 26.25H64.32L62.7 31.5H54.9ZM69.5 9.5L72.73 19.95H66.27Z',
+    o: 'M0 8.5a5 5 0 0 1 5-5H22a5 5 0 0 1 5 5V26.5a5 5 0 0 1-5 5H5a5 5 0 0 1-5-5ZM7.8 12.8v9.4a1.5 1.5 0 0 0 1.5 1.5h8.4a1.5 1.5 0 0 0 1.5-1.5V12.8a1.5 1.5 0 0 0-1.5-1.5H9.3a1.5 1.5 0 0 0-1.5 1.5Z',
+    t: 'M31 3.5H57.6V11.3H48.2V27.02L40.4 31.5V11.3H31Z',
+    a: 'M65.17 6.7L70.74 3.5H72.5L84.1 31.5H75.77L73.93 25.89H64.95L63.23 31.5H54.9ZM69.5 10L73 20.3H66Z',
     period: '<rect x="87.4" y="27.1" width="4.4" height="4.4" rx="1" fill="#407598"/>',
     // The wordmark's viewBox IS its cap band (y 3.5–31.5, 28 tall; the period
     // sits inside x 0–91.8), so a word box --lockup-word tall renders caps
@@ -684,7 +691,7 @@ test('P2-19: the lockup is drawn once as <symbol>s; every inline copy is a <use>
     ['the retired signature-line rule', /M0\.5 36\.5h86/],
   ];
   const markOf = (src) => src.replace(/<!--[\s\S]*?-->/g, '').replace(/\s*\/>/g, '/>').replace(/" \/>/g, '"/>');
-  assert.deepEqual(letters, [C.o, C.t, C.a], 'the O is the square portal, the T carries the bevelled stem, the A is unchanged');
+  assert.deepEqual(letters, [C.o, C.t, C.a], 'the O is the square portal, the T carries the bevelled stem, the A wears the cut apex');
   assert.ok(word.includes(C.period), 'the period (a signal square, rx 1) closes the word');
   assert.deepEqual([...word.matchAll(/fill="(#[0-9a-fA-F]{6})"/g)].map((m) => m[1].toLowerCase()), [bright], 'the ONE colour literal inside the wordmark is the signal token’s value (the period)');
   assert.ok(word.includes('<symbol id="nota-wordmark" ' + C.wordView), 'the wordmark viewBox is the cap band (0 3.5 91.8 28)');
@@ -730,13 +737,13 @@ test('P2-19: the lockup is drawn once as <symbol>s; every inline copy is a <use>
   assert.ok(signature.includes('<symbol id="nota-wordmark" ' + C.wordView), 'signing room: the wordmark viewBox is the cap band');
   assert.ok(!signature.includes('viewBox="0 0 92 42"'), 'signing room: no word box is left on the old 92 × 42 frame');
 
-  // Layout 16 « Centré à 60 % » — the lockup's GEOMETRY is five custom
+  // Optical sizing at 48% (ADR 0048) — the lockup's GEOMETRY is five custom
   // properties, declared ONCE per surface stylesheet on its lockup root, with
   // the SAME ratios in the carnet, the signing room and the admin console. A
   // surface sets --lockup-tile alone; the word (centred on the tile), the two
   // gaps and the badge follow. Nothing else may size a tile or a word in px.
   const LOCKUP = {
-    '--lockup-word': 'calc(var(--lockup-tile) * .60)',
+    '--lockup-word': 'calc(var(--lockup-tile) * .48)',
     '--lockup-gap': 'calc(var(--lockup-tile) * .12)',
     '--lockup-badge-gap': 'calc(var(--lockup-tile) * .16)',
     '--lockup-badge-size': 'max(9px, calc(var(--lockup-tile) * .16))',
@@ -754,7 +761,7 @@ test('P2-19: the lockup is drawn once as <symbol>s; every inline copy is a <use>
     for (const [k, v] of Object.entries(LOCKUP)) {
       const hit = new RegExp(k.replace(/-/g, '\\-') + ':\\s*([^;]+);').exec(decl);
       assert.ok(hit, name + ': declares ' + k);
-      assert.equal(hit[1].trim(), v, name + ': ' + k + ' carries layout 16’s ratio');
+      assert.equal(hit[1].trim(), v, name + ': ' + k + ' carries the shared optical ratio');
       assert.equal((css.match(new RegExp(k.replace(/-/g, '\\-') + ':', 'g')) || []).length, 1, name + ': ' + k + ' is declared once — a surface re-sets --lockup-tile only');
     }
     assert.match(decl, /--lockup-tile:\s*\d+px;/, name + ': the root sets its tile in px');
@@ -765,11 +772,16 @@ test('P2-19: the lockup is drawn once as <symbol>s; every inline copy is a <use>
     }
     assert.ok(css.includes('width: calc(var(--lockup-word) * 91.8 / 28); height: var(--lockup-word);'), name + ': the word box is --lockup-word tall and keeps the cap band’s ratio');
     assert.ok(css.includes('width: var(--lockup-tile); height: var(--lockup-tile);'), name + ': the tile is --lockup-tile square');
-    // Design 02: the badge takes the SIGNAL colour with white text, sized from the tile.
+    // The public header/footer use a soft neutral badge; the other lockups keep design 02.
     const badgeRule = [...css.matchAll(new RegExp(badge.replace(/[.]/g, '\\.') + '\\s*\\{([^}]*)\\}', 'g'))].find((m) => /background:/.test(m[1]));
     assert.ok(badgeRule, name + ': a ' + badge + ' rule that paints the badge');
-    assert.match(badgeRule[1], /background:\s*var\(--nota-blue-500\)/, name + ': the badge ground is --nota-blue-500 (design 02)');
-    assert.match(badgeRule[1], /color:\s*var\(--on-accent\)/, name + ': the badge text is --on-accent (white in both themes)');
+    if (name === 'styles.css') {
+      assert.match(badgeRule[1], /background:\s*light-dark\(#eef0f2, #2b3035\)/, name + ': Québec has a subtle neutral background in both themes');
+      assert.match(badgeRule[1], /color:\s*var\(--ink-muted\)/, name + ': Québec uses theme-aware secondary text');
+    } else {
+      assert.match(badgeRule[1], /background:\s*var\(--nota-blue-500\)/, name + ': the badge ground is --nota-blue-500 (design 02)');
+      assert.match(badgeRule[1], /color:\s*var\(--on-accent\)/, name + ': the badge text is --on-accent (white in both themes)');
+    }
     assert.match(badgeRule[1], /font-size:\s*var\(--lockup-badge-size\)/, name + ': the badge is sized from the tile');
     assert.match(badgeRule[1], /font-weight:\s*800/, name + ': the badge is 800');
     assert.match(badgeRule[1], /letter-spacing:\s*\.1em/, name + ': the badge tracks .1em');
@@ -824,7 +836,7 @@ test('P2-7: the service worker ignores other origins and never answers a failed 
 });
 
 
-test('notary landing exposes a quiet beta disclosure beside the acquisition path', async () => {
+test('notary landing keeps the beta disclosure inside optional information', async () => {
   const { doc } = await boot();
   doc.querySelector('.nav-tab[data-tab="notaires"]').click();
   await wait(10);
@@ -832,8 +844,10 @@ test('notary landing exposes a quiet beta disclosure beside the acquisition path
   const note = doc.getElementById('notary-ai-beta-note');
   assert.ok(note, 'the beta markup remains available to its dedicated tab flow');
   assert.equal(note.hidden, false, 'the beta teaser is available on the notary landing');
-  assert.equal(note.parentElement.classList.contains('notary-landing-left'), true,
-    'the beta teaser stays with the landing content it describes');
+  assert.equal(note.parentElement.id, 'notary-calendar-explore',
+    'the beta teaser stays with optional information after calendar subscription');
+  assert.equal(note.parentElement.open, false, 'secondary information starts folded');
+  note.parentElement.open = true;
   assert.match(CSS_SRC, /\.notary-landing-left\s*\{/,
     'the landing has a dedicated left content rail');
   assert.match(CSS_SRC, /\.notary-landing-right\s*\{/,
@@ -853,8 +867,18 @@ test('notary landing exposes a quiet beta disclosure beside the acquisition path
   assert.match(CSS_SRC, /\.beta-teaser:hover \.beta-teaser-details,\s*\.beta-teaser:focus-within \.beta-teaser-details/, 'hover and keyboard focus reveal the same surface');
 });
 
-test('Beta opens from the footer, participates in history and exposes the public preview', async () => {
-  const { win, doc } = await boot();
+test('the footer’s Beta link asks an anonymous visitor to sign in', async () => {
+  const { doc } = await boot();
+  doc.querySelector('.site-footer [data-goto="beta"]').click();
+  // The owner, 2026-09-12: a section that needs an account is not available
+  // without one. The visitor stays on the carnet with the sign-in sheet up,
+  // instead of landing on a room they cannot enter.
+  assert.equal(activePane(doc), 'pane-carnet');
+  assert.equal($(doc, 'auth-dialog').open, true, 'the sign-in sheet is what opens instead');
+});
+
+test('Beta opens from the footer, participates in history and exposes the preview', async () => {
+  const { win, doc } = await boot({ seed: { 'nota.profile.v1': JSON.stringify({ courriel: 'client@exemple.test' }) } });
   doc.querySelector('.site-footer [data-goto="beta"]').click();
   assert.equal(activePane(doc), 'pane-beta');
   assert.equal(win.location.hash.includes('t=beta'), true);
@@ -866,6 +890,6 @@ test('Beta opens from the footer, participates in history and exposes the public
   doc.querySelector('#pane-beta [data-goto="notaires"]').click();
   assert.equal(activePane(doc), 'pane-notaires');
   win.history.back();
-  await wait(30);
+  for (let i = 0; i < 40 && activePane(doc) !== 'pane-beta'; i++) await wait(25);
   assert.equal(activePane(doc), 'pane-beta');
 });

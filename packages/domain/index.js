@@ -657,6 +657,10 @@
       nomCourt: 'Refinancement',
       nomEn: 'Mortgage refinancing',
       nomCourtEn: 'Refinancing',
+      // L'article indéfini de l'acte, parce qu'une phrase composée le réclame
+      // (« Réserver une procuration ») et qu'aucune règle ne le déduit d'un nom.
+      // Un acte ajouté au catalogue apporte le sien.
+      article: 'un',
       // The most substantial act Nota lists (loan act + hypothec publication +
       // title/certificate review) with real value at stake, so the floor starts
       // at 2000 $ and rises with the loan value below.
@@ -716,6 +720,7 @@
       nomCourt: 'Financement',
       nomEn: 'Mortgage financing',
       nomCourtEn: 'Financing',
+      article: 'un',
       // The loan act for a NEW hypothec — a purchase or a first loan on a
       // property already owned. Slightly under refinancement's floor because
       // there is no old hypothec to discharge; the loan-value brackets are the
@@ -775,6 +780,7 @@
       nomCourt: 'Testament',
       nomEn: 'Notarial will',
       nomCourtEn: 'Will',
+      article: 'un',
       // The platform/date line is deliberately fixed across services. This
       // floor keeps the smaller act from carrying a disproportionate platform
       // burden while still leaving room for complexity add-ons.
@@ -859,6 +865,7 @@
       nomCourt: 'Procuration',
       nomEn: 'Notarial power of attorney',
       nomCourtEn: 'Power of attorney',
+      article: 'une',
       prixDepart: 1500,
       // A separate platform line keeps this smaller act commercially viable:
       // the date guarantee is a fixed-cost product, and the higher floor
@@ -1044,6 +1051,30 @@
     }
     const level = score >= 3 ? 'complexe' : score >= 1 ? 'standard' : 'simple';
     return { level, score, factors };
+  }
+
+  // Complete notary-facing criteria, including answers with zero complexity
+  // weight. Only catalogue choices, booleans and numbers can leave this
+  // projection: never arbitrary pricing fields or free-text client identity.
+  // An unanswered legacy criterion stays unknown, rather than being inferred.
+  function notaryOfferDetails(serviceId, answers) {
+    const svc = serviceById(serviceId);
+    if (!svc || !svc.pricing) return [];
+    answers = answers || {};
+    return svc.pricing.criteria.map((c) => {
+      const answer = answers[c.id];
+      let value = null;
+      if (c.type === 'choice') {
+        const option = (c.options || []).find((o) => o.id === answer);
+        if (option) value = option.label;
+      } else if (c.type === 'flag' && typeof answer === 'boolean') {
+        value = answer ? 'Oui' : 'Non';
+      } else if (c.type === 'bracket' && (typeof answer === 'number' || typeof answer === 'string') && String(answer).trim()) {
+        const n = Number(answer);
+        if (Number.isFinite(n) && n >= 0) value = c.unit === '$' ? money(n) : String(n);
+      }
+      return { id: c.id, label: c.label, value };
+    });
   }
 
   // --- Mandatory parameters ---------------------------------------------------
@@ -2458,6 +2489,26 @@
   // laisserait un visiteur croire qu'il parle à une personne. Le fil sait
   // toujours lequel des deux a parlé.
   const SUPPORT_FROM = { VISITEUR: 'visiteur', NOTA: 'nota', ASSISTANT: 'assistant' };
+  // Reviewed general answers only. Customer transcripts are never promoted
+  // automatically; both languages and an explicit review are required.
+  const SUPPORT_KNOWLEDGE_MAX = 40;
+  const SUPPORT_KNOWLEDGE_QUESTION_MAX = 500;
+  function validateSupportKnowledge(input = {}) {
+    if (!input || typeof input !== 'object') input = {};
+    const errors = [];
+    const value = {};
+    for (const lang of ['fr', 'en']) {
+      const pair = input[lang] || {};
+      const question = typeof pair.question === 'string' ? pair.question.trim() : '';
+      const answer = typeof pair.answer === 'string' ? pair.answer.trim() : '';
+      value[lang] = { question, answer };
+      if (!question || question.length > SUPPORT_KNOWLEDGE_QUESTION_MAX || !validateSupportAnswer({ texte: answer }).ok) {
+        errors.push({ code: 'connaissance_invalide', message: 'Ajoutez une question et une réponse générale valide dans les deux langues.' });
+      }
+    }
+    if (input.approved !== true) errors.push({ code: 'revision_requise', message: 'Confirmez la révision des deux langues et le retrait des renseignements personnels.' });
+    return { ok: errors.length === 0, errors, value };
+  }
   // --- The support inbox (2026-09-04) ------------------------------------------
   // A thread has ONE status, derived from who spoke last: the operator's inbox
   // sorts on it and the widget can never contradict it. `closLe` (set by the
@@ -2723,6 +2774,7 @@
         nomCourt: svc.nomCourt,
         nomEn: svc.nomEn,
         nomCourtEn: svc.nomCourtEn,
+        article: svc.article,
         description: svc.description,
         prixDepart: svc.prixDepart,
         prixNotaCents: svc.prixNotaCents,
@@ -3999,6 +4051,52 @@
     if (!p) return null;
     return { id: p.id, nom: p.nom, nomEn: p.nomEn, monthlyCents: p.monthlyCents,
       includedUses: p.includedUses, overageCents: p.overageCents };
+  }
+
+  // ADR 0052 — le notaire paie, ou il enseigne. La préparation assistée a deux
+  // voies et une seule différence entre elles : une entitlement payée ne doit
+  // rien à l'apprentissage, la voie gratuite est payée en révisions.
+  //
+  // Ce que « révisions » veut dire est borné ici, pas dans l'interface : le
+  // secret professionnel de l'art. 14 du Code de déontologie appartient au
+  // CLIENT, et aucun consentement de notaire ne peut le lever. Le notaire ne
+  // donne donc que son propre jugement sur une proposition de Nota — les deux
+  // natures d'événement que l'ADR 0047 fait déjà venir du notaire, et que le
+  // journal d'apprentissage écrit sans valeur de dossier.
+  const NOTARY_AI_CONTRIBUTION_VERSION = '2026-09-12.1';
+  const NOTARY_AI_CONTRIBUTION_MODES = Object.freeze(['requise', 'facultative']);
+  const NOTARY_AI_CONTRIBUTION_GIVES = Object.freeze(['notary_review', 'notary_question']);
+  const NOTARY_AI_CONTRIBUTION_NEVER = Object.freeze([
+    'document du client', 'valeur de dossier', 'renseignement personnel',
+  ]);
+
+  /**
+   * Le mode de contribution d'un notaire, à partir de sa seule entitlement.
+   *
+   * `abonnementActif` est vrai dès que l'abonnement court, même si le quota du
+   * mois est épuisé : un notaire qui a payé ne se met pas à contribuer parce
+   * qu'il a beaucoup travaillé. `unitesPayees` sont les unités achetées à la
+   * pièce qui restent.
+   *
+   * Fonction pure : le domaine ne connaît ni Stripe, ni le dépôt, ni la forme
+   * de la vue de `apps/api/src/ai-access.js` — c'est l'adaptateur qui traduit.
+   */
+  function notaryAIContribution(entitlement) {
+    const src = entitlement && typeof entitlement === 'object' ? entitlement : {};
+    const unites = Number(src.unitesPayees);
+    const paye = src.abonnementActif === true || (Number.isFinite(unites) && unites > 0);
+    return {
+      version: NOTARY_AI_CONTRIBUTION_VERSION,
+      mode: paye ? 'facultative' : 'requise',
+      donne: [...NOTARY_AI_CONTRIBUTION_GIVES],
+      jamais: [...NOTARY_AI_CONTRIBUTION_NEVER],
+      sortie: 'abonnement_ou_unite',
+      // Un refus ne reprend rien de ce que le notaire avait déjà : c'est la
+      // condition qui rend le consentement LIBRE au sens de l'art. 14 de la
+      // Loi 25, pas une amabilité commerciale.
+      refusRetire: 'preparation_assistee',
+      refusConserve: 'marche_complet',
+    };
   }
 
   // Commercial tiers for a notarial practice are intentionally separate from
@@ -6221,6 +6319,7 @@
     notaPrice,
     MARKET_MULTIPLIER,
     complexity,
+    notaryOfferDetails,
     missingRequired,
     TIERS,
     tierById,
@@ -6281,6 +6380,9 @@
     CONTACT_MESSAGE_MAX,
     validateContactMessage,
     SUPPORT_FROM,
+    SUPPORT_KNOWLEDGE_MAX,
+    SUPPORT_KNOWLEDGE_QUESTION_MAX,
+    validateSupportKnowledge,
     SUPPORT_STATUT,
     SUPPORT_STATUTS,
     SUPPORT_EXCERPT_MAX,
@@ -6298,6 +6400,10 @@
     NOTARY_AI_QUESTION_DECISIONS,
     notaryAIPlan,
     notaryAIPlanPublic,
+    NOTARY_AI_CONTRIBUTION_MODES,
+    NOTARY_AI_CONTRIBUTION_GIVES,
+    NOTARY_AI_CONTRIBUTION_NEVER,
+    notaryAIContribution,
     CABINET_PLANS,
     cabinetPlan,
     cabinetPlanPublic,

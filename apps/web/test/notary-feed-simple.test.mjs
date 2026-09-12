@@ -108,6 +108,9 @@ test('the feed boots in the essential view: toolbar and facteurs fold into a hid
     assert.ok(accept.classList.contains('btn-primary'), 'Retenir keeps its primary weight');
     const meta = card.querySelector('.nc-card-meta');
     assert.ok(meta && !body.contains(meta), 'signal pills stay on the visible row');
+    assert.ok(body.contains(card.querySelector('.nc-decline')), 'the secondary decline action belongs to details');
+    const facts = card.querySelector('.nc-card-facts');
+    if (facts) assert.ok(body.contains(facts), 'lender and full location context belong to details');
   }
   // The date is card data, not structure (ADR 0020): no day sections, one
   // responsive grid packs the width (CSS pinned by regex, like the header
@@ -116,6 +119,50 @@ test('the feed boots in the essential view: toolbar and facteurs fold into a hid
   assert.ok(doc.querySelector('#notary-open-list .nc-agenda-grid'), 'one grid holds the feed');
   assert.match(CSS_SRC, /\.nc-grid\s*{[^}]*auto-fill/, 'the grid packs the width with auto-fill tracks');
   assert.doesNotMatch(CSS_SRC, /\.nc-day--span/, 'the masonry span rule is gone from the stylesheet');
+});
+
+test('filters fold without dropping selected service or day, and reset remains reachable', async () => {
+  const { doc, win, open, Nota } = await bootSignedIn();
+  const toggle = $(doc, 'notary-filters-toggle');
+  const filters = $(doc, 'notary-open-filter');
+  assert.equal(toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(filters.hidden, true);
+  assert.equal($(doc, 'notary-open-days').hidden, true);
+  click(toggle);
+  assert.equal(filters.hidden, false);
+  assert.equal($(doc, 'notary-open-days').hidden, false);
+  const selected = open[0];
+  click(filters.querySelector('[data-svc="' + selected.serviceId + '"]'));
+  assert.equal(doc.activeElement.dataset.svc, selected.serviceId, 'filter redraw preserves keyboard focus');
+  click(doc.querySelector('.nc-daytile[data-date="' + selected.dateISO + '"]'));
+  assert.equal(doc.activeElement.dataset.date, selected.dateISO, 'day redraw preserves keyboard focus');
+  const ids = [...doc.querySelectorAll('#notary-open-list .nc-card')].map(c => c.dataset.id);
+  click(toggle);
+  assert.equal(filters.hidden, true);
+  assert.equal($(doc, 'notary-open-days').hidden, true);
+  assert.equal($(doc, 'notary-filters-count').textContent, '2');
+  assert.equal($(doc, 'notary-filters-count').hidden, false);
+  assert.equal($(doc, 'notary-open-reset').hidden, false);
+  Nota.notary.renderOpen();
+  assert.deepEqual([...doc.querySelectorAll('#notary-open-list .nc-card')].map(c => c.dataset.id), ids);
+  assert.equal(filters.hidden, true, 'polling respects the folded panel');
+  assert.equal(win.localStorage.getItem('nota.notary.filters.v1'), 'closed');
+  click($(doc, 'notary-open-reset'));
+  assert.equal($(doc, 'notary-filters-count').hidden, true);
+  assert.equal(doc.querySelectorAll('#notary-open-list .nc-card').length, open.length);
+});
+
+test('expanded cards expose all service answers, including answers that add no complexity', async () => {
+  const { doc, Nota } = await bootSignedIn();
+  const bid = Nota.notary.state.open[0];
+  bid.details = [{ label: 'Nombre de testateurs', value: '1' }, { label: 'Nombre de testateurs', value: '1' }, { label: 'Langue de l’acte', value: null }, null];
+  Nota.notary.renderOpen();
+  const card = doc.querySelector('[data-id="' + bid.id + '"]');
+  click(card.querySelector('.nc-toggle'));
+  assert.equal(card.querySelector('.nc-card-parameters dt').textContent, 'Nombre de testateurs');
+  assert.equal(card.querySelector('.nc-card-parameters dd').textContent, '1');
+  assert.equal(card.querySelector('.nc-card-parameters > div:last-child dd').textContent, 'Non précisé');
+  assert.equal(card.querySelectorAll('.nc-card-parameters > div').length, 2);
 });
 
 test('the per-card toggle opens and closes the body, and an open card survives a re-render', async () => {
@@ -142,6 +189,29 @@ test('clicking the card surface (not a control) toggles the disclosure too', asy
   assert.equal(card.querySelector('.nc-card-body').hidden, false, 'the whole row is the disclosure target');
   click(card.querySelector('.nc-card-title'));
   assert.equal(card.querySelector('.nc-card-body').hidden, true);
+});
+
+test('filter totals match the visible cards and Clear filters restores the complete feed', async () => {
+  const { doc, open, D, Nota } = await bootSignedIn();
+  const selected = open[0];
+  click(doc.querySelector('#notary-open-filter [data-svc="'+selected.serviceId+'"]'));
+  click(doc.querySelector('#notary-open-list .nc-daytile[data-date="'+selected.dateISO+'"]'));
+  const shown = open.filter(b => b.serviceId === selected.serviceId && b.dateISO === selected.dateISO);
+  assert.equal(doc.querySelector('#notary-open-h .nc-h-n').textContent, String(shown.length));
+  assert.equal(doc.querySelector('#notary-open-h .nc-h-amt').textContent, D.money(shown.reduce((sum,b) => sum+b.montant,0)));
+  assert.equal($(doc, 'notary-open-reset').hidden, false);
+  click($(doc, 'notary-open-reset'));
+  assert.equal(doc.querySelectorAll('#notary-open-list .nc-card').length, open.length);
+  assert.equal($(doc, 'notary-open-reset').hidden, true);
+  assert.equal(doc.activeElement, $(doc, 'notary-open-h'), 'focus stays on a visible element after the reset disappears');
+
+  Nota.notary.state.filter.readyOnly = true;
+  open.forEach(b => { b.ready = false; });
+  click(doc.querySelector('#notary-open-filter [data-svc="all"]'));
+  assert.equal($(doc, 'notary-open-empty').hidden, false);
+  assert.equal($(doc, 'notary-open-reset').hidden, false, 'empty results still offer a way back');
+  click($(doc, 'notary-open-reset'));
+  assert.equal(doc.querySelectorAll('#notary-open-list .nc-card').length, open.length);
 });
 
 // ---------------------------------------------------------------------------

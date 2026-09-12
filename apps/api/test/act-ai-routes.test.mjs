@@ -127,7 +127,7 @@ test('act AI entitlement refusals carry the honest code before any provider call
   assert.equal(fresh.data.errors[0].code, 'ai_access_required');
   assert.equal(fresh.data.errors[0].message, 'Activez la bêta IA ou choisissez une formule pour continuer.');
 
-  await access.enroll('owner');
+  await access.enroll('owner', { contribue: true }); // ADR 0052
   for (let i = 0; i < D.NOTARY_AI_BETA_TRIAL_USES; i += 1) assert.equal((await access.consume('owner')).ok, true);
   assert.equal((await access.get('owner')).reason, 'quota_epuise');
   const spent = await a.request('/notary/acts/preparation');

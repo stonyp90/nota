@@ -60,7 +60,21 @@ function measure({ rootSel, touch, vw, vh, allowOverlap }) {
   // Block-level boxes only: an inline run (a <strong> in a paragraph) is not a
   // sibling in the sense a layout has siblings.
   const BLOCKISH = /^(block|flex|grid|list-item|table|flow-root|inline-block|inline-flex|inline-grid)$/;
-  const blockKids = (el) => flatten(el).filter((k) => vis(k) && BLOCKISH.test(getComputedStyle(k).display) && !['fixed', 'absolute', 'sticky'].includes(getComputedStyle(k).position));
+  // A transparent subgrid may span a title's cell while its actual content
+  // occupies other cells. Compare its painted children with that title; the
+  // subgrid's empty rectangle is not an overlapping card.
+  const overlapKids = (el) => [...el.children].flatMap((k) => {
+    const cs = getComputedStyle(k);
+    const unpaintedSubgrid = cs.display === 'grid'
+      && /subgrid/.test(cs.gridTemplateColumns + cs.gridTemplateRows)
+      && cs.backgroundColor === 'rgba(0, 0, 0, 0)' && cs.backgroundImage === 'none'
+      && cs.boxShadow === 'none'
+      && [cs.borderTopWidth, cs.borderRightWidth, cs.borderBottomWidth, cs.borderLeftWidth].every(v => parseFloat(v) === 0)
+      && ![...k.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())
+      && ['::before', '::after'].every(p => ['none', 'normal', '""'].includes(getComputedStyle(k, p).content));
+    return cs.display === 'contents' || unpaintedSubgrid ? overlapKids(k) : [k];
+  });
+  const blockKids = (el) => overlapKids(el).filter((k) => vis(k) && BLOCKISH.test(getComputedStyle(k).display) && !['fixed', 'absolute', 'sticky'].includes(getComputedStyle(k).position));
 
   // Blank bands, read the way an eye reads them: project every visible box of
   // the column onto the vertical axis and look for a horizontal strip that no
@@ -169,9 +183,17 @@ function measure({ rootSel, touch, vw, vh, allowOverlap }) {
       const inline = (cs.display === 'inline' || cs.display === 'inline-block') && el.parentElement && TEXT_PARENT.test(el.parentElement.tagName);
       if (inline) return;
       const min = 40;
-      // A ::before hit-area extension counts: read the pseudo-element's box.
-      const ext = getComputedStyle(el, '::before');
-      const grow = ext.content !== 'none' && ext.position === 'absolute' && /^-?\d/.test(ext.inset) ? Math.abs(parseFloat(ext.inset)) * 2 : 0;
+      // A pseudo-element hit-area extension counts. BOTH sides are read: the
+      // theme switch draws its knob in ::before and grows its target in ::after
+      // (2026-09-12 — redeclaring ::before had been pushing the knob off its
+      // track on every coarse pointer), and a lens that only knew ::before
+      // then reported a 52×28 switch that a thumb actually hits at 68×44.
+      const reach = (which) => {
+        const ext = getComputedStyle(el, which);
+        return ext.content !== 'none' && ext.position === 'absolute' && /^-?\d/.test(ext.inset)
+          ? Math.abs(parseFloat(ext.inset)) * 2 : 0;
+      };
+      const grow = Math.max(reach('::before'), reach('::after'));
       if (r.height + grow < min || r.width + grow < min) {
         small.push(`${label(el)} ${Math.round(r.width)}×${Math.round(r.height)} « ${(el.textContent || el.getAttribute('aria-label') || '').trim().slice(0, 30)} »`);
       }

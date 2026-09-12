@@ -22,8 +22,8 @@ test('phone market strip: the two acts sit side by side as compact cards', () =>
     'the volume bar and counts caption leave the phone cards — figures only');
   assert.match(css, /\.pulse-item\s+\.mini-btn\s*\{[^}]*display:\s*none/,
     'the per-row book arrow goes on phones — the hero CTA right above books');
-  assert.match(css, /\.pulse-row\.is-on\s*\{[^}]*border-color:\s*var\(--brand\)/,
-    'the active act card is named by its brand edge, not by fill alone');
+  assert.match(css, /\.pulse-row\.is-on \.pulse-svc\s*\{[^}]*text-decoration:\s*underline/,
+    'the active act is indicated by its underlined name');
 });
 
 test('phone: the floating guide bubble goes — the calendar owns its corner', () => {

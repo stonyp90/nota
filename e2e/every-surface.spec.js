@@ -24,6 +24,7 @@
  */
 const { test, expect } = require('@playwright/test');
 const { measure, settle } = require('./layout-lens');
+const { chooseFinancingLenderAndTravel } = require('./helpers');
 
 const ADMIN = `http://localhost:${process.env.E2E_ADMIN_PORT || 4312}`;
 const API = `http://localhost:${process.env.E2E_API_PORT || 8811}`;
@@ -44,6 +45,16 @@ const VIEWPORTS = [
 const seenBoth = () => { try { localStorage.setItem('nota.introSeen', '1'); localStorage.setItem('nota.onboarded.v1', '1'); } catch (e) { /* storage blocked */ } };
 const seenBothDark = () => { try { localStorage.setItem('nota.introSeen', '1'); localStorage.setItem('nota.onboarded.v1', '1'); localStorage.setItem('nota.theme', JSON.stringify('dark')); } catch (e) { /* storage blocked */ } };
 const seenIntroOnly = () => { try { localStorage.setItem('nota.introSeen', '1'); } catch (e) { /* storage blocked */ } };
+// « Signature » needs an account since 2026-09-12 (portes-authentifiees):
+// signed out, the door is not shown and the deep link lands on the carnet.
+// Measuring the pane means arriving as someone who may open it.
+const seenBothSignedIn = () => {
+  try {
+    localStorage.setItem('nota.introSeen', '1');
+    localStorage.setItem('nota.onboarded.v1', '1');
+    localStorage.setItem('nota.profile.v1', JSON.stringify({ courriel: 'client@exemple.test', nom: 'Client' }));
+  } catch (e) { /* storage blocked */ }
+};
 
 /** Fill the booking sheet up to a given step. */
 async function bookTo(page, step) {
@@ -57,8 +68,7 @@ async function bookTo(page, step) {
   await page.fill('#crit-valeur_pret', '350000');
   await page.click('#crit-contexte__propriete_detenue');
   await page.click('#crit-approbation_bancaire__obtenue');
-  await page.selectOption('#crit-preteur', 'banque_nationale');
-  await page.selectOption('#crit-deplacement', 'client_50');
+  await chooseFinancingLenderAndTravel(page);
   await page.click('#book-next');
   await page.waitForSelector('#offer-form[data-at="3"]');
   if (step < 4) return;
@@ -122,9 +132,9 @@ async function retainedAct(request) {
 const SURFACES = [
   { key: 'carnet', url: '/?lang=fr', seed: seenBoth, wait: '#pulse-rows .pulse-row', root: '#pane-carnet' },
   { key: 'carnet, English, dark theme', url: '/?lang=en', seed: seenBothDark, wait: '#pulse-rows .pulse-row', root: '#pane-carnet', theme: 'dark' },
-  { key: 'notaires (signed out)', url: '/?lang=fr#t=notaires', seed: seenBoth, wait: '#notary-live-grid', root: '#pane-notaires' },
+  { key: 'notaires (signed out)', url: '/?lang=fr#t=notaires', seed: seenBoth, wait: '#sub-google', root: '#pane-notaires' },
   { key: 'partenaires', url: '/?lang=fr#t=partenaires', seed: seenBoth, wait: '.pr-hero', root: '#pane-partenaires' },
-  { key: 'signature beta', url: '/?lang=fr#t=beta', seed: seenBoth, wait: '#pane-beta h1', root: '#pane-beta' },
+  { key: 'signature beta', url: '/?lang=fr#t=beta', seed: seenBothSignedIn, wait: '#pane-beta h1', root: '#pane-beta' },
   { key: 'confidentialité', url: '/?lang=fr#t=confidentialite', seed: seenBoth, wait: '#pane-confidentialite', root: '#pane-confidentialite' },
   { key: 'conditions', url: '/?lang=fr#t=conditions', seed: seenBoth, wait: '#pane-conditions', root: '#pane-conditions' },
   { key: 'charte', url: '/?lang=fr#t=charte', seed: seenBoth, wait: '#pane-charte', root: '#pane-charte' },
@@ -138,10 +148,11 @@ const SURFACES = [
     open: async (p) => { await p.evaluate(() => (document.getElementById('header-login') || document.getElementById('mnav-login')).click()); await p.waitForSelector('#auth-dialog[open]'); }, root: '#auth-dialog' },
   { key: 'mobile drawer', url: '/?lang=fr', seed: seenBoth, wait: '#pulse-rows .pulse-row', maxWidth: 899,
     open: async (p) => { await p.click('#nav-burger'); await expect(p.locator('#mobile-nav')).toBeVisible(); }, root: '#mobile-nav' },
-  { key: 'notary console (signed in)', url: '/?lang=fr#t=notaires', seed: seenBoth, wait: '#nc-email, #notary-authed:not([hidden])', preservePage: true,
+  { key: 'notary console (signed in)', url: '/?lang=fr#t=notaires', seed: seenBoth, wait: '#notary-calendar-access:not([hidden]), #notary-authed:not([hidden])', preservePage: true,
     open: async (p) => {
       // The session survives a reload (ncRestore): sign in once, then only resize.
       if (!(await p.locator('#notary-authed:not([hidden])').count())) {
+        await p.locator('#notary-calendar-access > summary').click();
         await p.fill('#nc-email', 'lens.notaire@etude.ca');
         await p.click('#notary-console-signin');
       }
@@ -191,7 +202,7 @@ const SURFACES = [
   { key: 'admin · audit', admin: 'audit', root: '#app' },
   { key: 'admin · usagers', admin: 'usagers', root: '#app' },
   { key: 'pitch deck', url: `${DOCS}/pitch-deck.html`, seed: () => {}, wait: '#slide', root: 'body' },
-  { key: 'business plan', url: `${DOCS}/business-plan.html`, seed: () => {}, wait: '#plan-en', root: 'body' },
+  { key: 'business plan', url: `${DOCS}/business-plan.html`, seed: () => {}, wait: 'h1:visible', root: 'body' },
   { key: 'brand guide', url: '/brand.html', seed: () => {}, wait: 'h1', root: 'body' },
   { key: 'brand explorations', url: '/brand-explorations.html', seed: () => {}, wait: 'h1', root: 'body' },
 ];
@@ -199,7 +210,9 @@ const SURFACES = [
 // The two first-visit surfaces exist only WITHOUT reduced motion (the films
 // and the guide are suppressed for a visitor who asked for less motion).
 const MOTION_SURFACES = [
-  { key: 'intro gate (first visit)', url: '/?lang=fr', seed: () => {}, wait: '#intro-gate:not([hidden])', root: '#intro-gate' },
+  // Measure the chooser's content, not the decorative floating SVG backdrop:
+  // its offscreen cubes create moving gaps below the viewport by design.
+  { key: 'intro gate (first visit)', url: '/?lang=fr', seed: () => {}, wait: '#intro-gate:not([hidden])', root: '#ig-chooser' },
   { key: 'onboarding guide', url: '/?lang=fr', seed: seenIntroOnly, wait: '#onboarding-dialog[open]', root: '#onboarding-dialog' },
 ];
 
@@ -237,6 +250,15 @@ async function sweep(page, request, surface, testInfo) {
         }
       }
       await settle(page);
+      // Every authenticated pane shares the brand contract, including admin
+      // sections that the standalone brand audit reaches only through sign-in.
+      const brand = await page.evaluate(() => {
+        const css = getComputedStyle(document.documentElement);
+        return Object.fromEntries(['--nota-blue-900', '--nota-blue-500', '--type-h1'].map(name => [name, css.getPropertyValue(name).replace(/\s/g, '').toLowerCase()]));
+      });
+      for (const [name, value] of Object.entries({ '--nota-blue-900': '#264961', '--nota-blue-500': '#407598', '--type-h1': 'clamp(26px,2.25vw,36px)' })) {
+        if (brand[name] !== value) failures.push(`[${vp.name}] brand token ${name}: ${brand[name] || 'missing'}, expected ${value}`);
+      }
       const m = await page.evaluate(measure, { rootSel: surface.root, touch, vw: vp.width, vh: vp.height, allowOverlap: ['.pulse-row', '.mini-reserver'] });
       const at = `[${vp.name}]`;
       if (m.sideways) failures.push(`${at} scrolls sideways (${m.scrollW} > ${m.clientW}): ${m.offenders.join('; ') || 'no outermost offender found'}`);

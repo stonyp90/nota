@@ -7,7 +7,7 @@ import { startSigningFixture } from './servers/signing-fixture.mjs';
 test('two authenticated browsers exchange real encrypted media and sign the same test document', { timeout: 150000 }, async () => {
   const fixture = await startSigningFixture();
   const browser = await chromium.launch({ args: ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--disable-features=WebRtcHideLocalIpsWithMdns', '--allow-loopback-in-peer-connection'] });
-  const pages = {}, errors = [];
+  const pages = {}, errors = [], signalConflicts = new Set();
   try {
     for (const role of ['notary', 'client']) {
       const context = await browser.newContext({ viewport: { width: 1440, height: 1100 }, permissions: ['camera', 'microphone'] });
@@ -19,6 +19,15 @@ test('two authenticated browsers exchange real encrypted media and sign the same
         window.RTCPeerConnection = class extends RTC { constructor(config) { super(config); window.__testPeers.push(this); this.addEventListener('icecandidateerror', event => window.__testIceErrors.push({ code:event.errorCode, message:event.errorText, url:event.url })); } };
       }, { role, token: fixture.tokens[role], bid: fixture.bid });
       const page = await context.newPage(); pages[role] = page;
+      // A heartbeat can win the revision between GET and POST /signal.
+      // Reject each participant's first signal and require the real handshake
+      // to recover; all subsequent signaling and media use the real server.
+      await page.route('**/api/signing-beta/sessions/*/signal', async route => {
+        if (!signalConflicts.has(role)) {
+          signalConflicts.add(role);
+          await route.fulfill({ status:409, contentType:'application/json', body:JSON.stringify({ errors:[{ code:'conflit_revision' }] }) });
+        } else await route.continue();
+      });
       page.setDefaultTimeout(20000);
       page.on('pageerror', e => errors.push(e.message));
       page.on('response', async r => { if (r.url().includes('/signing-beta/') && r.status() >= 400) console.log(role, 'API', new URL(r.url()).pathname, r.status(), await r.text()); });
@@ -36,6 +45,7 @@ test('two authenticated browsers exchange real encrypted media and sign the same
       await page.locator('#peer-verified').check();
     }
     assert.equal(await n.locator('#connection-fingerprint').textContent(), await c.locator('#connection-fingerprint').textContent());
+    assert.equal(signalConflicts.size, 2, 'both participants recovered from a stale signal revision');
     if (process.env.NOTA_SIGNING_TEST_RECONNECT === 'true') {
       const firstFingerprint = await n.locator('#connection-fingerprint').textContent();
       // Fault injection at the transport boundary, followed by the real UI

@@ -83,6 +83,8 @@ for (const lang of ['fr', 'en']) {
       await page.locator('#chat-send').click();
       await expect(input).toHaveValue('');
       await expect(page.locator('#chat-log .sup-msg[data-de="visiteur"]')).toHaveCount(1);
+      await expect(page.locator('#chat-courriel-row')).toBeHidden();
+      await page.locator('#chat-courriel-open').click();
       await page.locator('#chat-courriel').fill('chat-followup@example.test');
       const saved = page.waitForResponse(r => r.url().endsWith('/support/thread') && r.request().method() === 'PATCH');
       await page.locator('#chat-courriel-save').click();

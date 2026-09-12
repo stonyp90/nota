@@ -37,6 +37,16 @@ async function boot(t, options = {}) {
   });
   t.after(() => dom.window.close());
   let testHooks = options.gatheringHook ? '  window.__testGathered = gathered;\n' : '';
+  if (options.signalHook) testHooks += `
+    window.__testSignal = {
+      configure: function (value) {
+        joinedSession = value.id; session = value; role = 'client';
+        pc = { signalingState: 'stable', remoteDescription: { sdp: 'offer-original' } };
+        signBytes = async function () { return 'signed-answer'; };
+      },
+      send: sendSignal
+    };
+  `;
   if (options.connectionHook) testHooks += `
     window.__testConnection = {
       configure: function (value) {
@@ -50,6 +60,38 @@ async function boot(t, options = {}) {
   `;
   dom.window.eval(domain); dom.window.eval(testHooks ? script.replace('  init();', testHooks + '  init();') : script); await wait();
   return { w: dom.window, doc: dom.window.document, calls, media };
+}
+
+for (const scenario of ['heartbeat', 'repeated conflict', 'replacement session', 'replacement offer', 'access denied']) {
+  test('signaling revision recovery: ' + scenario, async t => {
+    let reads = 0, writes = 0;
+    const payloads = [];
+    const { w } = await boot(t, { signalHook: true, fetch: async (url, opts) => {
+      if (opts.method !== 'POST') {
+        reads++;
+        return { ok:true, json:async () => ({ session:{ id:reads > 1 && scenario === 'replacement session' ? 'other' : 'original', revision:reads,
+          peerSignal:{ sdp:reads > 1 && scenario === 'replacement offer' ? 'offer-new' : 'offer-original' } } }) };
+      }
+      writes++; payloads.push(JSON.parse(opts.body));
+      const rejected = writes === 1 || scenario === 'repeated conflict';
+      return { ok:!rejected, status:scenario === 'access denied' ? 403 : 409,
+        json:async () => rejected ? { errors:[{ code:scenario === 'access denied' ? 'interdit' : 'conflit_revision' }] } : {} };
+    } });
+    // Ignore the page's unauthenticated capability request during boot.
+    reads = 0;
+    w.__testSignal.configure({ id:'original' });
+    const send = w.__testSignal.send('answer', { sdp:'answer-original' });
+    if (scenario === 'heartbeat') {
+      await send;
+      assert.equal(writes, 2);
+      assert.equal(payloads[1].revision, 2);
+      assert.equal(payloads[1].sdp, payloads[0].sdp);
+      assert.equal(payloads[1].signature, payloads[0].signature);
+    } else {
+      await assert.rejects(send, scenario.startsWith('replacement') ? /session_changed/ : scenario === 'access denied' ? /interdit/ : /conflit_revision/);
+      assert.equal(writes, scenario === 'repeated conflict' ? 4 : 1);
+    }
+  });
 }
 function change(w, id, checked = true) { const el = w.document.getElementById(id); el.checked = checked; el.dispatchEvent(new w.Event('change', { bubbles: true })); }
 

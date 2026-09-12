@@ -2,9 +2,9 @@
   <!-- Brand values = the production Nota Québec lockup. -->
   <rect width="64" height="64" rx="7" fill="#264961"/>
   <g fill="#ffffff">
-    <rect x="16" y="15" width="7.5" height="34" rx="1"/>
-    <rect x="40.5" y="15" width="7.5" height="34" rx="1"/>
-    <polygon points="16,15 24,15 48,49 40,49"/>
+    <rect x="16" y="15" width="9.5" height="34" rx="1"/>
+    <rect x="38.5" y="15" width="9.5" height="34" rx="1"/>
+    <polygon points="16,15 26.2,15 48,49 37.8,49"/>
   </g>
   <rect x="40" y="8" width="16" height="16" rx="3" fill="#407598" stroke="#264961" stroke-width="3"/>
 </svg>

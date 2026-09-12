@@ -52,7 +52,7 @@ function needsTranslation(s) {
 
 test('every user-visible string in index.html has an English entry', () => {
   const html = HTML_SRC
-    .replace(/<script[\s\S]*?<\/script>/g, '\u0000')
+    .replace(/<(script|style)\b[\s\S]*?<\/\1>/g, '\u0000')
     .replace(/<!--[\s\S]*?-->/g, '\u0000');
   const texts = [];
   for (const run of html.replace(/<[^>]+>/g, '\u0000').split('\u0000')) texts.push(run);

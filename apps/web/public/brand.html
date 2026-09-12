@@ -11,13 +11,31 @@
        the brand guide. No saved choice = the system preference (the
        guarded @media block below). -->
   <script>try{var t=JSON.parse(localStorage.getItem('nota.theme')||'null');if(t==='dark'||t==='light')document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
-  <link rel="canonical" href="https://brand.nota.ca/">
+  <link rel="canonical" href="https://brand.gonota.ca/">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@700;800&display=swap">
-  <title>Nota — brand kit</title>
+  <title>Nota — Guide de marque</title>
   <style>
+    /* ==========================================================================
+       Les polices, servies par Nota — jamais par un tiers.
+       Inter (texte) et Sora (titres) arrivaient de fonts.googleapis.com : l'adresse
+       IP et l'agent de CHAQUE visiteur atteignaient Google avant toute bannière, sur
+       un site qui vend des actes notariés (propriétaire, 2026-09-12). Les octets
+       vivent désormais dans /fonts, licence OFL jointe (fonts/OFL.txt).
+       Ce sont les versions VARIABLES : un seul fichier par tranche couvre toutes
+       les graisses. `swap` garde le texte lisible pendant le chargement.
+       ========================================================================== */
+    @font-face { font-family: 'Inter'; font-style: normal; font-weight: 100 900; font-display: swap;
+      src: url('/fonts/inter-latin-ext.woff2') format('woff2');
+      unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+    @font-face { font-family: 'Inter'; font-style: normal; font-weight: 100 900; font-display: swap;
+      src: url('/fonts/inter-latin.woff2') format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+    @font-face { font-family: 'Sora'; font-style: normal; font-weight: 100 800; font-display: swap;
+      src: url('/fonts/sora-latin-ext.woff2') format('woff2');
+      unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+    @font-face { font-family: 'Sora'; font-style: normal; font-weight: 100 800; font-display: swap;
+      src: url('/fonts/sora-latin.woff2') format('woff2');
+      unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
     /* A standalone page: it cannot inherit styles.css, so the ADR 0048 colour
        roles and the ADR 0050 type scale are copied here, verbatim, from
        apps/web/public/styles.css. Change them there first. Themes use the
@@ -34,30 +52,30 @@
       --nota-blue-950: #101b26;
       --nota-orange-600: #b45309; --nota-orange-400: #f79009;
       /* Roles, light = styles.css :root */
-      --ink: #173b52; --muted: #526b78; --subtitle-ink: #000000;
-      --canvas: #eef5f7; --surface: #fbfdfd; --surface-inset: #e6f0f4;
-      --line: #c5d8df; --line-strong: #a9c3ce;
-      --blue: var(--nota-blue-600); --blue-deep: var(--nota-blue-800); --wash: var(--nota-blue-50);
-      --on-brand: #ffffff;
-      --wordmark-ink: var(--nota-blue-950); /* ADR 0048: the word is set in midnight on light */
-      --on-signal: #ffffff; /* text on the --nota-blue-500 signal fill — white in every theme (4.97:1) */
-      --canvas-surface: #fbfdfd; /* a light surface that stays light (the light lockup specimen) */
+      --ink: #173b52; --ink-muted: #526b78; --subtitle-ink: #000000;
+      --bg: #eef5f7; --surface: #fbfdfd; --surface-inset: #e6f0f4;
+      --border: #c5d8df; --border-strong: #a9c3ce;
+      --brand: var(--nota-blue-600); --brand-hover: var(--nota-blue-800); --brand-tint-solid: var(--nota-blue-50);
+      --brand-ink: #ffffff;
+      --brand-word-ink: var(--ink); /* The word uses the product text ink in both themes. */
+      --on-accent: #ffffff; /* text on the --nota-blue-500 signal fill — white in every theme (4.97:1) */
+      --light-surface: #fbfdfd; /* a light surface that stays light (the light lockup specimen) */
       /* Surfaces that stay dark in EVERY theme (the logo square, the midnight
          specimen, the code block), with the ink that reads on them. */
-      --deep: var(--nota-blue-900); --midnight: var(--nota-blue-950);
-      --ink-dark-canvas: #f4f8fa; --muted-dark-canvas: #afc2cf;
+      --mark-bg: var(--nota-blue-900); --midnight: var(--nota-blue-950);
+      --midnight-ink: #f4f8fa; --midnight-ink-muted: #afc2cf;
       --shadow-sm: 0 1px 2px rgb(16 27 38 / .05); --shadow: 0 14px 36px rgb(16 27 38 / .09);
       /* The theme switch's knob and icon tint follow the EFFECTIVE theme through
          these three blocks, so the control is right on a system-dark visit too. */
-      --tswitch-x: 0; --tswitch-sun: var(--blue); --tswitch-moon: var(--muted);
+      --tswitch-x: 0; --tswitch-sun: var(--brand); --tswitch-moon: var(--ink-muted);
       --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-      --font-display: 'Sora', var(--font-sans); --weight-display: 800;
-      --type-h1: clamp(30px, 2.6vw, 44px); --type-h1-lh: 1.02; --type-h1-ls: -.055em;
-      --type-h1-compact: clamp(28px, 8vw, 38px);
-      --type-h2: clamp(20px, 1.6vw, 26px); --type-h2-lh: 1.15; --type-h2-ls: -.045em;
+      --font-display: 'Sora', var(--font-sans); --weight-display: 700;
+      --type-h1: clamp(26px, 2.25vw, 36px); --type-h1-lh: 1.12; --type-h1-ls: -.04em;
+      --type-h1-compact: clamp(26px, 6vw, 32px);
+      --type-h2: clamp(19px, 1.5vw, 24px); --type-h2-lh: 1.2; --type-h2-ls: -.035em;
       --type-h3: 17px; --type-h3-lh: 1.3; --type-h3-ls: -.02em;
       --type-h4: 15px; --type-h4-lh: 1.3; --type-h4-ls: -.01em;
-      --type-lead: 17px; --type-lead-lh: 1.7;
+      --type-lead: 16px; --type-lead-lh: 1.6;
       --type-eyebrow: 12px; --type-eyebrow-ls: .1em;
       --type-body: 16px; --type-body-lh: 1.5;
       --radius: 8px; --radius-sm: 6px; --radius-lg: 12px;
@@ -65,27 +83,27 @@
     @media (prefers-color-scheme: dark) {
       :root:not([data-theme="light"]) {
         color-scheme: dark;
-        --ink: #f4f8fa; --muted: #afc2cf; --subtitle-ink: #f4f8fa;
-        --canvas: #101820; --surface: #0f2030; --surface-inset: #132b3f;
-        --line: #294353; --line-strong: #3f5f70;
-        --blue: var(--nota-blue-400); --blue-deep: var(--nota-blue-300); --wash: var(--surface-inset);
-        --on-brand: #061c2a; --wordmark-ink: var(--ink);
+        --ink: #f4f8fa; --ink-muted: #afc2cf; --subtitle-ink: #f4f8fa;
+        --bg: #101820; --surface: #0f2030; --surface-inset: #132b3f;
+        --border: #294353; --border-strong: #3f5f70;
+        --brand: var(--nota-blue-400); --brand-hover: var(--nota-blue-300); --brand-tint-solid: var(--surface-inset);
+        --brand-ink: #061c2a; --brand-word-ink: var(--ink);
         --shadow-sm: 0 1px 2px rgb(0 0 0 / .5); --shadow: 0 14px 36px rgb(0 0 0 / .5);
-        --tswitch-x: 24px; --tswitch-sun: var(--muted); --tswitch-moon: var(--blue);
+        --tswitch-x: 24px; --tswitch-sun: var(--ink-muted); --tswitch-moon: var(--brand);
       }
     }
     :root[data-theme="dark"] {
       color-scheme: dark;
-      --ink: #f4f8fa; --muted: #afc2cf; --subtitle-ink: #f4f8fa;
-      --canvas: #101820; --surface: #0f2030; --surface-inset: #132b3f;
-      --line: #294353; --line-strong: #3f5f70;
-      --blue: var(--nota-blue-400); --blue-deep: var(--nota-blue-300); --wash: var(--surface-inset);
-      --on-brand: #061c2a; --wordmark-ink: var(--ink);
+      --ink: #f4f8fa; --ink-muted: #afc2cf; --subtitle-ink: #f4f8fa;
+      --bg: #101820; --surface: #0f2030; --surface-inset: #132b3f;
+      --border: #294353; --border-strong: #3f5f70;
+      --brand: var(--nota-blue-400); --brand-hover: var(--nota-blue-300); --brand-tint-solid: var(--surface-inset);
+      --brand-ink: #061c2a; --brand-word-ink: var(--ink);
       --shadow-sm: 0 1px 2px rgb(0 0 0 / .5); --shadow: 0 14px 36px rgb(0 0 0 / .5);
-      --tswitch-x: 24px; --tswitch-sun: var(--muted); --tswitch-moon: var(--blue);
+      --tswitch-x: 24px; --tswitch-sun: var(--ink-muted); --tswitch-moon: var(--brand);
     }
     * { box-sizing: border-box; }
-    body { margin: 0; background: var(--canvas); color: var(--ink); font: var(--type-body)/var(--type-body-lh) var(--font-sans); }
+    body { margin: 0; background: var(--bg); color: var(--ink); font: var(--type-body)/var(--type-body-lh) var(--font-sans); }
     a { color: inherit; }
     button { font: inherit; cursor: pointer; }
     h1, h2, h3, p { margin: 0; }
@@ -99,86 +117,308 @@
        .svg-defs above), not typeset: tile + solid O T A word + QUÉBEC badge,
        the same three pieces as the carnet header. */
     .svg-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
-    /* The lockup, design 16 « Centré à 60 % » (owner, 2026-09-11): every length
+    /* The lockup, centred at 50% (ADR 0048, optical sizing amendment): every length
        derives from the tile's rendered height, --lockup-tile, through the five
-       ratios below — OTA cap height .60 of the tile, vertically centred; .12 of
+       ratios below — OTA cap height .48 of the tile, vertically centred; .12 of
        tile between tile and word; .16 between word and badge; the badge at .16 of
        tile, on --nota-blue-500 with white in both themes. The wordmark svg is its
        cap band (28 tall, 91.8 wide with the period), so its rendered height IS the cap height. */
-    .lockup { --lockup-tile: 36px; --lockup-word: .6; --lockup-gap: .12; --lockup-badge-gap: .16; --lockup-badge-size: .16;
-      display: inline-flex; align-items: center; gap: calc(var(--lockup-tile) * var(--lockup-badge-gap)); min-height: 44px; text-decoration: none; color: var(--wordmark-ink); }
+    .lockup { --lockup-tile: 36px; --lockup-word: .48; --lockup-gap: .12; --lockup-badge-gap: .16; --lockup-badge-size: .16;
+      display: inline-flex; align-items: center; gap: calc(var(--lockup-tile) * var(--lockup-badge-gap)); min-height: 44px; text-decoration: none; color: var(--brand-word-ink); }
     .brand-lockup { display: inline-flex; align-items: center; gap: calc(var(--lockup-tile) * var(--lockup-gap)); line-height: 1; }
     .brand-mark-svg { display: block; flex: none; width: var(--lockup-tile); height: var(--lockup-tile); }
     .brand-word { display: block; flex: none; height: calc(var(--lockup-tile) * var(--lockup-word)); width: calc(var(--lockup-tile) * var(--lockup-word) * 91.8 / 28); }
     .brand-word-svg { display: block; width: 100%; height: 100%; overflow: visible; }
-    .brand-sub { font: var(--weight-display) calc(var(--lockup-tile) * var(--lockup-badge-size)) / 1 var(--font-sans); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; padding: .55em .7em; background: var(--nota-blue-500); color: var(--on-signal); border-radius: 4px; }
+    .brand-sub { font: 800 calc(var(--lockup-tile) * var(--lockup-badge-size)) / 1 var(--font-sans); letter-spacing: .1em; text-transform: uppercase; white-space: nowrap; padding: .55em .7em; background: var(--nota-blue-500); color: var(--on-accent); border-radius: 4px; }
     .lockup-xl { --lockup-tile: clamp(40px, 16vw, 80px); min-height: 0; } /* ~4.2 × the tile wide: scales down so a 320px phone never scrolls sideways */
     /* The reference specimens: one on a light surface that stays light, one on the midnight canvas. */
     .lockup-specimens { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
-    .lockup-specimen { display: grid; place-items: center; min-height: 150px; padding: 28px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--canvas-surface); --wordmark-ink: var(--nota-blue-950); }
-    .lockup-specimen-dark { background: var(--midnight); border-color: var(--midnight); --wordmark-ink: var(--ink-dark-canvas); }
+    .lockup-specimen { display: grid; place-items: center; min-height: 150px; padding: 28px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--light-surface); --brand-word-ink: #173b52; }
+    .lockup-specimen-dark { background: var(--midnight); border-color: var(--midnight); --brand-word-ink: var(--midnight-ink); }
     .ratios { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px 18px; margin: 18px 0 0; padding: 0; list-style: none; }
-    .ratios li { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--muted); font-size: 13px; line-height: 1.45; }
+    .ratios li { padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--ink-muted); font-size: 13px; line-height: 1.45; }
     .ratios strong { display: block; margin-bottom: 3px; color: var(--ink); font-size: 14px; }
     .top-links { display: flex; gap: 8px; align-items: center; font-size: 13px; }
-    .top-links a { min-height: 44px; display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); padding: 8px 11px; text-decoration: none; color: var(--blue); }
-    .top-links a:hover { border-color: var(--blue); }
+    .top-links a { min-height: 44px; display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); padding: 8px 11px; text-decoration: none; color: var(--brand); }
+    .top-links a:hover { border-color: var(--brand); }
     /* Theme switch — the site's control (styles.css .tswitch), same geometry:
        28 = 2px pad + 24px cell + 2px pad; the 24px knob slides one cell over.
        ::after draws the knob so ::before can carry the coarse-pointer hit area. */
-    .tswitch { appearance: none; position: relative; display: inline-flex; align-items: center; justify-content: space-between; flex: none; width: 52px; height: 28px; padding: 2px; border: 0; border-radius: var(--radius); background: var(--surface-inset); color: var(--muted); cursor: pointer; }
+    .tswitch { appearance: none; position: relative; display: inline-flex; align-items: center; justify-content: space-between; flex: none; width: 52px; height: 28px; padding: 2px; border: 0; border-radius: var(--radius); background: var(--surface-inset); color: var(--ink-muted); cursor: pointer; }
     .tswitch svg { position: relative; z-index: 1; display: block; flex: none; margin: 0 5.5px; }
-    .tswitch::after { content: ''; position: absolute; top: 2px; left: 2px; z-index: 0; width: 24px; height: 24px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow-sm); transition: transform .16s ease; transform: translateX(var(--tswitch-x)); }
+    .tswitch::after { content: ''; position: absolute; top: 2px; left: 2px; z-index: 0; width: 24px; height: 24px; border-radius: var(--radius-sm); background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); transition: transform .16s ease; transform: translateX(var(--tswitch-x)); }
     .tswitch .tswitch-sun { color: var(--tswitch-sun); }
     .tswitch .tswitch-moon { color: var(--tswitch-moon); }
     @media (pointer: coarse) { .tswitch::before { content: ''; position: absolute; inset: -8px -4px; } }
-    .eyebrow { display: inline-flex; padding: 5px 8px; border-radius: var(--radius-sm); background: var(--wash); color: var(--subtitle-ink); font-size: var(--type-eyebrow); font-weight: var(--weight-display); letter-spacing: var(--type-eyebrow-ls); text-transform: uppercase; }
-    .lede { max-width: 680px; color: var(--muted); font-size: var(--type-lead); line-height: var(--type-lead-lh); }
+    .eyebrow { display: inline-flex; padding: 5px 8px; border-radius: var(--radius-sm); background: var(--brand-tint-solid); color: var(--subtitle-ink); font-size: var(--type-eyebrow); font-weight: var(--weight-display); letter-spacing: var(--type-eyebrow-ls); text-transform: uppercase; }
+    .lede { max-width: 680px; color: var(--ink-muted); font-size: var(--type-lead); line-height: var(--type-lead-lh); }
     .hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, .45fr); gap: 36px; align-items: end; padding: 44px 0 28px; }
-    .hero-mark { display: grid; place-items: center; min-height: 220px; padding: 35px; background: var(--deep); border-radius: var(--radius-lg); box-shadow: var(--shadow); }
+    .hero-mark { display: grid; place-items: center; min-height: 220px; padding: 35px; background: var(--mark-bg); border-radius: var(--radius-lg); box-shadow: var(--shadow); }
     .hero-mark img { width: min(170px, 48%); height: auto; }
-    .section { border-top: 1px solid var(--line); padding: 26px 0 0; margin-top: 22px; }
+    .section { border-top: 1px solid var(--border); padding: 26px 0 0; margin-top: 22px; }
     .section-head { display: flex; justify-content: space-between; align-items: end; gap: 24px; margin-bottom: 20px; }
-    .section-head p { max-width: 480px; color: var(--muted); font-size: 13px; }
+    .section-head p { max-width: 480px; color: var(--ink-muted); font-size: 13px; }
     .swatches { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
-    .swatch { appearance: none; display: grid; gap: 6px; min-width: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); text-align: left; color: var(--ink); }
-    .swatch:hover { border-color: var(--blue); box-shadow: var(--shadow); }
+    .swatch { appearance: none; display: grid; gap: 6px; min-width: 0; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--surface); text-align: left; color: var(--ink); }
+    .swatch:hover { border-color: var(--brand); box-shadow: var(--shadow); }
     .swatch-color { height: 76px; background: var(--swatch); }
     .swatch-copy { padding: 9px 10px 11px; }
     .swatch strong, .swatch code { display: block; }
     .swatch strong { font-size: 12px; }
-    .swatch code { margin-top: 2px; color: var(--muted); font-size: 11px; }
+    .swatch code { margin-top: 2px; color: var(--ink-muted); font-size: 11px; }
     .buttons { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 18px; }
+    [data-lang-seg] { display: inline-flex; gap: 4px; }
+    [data-lang-seg] button { background: transparent; color: var(--ink); font: inherit; min-width: 44px; min-height: 44px; }
+    [data-lang-seg] button[aria-pressed="true"] { border-color: var(--brand); }
     .btn { min-height: 44px; padding: 10px 15px; border: 1px solid transparent; border-radius: var(--radius); font-weight: 700; }
-    .btn-primary { background: var(--blue); color: var(--on-brand); }
-    .btn-primary:hover { background: var(--blue-deep); }
-    .btn-secondary { background: var(--surface); border-color: var(--line); color: var(--blue); }
-    .btn-secondary:hover { border-color: var(--blue); }
+    /* Aucun bouton n'est un aplat (propriétaire, 2026-09-12) : l'action
+       primaire se lit à la couleur de marque, à la graisse et au contour. */
+    .btn-primary { background: transparent; color: var(--brand); border-color: var(--brand); }
+    .btn-primary:hover { background: var(--brand-tint-solid); border-color: var(--brand-hover); color: var(--brand-hover); }
+    .btn-secondary { background: transparent; border-color: var(--border); color: var(--brand); }
+    .btn-secondary:hover { border-color: var(--brand); }
     .variants { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-    .variant { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
-    .variant-mark { display: grid; place-items: center; min-height: 112px; padding: 18px; background: var(--variant-bg, var(--wash)); border-radius: var(--radius); }
+    .variant { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+    .variant-mark { display: grid; place-items: center; min-height: 112px; padding: 18px; background: var(--variant-bg, var(--brand-tint-solid)); border-radius: var(--radius); }
     .variant-mark svg { width: 88px; height: 88px; }
     .variant-meta { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
     .variant-number { color: var(--subtitle-ink); font-size: 11px; font-weight: var(--weight-display); letter-spacing: var(--type-eyebrow-ls); }
-    .variant p { color: var(--muted); font-size: 12px; }
+    .variant p { color: var(--ink-muted); font-size: 12px; }
     .variant-dark { --variant-bg: var(--midnight); }
-    .variant-dark h3 { color: var(--ink-dark-canvas); }
-    .variant-dark p { color: var(--muted-dark-canvas); }
-    .copy { align-self: flex-start; min-height: 44px; padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--radius); background: transparent; color: var(--blue); font-size: 12px; font-weight: 700; }
-    .copy:hover { border-color: var(--blue); background: var(--wash); }
+    .variant-dark h3 { color: var(--midnight-ink); }
+    .variant-dark p { color: var(--midnight-ink-muted); }
+    .copy { align-self: flex-start; min-height: 44px; padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: transparent; color: var(--brand); font-size: 12px; font-weight: 700; }
+    .copy:hover { border-color: var(--brand); background: var(--brand-tint-solid); }
     .usage { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .usage-card { min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
-    .usage-card p { margin-top: 7px; color: var(--muted); font-size: 13px; }
-    pre { margin: 14px 0 0; padding: 13px; overflow-x: auto; background: var(--midnight); color: var(--ink-dark-canvas); border-radius: var(--radius); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
-    .footer { display: flex; justify-content: space-between; gap: 20px; padding-top: 34px; color: var(--muted); font-size: 12px; }
-    .footer a { color: var(--blue); display: inline-flex; align-items: center; min-height: 44px; }
-    :focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; }
+    .usage-card { min-width: 0; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+    .usage-card img { display: block; }
+    .usage-card a { display: inline-flex; align-items: center; min-height: 44px; }
+    .usage-card p { margin-top: 7px; color: var(--ink-muted); font-size: 13px; }
+    pre { margin: 14px 0 0; padding: 13px; overflow-x: auto; background: var(--midnight); color: var(--midnight-ink); border-radius: var(--radius); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .footer { display: flex; justify-content: space-between; gap: 20px; padding-top: 34px; color: var(--ink-muted); font-size: 12px; }
+    .footer a { color: var(--brand); display: inline-flex; align-items: center; min-height: 44px; }
+    :focus-visible { outline: 3px solid var(--brand); outline-offset: 3px; }
     @media (max-width: 800px) { .hero { grid-template-columns: 1fr; } .hero-mark { min-height: 150px; } .variants { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
     @media (max-width: 540px) { .page { width: min(100% - 24px, 430px); padding-top: 20px; } .lockup-specimen { min-height: 0; padding: 22px; } .top { align-items: flex-start; } .top-links { flex-direction: column; align-items: stretch; } .hero { padding: 28px 0 10px; } .hero-mark { min-height: 0; padding: 20px; } .swatches, .variants, .usage { grid-template-columns: 1fr; } .section-head { display: block; } .section-head p { margin-top: 8px; } .footer { display: block; } .footer a { display: block; margin-top: 7px; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .001ms !important; } }
   </style>
+<style data-nota-foundations>
+:root {
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', Menlo, monospace;
+  --font-display: 'Sora', var(--font-sans);
+  --weight-display: 700;
+  --type-h1: clamp(26px, 2.25vw, 36px);
+  --type-h1-lh: 1.12;
+  --type-h1-ls: -.04em;
+  --type-h1-compact: clamp(26px, 6vw, 32px);
+  --type-h2: clamp(19px, 1.5vw, 24px);
+  --type-h2-lh: 1.2;
+  --type-h2-ls: -.035em;
+  --type-h3: 17px;
+  --type-h3-lh: 1.3;
+  --type-h3-ls: -.02em;
+  --type-h4: 15px;
+  --type-h4-lh: 1.3;
+  --type-h4-ls: -.01em;
+  --type-lead: 16px;
+  --type-lead-lh: 1.6;
+  --type-eyebrow: 12px;
+  --type-eyebrow-ls: .1em;
+  --type-body: 16px;
+  --type-body-lh: 1.5;
+  --space-1: 2px;
+  --space-2: 4px;
+  --space-3: 6px;
+  --space-4: 8px;
+  --space-5: 10px;
+  --space-6: 12px;
+  --space-7: 14px;
+  --space-8: 16px;
+  --space-9: 18px;
+  --space-10: 20px;
+  --space-12: 24px;
+  --space-14: 28px;
+  --space-16: 32px;
+  --logo-word-ratio: .48;
+  --logo-gap-ratio: .12;
+  --logo-badge-gap-ratio: .16;
+  --logo-tile: 28px;
+  --logo-badge-bg: light-dark(#eef0f2, #2b3035);
+}
+/* Shared application chrome. Embedded by sync-brand-foundations.mjs so the
+   plan and presentation remain usable as standalone documents. */
+:root {
+  --layout-width: 1600px;
+  --layout-gutter: clamp(16px, 4vw, 28px);
+  --layout-header-height: 52px;
+  --layout-section-gap: 32px;
+  --layout-content-top: clamp(16px, 1.8vw, 24px);
+  --logo-badge-min: 9px;
+  --control-gap: 8px;
+  --control-height: 44px;
+  --type-control: 13px;
+  --header-h: var(--layout-header-height);
+  --admin-topbar-h: var(--layout-header-height);
+  --brand-word-ink: var(--ink);
+}
+
+/* The outer bar spans the viewport. Its contents align with the page rail. */
+.nota-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: var(--surface);
+  border: 0;
+  box-shadow: var(--shadow);
+  backdrop-filter: none;
+}
+.nota-header-inner {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--control-gap);
+  width: 100%;
+  min-height: var(--layout-header-height);
+  height: auto;
+  padding: 0 max(var(--layout-gutter), calc((100% - var(--layout-width)) / 2 + var(--layout-gutter)));
+  margin: 0;
+}
+.site-header.nota-header .nota-header-inner {
+  max-width: var(--layout-width);
+  margin-inline: auto;
+  padding-inline: var(--layout-gutter);
+  height: var(--layout-header-height);
+}
+.nota-header :is(.brand, .admin-brand, .lockup, .plan-brand) {
+  --lockup-tile: var(--logo-tile);
+  color: var(--ink);
+  margin-block: 0;
+  text-decoration: none;
+  flex-shrink: 0;
+  min-height: var(--control-height);
+}
+.nota-header :is(.brand, .admin-brand) {
+  --lockup-word: calc(var(--lockup-tile) * var(--logo-word-ratio));
+  --lockup-gap: calc(var(--lockup-tile) * var(--logo-gap-ratio));
+  --lockup-badge-gap: calc(var(--lockup-tile) * var(--logo-badge-gap-ratio));
+}
+.nota-header :is(.lockup, .plan-brand),
+[data-nota-surface="pitch"] .nota-header .brand {
+  --lockup-word: var(--logo-word-ratio);
+  --lockup-gap: var(--logo-gap-ratio);
+  --lockup-badge-gap: var(--logo-badge-gap-ratio);
+}
+.nota-header :is(.brand-word, .admin-brand-word, .plan-brand-word) { color: var(--ink); }
+.nota-header :is(.brand-sub, .admin-brand-sub, .brand-region, .plan-brand-region) {
+  font-size: max(var(--logo-badge-min), calc(var(--logo-tile) * .16));
+  font-family: var(--font-sans);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  padding: .55em .7em;
+  color: var(--ink-muted);
+  background: var(--logo-badge-bg);
+  border-radius: var(--radius-xs, 3px);
+}
+.nota-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--control-gap);
+  margin-left: auto;
+  min-width: 0;
+}
+.nota-menu { margin-left: auto; }
+.nota-menu > summary { display: none; }
+.nota-menu > .nota-header-actions { display: flex; }
+.nota-header .nota-header-actions :is(a, button):not(.tswitch) {
+  min-height: var(--control-height);
+  font-family: var(--font-sans);
+  font-size: var(--type-control);
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--ink);
+}
+.nota-header .nota-header-actions :is(a, button):hover { color: var(--brand); }
+.nota-header .nota-header-actions [aria-pressed="true"] { color: var(--brand); }
+
+/* Content rails share their outer margins; long prose retains its own measure. */
+[data-nota-surface="brand"] .page,
+[data-nota-surface="plan"] > main,
+[data-nota-surface="pitch"] > main {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: var(--layout-width);
+  margin-inline: auto;
+  padding: var(--layout-content-top) var(--layout-gutter) calc(var(--layout-section-gap) * 2);
+}
+[data-nota-surface="brand"] .hero { padding-top: 0; }
+[data-nota-surface="brand"] .section { margin-top: var(--layout-section-gap); padding-top: var(--layout-section-gap); }
+[data-nota-surface="brand"] .section-head { margin-bottom: 16px; gap: 24px; }
+[data-nota-surface="brand"] .section-head p { font-size: var(--type-body); line-height: var(--type-body-lh); }
+[data-nota-surface="brand"] .lede { max-width: 47ch; }
+[data-nota-surface="pitch"] .deck-head h1 { font-size: var(--type-h1); line-height: var(--type-h1-lh); letter-spacing: var(--type-h1-ls); }
+[data-nota-surface="pitch"] .deck-head p:not(.deck-kicker) { font-size: var(--type-lead); line-height: var(--type-lead-lh); }
+[data-nota-surface="plan"] .language-bar {
+  position: static;
+  padding: 0;
+  margin-block: 0;
+  border: 0;
+  box-shadow: none;
+  background: transparent;
+}
+[data-nota-surface="plan"] .language-bar .deck-link,
+[data-nota-surface="plan"] .language-bar [data-plan-focus] { margin-inline: 0; }
+[data-nota-surface="plan"] .language-bar > span { display: none; }
+[data-nota-surface="plan"] :is(.section-body, .french-summary) > :is(p, ul, ol) { max-width: 76ch; }
+
+@media (max-width: 700px) {
+  .nota-header.nota-header-inner { flex-wrap: wrap; }
+  .nota-menu > summary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--control-gap);
+    min-height: var(--control-height);
+    min-width: var(--control-height);
+    padding-inline: 8px;
+    color: var(--ink);
+    cursor: pointer;
+    font: 600 var(--type-control)/1 var(--font-sans);
+    list-style: none;
+  }
+  .nota-menu > summary::-webkit-details-marker { display: none; }
+  .nota-menu:not([open]) > .nota-header-actions { display: none; }
+  .nota-menu > .nota-header-actions {
+    position: absolute;
+    top: 100%;
+    inset-inline: var(--layout-gutter);
+    padding: 16px;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--surface);
+    box-shadow: var(--shadow);
+  }
+  [data-nota-surface="plan"] .nota-menu > .language-bar { position: absolute; padding: 16px; background: var(--surface); }
+  .nota-header .top-links { flex-direction: row; align-items: center; }
+}
+@media print {
+  .nota-header { position: static; box-shadow: none; }
+  .nota-header-actions { display: none; }
+}
+
+[data-nota-surface="acquisition"] .search-page { max-width: var(--layout-width); padding: var(--layout-content-top) var(--layout-gutter) 64px; }
+[data-nota-surface="acquisition"] .search-page :is(p, ol, ul) { max-width: 76ch; }
+.nota-header > .lang-link { display: inline-flex; align-items: center; min-height: var(--control-height); padding-inline: 12px; color: var(--ink); }
+</style>
 </head>
-<body>
+<body data-nota-surface="brand">
   <!-- The Nota lockup (exploration 01 « Monogramme lié ») is drawn ONCE, in
        index.html; this is the same drawing, byte for byte, so every mark on
        this surface is a <use href="#nota-logomark"> / <use href="#nota-wordmark">.
@@ -187,9 +427,9 @@
     <symbol id="nota-logomark" viewBox="0 0 64 64">
       <rect width="64" height="64" rx="7" fill="#264961"/>
       <g fill="#ffffff">
-        <rect x="16" y="15" width="7.5" height="34" rx="1"/>
-        <rect x="40.5" y="15" width="7.5" height="34" rx="1"/>
-        <polygon points="16,15 24,15 48,49 40,49"/>
+        <rect x="16" y="15" width="9.5" height="34" rx="1"/>
+        <rect x="38.5" y="15" width="9.5" height="34" rx="1"/>
+        <polygon points="16,15 26.2,15 48,49 37.8,49"/>
       </g>
       <rect x="40" y="8" width="16" height="16" rx="3" fill="#407598" stroke="#264961" stroke-width="3"/>
     </symbol>
@@ -198,35 +438,36 @@
          owner 2026-09-11) hold. -->
     <symbol id="nota-wordmark" viewBox="0 3.5 91.8 28">
       <g fill="currentColor" fill-rule="evenodd">
-        <path d="M0 8.5a5 5 0 0 1 5-5H22a5 5 0 0 1 5 5V26.5a5 5 0 0 1-5 5H5a5 5 0 0 1-5-5ZM7.3 12.3v10.4a1.5 1.5 0 0 0 1.5 1.5h9.4a1.5 1.5 0 0 0 1.5-1.5V12.3a1.5 1.5 0 0 0-1.5-1.5H8.8a1.5 1.5 0 0 0-1.5 1.5Z"/>
-        <path d="M28.4 3.5H55V10.8H45.35V27.3L38.05 31.5V10.8H28.4Z"/>
-        <path d="M66.5 3.5H72.5L84.1 31.5H76.3L74.68 26.25H64.32L62.7 31.5H54.9ZM69.5 9.5L72.73 19.95H66.27Z"/>
+        <path d="M0 8.5a5 5 0 0 1 5-5H22a5 5 0 0 1 5 5V26.5a5 5 0 0 1-5 5H5a5 5 0 0 1-5-5ZM7.8 12.8v9.4a1.5 1.5 0 0 0 1.5 1.5h8.4a1.5 1.5 0 0 0 1.5-1.5V12.8a1.5 1.5 0 0 0-1.5-1.5H9.3a1.5 1.5 0 0 0-1.5 1.5Z"/>
+        <path d="M31 3.5H57.6V11.3H48.2V27.02L40.4 31.5V11.3H31Z"/>
+        <path d="M65.17 6.7L70.74 3.5H72.5L84.1 31.5H75.77L73.93 25.89H64.95L63.23 31.5H54.9ZM69.5 10L73 20.3H66Z"/>
       </g>
       <!-- A signal-blue period closes the word (« NOTA. »), the same blue as the tile's square. -->
       <rect x="87.4" y="27.1" width="4.4" height="4.4" rx="1" fill="#407598"/>
     </symbol>
   </svg>
-  <main class="page">
-    <header class="top">
-      <a class="lockup" href="/" aria-label="Retour à Nota"><span class="brand-lockup" aria-hidden="true"><svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 3.5 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg></span></span><span class="brand-sub" aria-hidden="true">Québec</span></a>
-      <nav class="top-links" aria-label="Ressources de marque">
-        <a href="favicon.svg" download>Télécharger le logo</a>
-        <a href="brand-explorations.html">Planche complète</a>
+    <header class="top nota-header nota-header-inner">
+      <a class="lockup" href="https://gonota.ca/" aria-label="Retour à Nota"><span class="brand-lockup" aria-hidden="true"><svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg></span></span><span class="brand-sub" aria-hidden="true">Québec</span></a>
+      <details class="nota-menu"><summary><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Menu</span></summary><nav class="top-links nota-header-actions" aria-label="Ressources de marque">
+        <span data-lang-seg data-i18n-skip><button class="btn" data-set-lang="fr">FR</button> <button class="btn" data-set-lang="en">EN</button></span>
+        <a href="nota-logo-light.svg" download>Télécharger le logo</a>
+        <a href="#downloads-title">Ressources officielles</a>
         <!-- Theme: the site's sun/moon switch (index.html #theme-toggle), checked = dark. -->
         <button type="button" class="tswitch" id="theme-toggle" role="switch" aria-checked="false" aria-label="Thème clair">
           <svg class="tswitch-sun" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
           <svg class="tswitch-moon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
         </button>
-      </nav>
+      </nav></details>
     </header>
+  <main class="page">
 
     <section class="hero" aria-labelledby="brand-title">
       <div>
-        <span class="eyebrow">brand.nota.ca · Nota</span>
+        <span class="eyebrow">brand.gonota.ca · Nota</span>
         <h1 id="brand-title">Une identité claire, partout où Nota apparaît.</h1>
         <p class="lede">Le logo, les couleurs et les boutons de Nota sont ici. Utilisez les ressources directement dans votre site, votre présentation ou votre signature de courriel.</p>
         <div class="buttons">
-          <a class="btn btn-primary" href="favicon.svg" download>Obtenir le logo SVG</a>
+          <a class="btn btn-primary" href="nota-logo-light.svg" download>Obtenir le logo SVG</a>
           <a class="btn btn-secondary" href="og.svg" download>Obtenir la carte sociale</a>
         </div>
       </div>
@@ -234,18 +475,19 @@
     </section>
 
     <section class="section" aria-labelledby="lockup-title">
-      <div class="section-head"><h2 id="lockup-title">Le lockup · mise en page 16</h2><p>La direction 01 a donné le monogramme ; la planche 02 sa mise en page (le carré-signal de la tuile donne sa couleur au badge) ; la planche 03 sa taille (OTA centré à 60 % de la tuile) ; la planche 04 ses deux détails de lettres, combinés : le T signé et le point final. La <a href="brand-explorations.html">planche complète</a> montre les 36 pistes.</p></div>
+      <div class="section-head"><h2 id="lockup-title">Le logo officiel</h2><p>Le logo officiel associe le monogramme N aux lettres OTA et au point carré. La même géométrie apparaît dans le carnet, la console admin et la salle de signature.</p></div>
       <div class="lockup-specimens">
-        <div class="lockup-specimen" aria-label="Lockup Nota Québec sur fond clair"><span class="lockup lockup-xl"><span class="brand-lockup" aria-hidden="true"><svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 3.5 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg></span></span><span class="brand-sub" aria-hidden="true">Québec</span></span></div>
-        <div class="lockup-specimen lockup-specimen-dark" aria-label="Lockup Nota Québec sur fond sombre"><span class="lockup lockup-xl"><span class="brand-lockup" aria-hidden="true"><svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 3.5 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg></span></span><span class="brand-sub" aria-hidden="true">Québec</span></span></div>
+        <div class="lockup-specimen" aria-label="Lockup Nota Québec sur fond clair"><span class="lockup lockup-xl"><span class="brand-lockup" aria-hidden="true"><svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg></span></span><span class="brand-sub" aria-hidden="true">Québec</span></span></div>
+        <div class="lockup-specimen lockup-specimen-dark" aria-label="Lockup Nota Québec sur fond sombre"><span class="lockup lockup-xl"><span class="brand-lockup" aria-hidden="true"><svg class="brand-mark-svg" viewBox="0 0 64 64" focusable="false"><use href="#nota-logomark"/></svg><span class="brand-word"><svg class="brand-word-svg" viewBox="0 0 91.8 28" focusable="false"><use href="#nota-wordmark"/></svg></span></span><span class="brand-sub" aria-hidden="true">Québec</span></span></div>
       </div>
       <ul class="ratios" aria-label="Les cinq rapports du lockup">
         <li><strong>Tuile</strong>Un carré arrondi à 7/64 de son côté, carré-signal en haut à droite ; sa hauteur rendue est l’unité de tout le reste.</li>
-        <li><strong>Mot · 0,60</strong>Les capitales OTA (O carré) font 60 % de la hauteur de la tuile et sont centrées verticalement sur elle.</li>
+        <li><strong>Mot · 0,48</strong>Les capitales OTA (O carré) font 48 % de la hauteur de la tuile et sont centrées verticalement sur elle.</li>
         <li><strong>Air tuile → mot · 0,12</strong>Entre la tuile et le mot, 12 % de la hauteur de la tuile.</li>
         <li><strong>Air mot → badge · 0,16</strong>Entre le mot et le badge QUÉBEC, 16 % de la hauteur de la tuile.</li>
-        <li><strong>Badge · 0,16</strong>QUÉBEC en 16 % de la hauteur de la tuile, graisse 800, interlettrage 0,1 em, rembourrage 0,55 em / 0,7 em, coins 4 px, sur le bleu signal (#407598) avec du blanc, dans les deux thèmes.</li>
-        <li><strong>Le T signé</strong>Le fût du T se termine en biseau (de 27,3 à 31,5 sur sa gauche), la même pente que la diagonale du N : une seule pente dans toute la marque.</li>
+        <li><strong>Badge · 0,16</strong>QUÉBEC en 16 % de la hauteur de la tuile, graisse 800, interlettrage 0,1 em, rembourrage 0,55 em / 0,7 em, coins 3 px, sur le bleu signal (#407598) avec du blanc, dans les deux thèmes.</li>
+        <li><strong>Le T signé</strong>Le fût du T se termine en biseau, de 27,02 à droite à 31,5 à gauche, en écho à la diagonale du N.</li>
+        <li><strong>Le A coupé</strong>Le sommet du A est tranché sur sa gauche, à la pente du biseau du T : la marque porte une seule coupe, répétée — la diagonale du N, le fût du T, le sommet du A.</li>
         <li><strong>Le point final</strong>Un carré-signal de 4,4 × 4,4 (coins 1), posé sur la ligne de base après le A, ferme le mot comme un point : « NOTA. » — la ponctuation d’un acte signé. Il élargit la bande du mot à 91,8 pour 28 de haut.</li>
       </ul>
     </section>
@@ -254,41 +496,60 @@
       <div class="section-head"><h2 id="colors-title">Couleurs de marque</h2><p>Cliquez sur une couleur pour copier sa valeur hexadécimale. Les couleurs de service de l’application restent réservées aux données.</p></div>
       <div class="swatches">
         <button class="swatch" data-copy="#264961" style="--swatch:#264961"><span class="swatch-color"></span><span class="swatch-copy"><strong>Carré du logo</strong><code>#264961</code></span></button>
-        <button class="swatch" data-copy="#386888" style="--swatch:#386888"><span class="swatch-color"></span><span class="swatch-copy"><strong>Blue-teal · action</strong><code>#386888</code></span></button>
-        <button class="swatch" data-copy="#407598" style="--swatch:#407598"><span class="swatch-color"></span><span class="swatch-copy"><strong>Cyan signal</strong><code>#407598</code></span></button>
-        <button class="swatch" data-copy="#101b26" style="--swatch:#101b26"><span class="swatch-color"></span><span class="swatch-copy"><strong>Midnight ink</strong><code>#101B26</code></span></button>
-        <button class="swatch" data-copy="#b45309" style="--swatch:#b45309"><span class="swatch-color"></span><span class="swatch-copy"><strong>Warm accent</strong><code>#B45309 · #F79009 en sombre</code></span></button>
+        <button class="swatch" data-copy="#386888" style="--swatch:#386888"><span class="swatch-color"></span><span class="swatch-copy"><strong>Bleu · action</strong><code>#386888</code></span></button>
+        <button class="swatch" data-copy="#407598" style="--swatch:#407598"><span class="swatch-color"></span><span class="swatch-copy"><strong>Bleu signal</strong><code>#407598</code></span></button>
+        <button class="swatch" data-copy="#101b26" style="--swatch:#101b26"><span class="swatch-color"></span><span class="swatch-copy"><strong>Encre nuit</strong><code>#101B26</code></span></button>
+        <button class="swatch" data-copy="#b45309" style="--swatch:#b45309"><span class="swatch-color"></span><span class="swatch-copy"><strong>Accent chaud</strong><code>#B45309 · #F79009 en sombre</code></span></button>
         <button class="swatch" data-copy="#ebf1f5" style="--swatch:#ebf1f5"><span class="swatch-color"></span><span class="swatch-copy"><strong>Lavis Québec</strong><code>#EBF1F5</code></span></button>
         <button class="swatch" data-copy="#eef5f7" style="--swatch:#eef5f7"><span class="swatch-color"></span><span class="swatch-copy"><strong>Canevas</strong><code>#EEF5F7 · surface #FBFDFD</code></span></button>
       </div>
       <div class="buttons" aria-label="Exemples de boutons">
-        <button class="btn btn-primary" data-copy="background:#386888;color:#ffffff;border-radius:8px">Action primaire · #386888</button>
-        <button class="btn btn-secondary" data-copy="border:1px solid #c5d8df;color:#386888;border-radius:8px">Action secondaire · contour</button>
+        <button class="btn btn-primary" data-copy="background:transparent;border:1px solid #386888;color:#386888;font-weight:700;border-radius:8px">Action primaire · contour #386888</button>
+        <button class="btn btn-secondary" data-copy="background:transparent;border:1px solid #c5d8df;color:#386888;border-radius:8px">Action secondaire · contour discret</button>
       </div>
     </section>
 
-    <section class="section" aria-labelledby="variants-title">
-      <div class="section-head"><h2 id="variants-title">Neuf directions de logo</h2><p>La direction 01 est la marque de production. Les huit autres restent disponibles pour explorer une campagne, une présentation ou une déclinaison éditoriale.</p></div>
-      <div class="variants">
-        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#nota-logomark"/></svg></div><div class="variant-meta"><span class="variant-number">01 · PRODUCTION</span><h3>Monogramme lié</h3></div><p>Le N ouvre directement le mot. Lisible en petit format.</p><button class="copy" data-copy='<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="7" fill="#264961"/><g fill="#ffffff"><rect x="16" y="15" width="7.5" height="34" rx="1"/><rect x="40.5" y="15" width="7.5" height="34" rx="1"/><polygon points="16,15 24,15 48,49 40,49"/></g><rect x="40" y="8" width="16" height="16" rx="3" fill="#407598" stroke="#264961" stroke-width="3"/></svg>'>Copier le SVG</button></article>
-        <article class="variant variant-dark"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="26" fill="none" stroke="#f79009" stroke-width="3"/><path d="M21 46V18h6l11 16V18h6v28h-6L27 30v16z" fill="#ffffff"/></svg></div><div class="variant-meta"><span class="variant-number">02</span><h3>Sceau</h3></div><p>Institutionnel, sans être froid.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="26" fill="none" stroke="#f79009" stroke-width="3"/><path d="M21 46V18h6l11 16V18h6v28h-6L27 30v16z" fill="#ffffff"/></svg>'>Copier le SVG</button></article>
-        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M13 7h30l8 8v42H13z" fill="#ffffff" stroke="#386888" stroke-width="3"/><path d="M43 7v10h8M22 28h20M22 37h20M22 46h14" fill="none" stroke="#386888" stroke-width="3" stroke-linecap="round"/><path d="m20 15 7 9 7-9" fill="none" stroke="#b45309" stroke-width="3" stroke-linecap="round"/></svg></div><div class="variant-meta"><span class="variant-number">03</span><h3>Feuillet d’acte</h3></div><p>Le document devient le signe.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><path d="M13 7h30l8 8v42H13z" fill="#ffffff" stroke="#386888" stroke-width="3"/><path d="M43 7v10h8M22 28h20M22 37h20M22 46h14" fill="none" stroke="#386888" stroke-width="3"/></svg>'>Copier le SVG</button></article>
-        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M17 47V17h7l15 21V17h8v30h-8L25 26v21z" fill="#386888"/><path d="M8 49c12-7 17 5 27-2 8-5 12-1 21-9" fill="none" stroke="#b45309" stroke-width="3" stroke-linecap="round"/></svg></div><div class="variant-meta"><span class="variant-number">04</span><h3>Paraphe continu</h3></div><p>Une ligne de signature traverse le nom.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><path d="M17 47V17h7l15 21V17h8v30h-8L25 26v21z" fill="#386888"/><path d="M8 49c12-7 17 5 27-2 8-5 12-1 21-9" fill="none" stroke="#b45309" stroke-width="3"/></svg>'>Copier le SVG</button></article>
-        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="8" y="10" width="48" height="44" rx="5" fill="none" stroke="#407598" stroke-width="3"/><path d="M20 10v44M27 20h20M27 30h20M27 40h13" fill="none" stroke="#386888" stroke-width="3" stroke-linecap="round"/><path d="M14 17h5" fill="none" stroke="#b45309" stroke-width="3" stroke-linecap="round"/></svg></div><div class="variant-meta"><span class="variant-number">05</span><h3>Registre</h3></div><p>Des lignes qui évoquent le carnet public.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><rect x="8" y="10" width="48" height="44" rx="5" fill="none" stroke="#407598" stroke-width="3"/><path d="M20 10v44M27 20h20M27 30h20M27 40h13" fill="none" stroke="#386888" stroke-width="3"/></svg>'>Copier le SVG</button></article>
-        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M11 46V18h7l14 18 14-18h7v28h-7V30L32 48 18 30v16z" fill="#386888"/><path d="M18 52h28" fill="none" stroke="#b45309" stroke-width="4" stroke-linecap="round"/></svg></div><div class="variant-meta"><span class="variant-number">06</span><h3>Pont notarial</h3></div><p>Le N relie client, notaire et date.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><path d="M11 46V18h7l14 18 14-18h7v28h-7V30L32 48 18 30v16z" fill="#386888"/><path d="M18 52h28" fill="none" stroke="#b45309" stroke-width="4"/></svg>'>Copier le SVG</button></article>
-        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><rect x="10" y="14" width="44" height="39" rx="6" fill="#386888"/><path d="M10 25h44M20 9v12M44 9v12M22 35h20M22 43h12" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/><circle cx="46" cy="43" r="7" fill="#b45309" stroke="#101b26" stroke-width="3"/></svg></div><div class="variant-meta"><span class="variant-number">07</span><h3>Date réservée</h3></div><p>Le repère devient notre signature.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><rect x="10" y="14" width="44" height="39" rx="6" fill="#386888"/><circle cx="46" cy="43" r="7" fill="#b45309"/></svg>'>Copier le SVG</button></article>
-        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M22 9H9v13M42 9h13v13M9 42v13h13M55 42v13H42" fill="none" stroke="#b45309" stroke-width="4" stroke-linecap="round"/><path d="M22 46V18h6l10 15V18h6v28h-6L28 31v15z" fill="#386888"/></svg></div><div class="variant-meta"><span class="variant-number">08</span><h3>Cadre de preuve</h3></div><p>Des coins qui rappellent l’acte encadré.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><path d="M22 9H9v13M42 9h13v13M9 42v13h13M55 42v13H42" fill="none" stroke="#b45309" stroke-width="4"/><path d="M22 46V18h6l10 15V18h6v28h-6L28 31v15z" fill="#386888"/></svg>'>Copier le SVG</button></article>
-        <article class="variant"><div class="variant-mark"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 5l8 19 19 8-19 8-8 19-8-19-19-8 19-8z" fill="#ebf1f5" stroke="#386888" stroke-width="3"/><path d="M24 46V18h6l10 15V18h5v28h-5L30 31v15z" fill="#386888"/><circle cx="50" cy="14" r="5" fill="#b45309"/></svg></div><div class="variant-meta"><span class="variant-number">09</span><h3>Rosace de Québec</h3></div><p>Une géométrie patrimoniale, plus mémorable.</p><button class="copy" data-copy='<svg viewBox="0 0 64 64"><path d="M32 5l8 19 19 8-19 8-8 19-8-19-19-8 19-8z" fill="#ebf1f5" stroke="#386888" stroke-width="3"/><path d="M24 46V18h6l10 15V18h5v28h-5L30 31v15z" fill="#386888"/></svg>'>Copier le SVG</button></article>
+    <!-- Le registre d'encre. Exposé ici parce que le propriétaire l'a demandé
+         (2026-09-12) : une règle qui ne vit que dans la feuille de style
+         redérive — cinq titres étaient repassés au bleu entre deux vagues. -->
+    <section class="section" aria-labelledby="encre-title">
+      <div class="section-head"><h2 id="encre-title">Registre d’encre</h2><p>Un titre est <strong>blanc ou noir</strong>, en toutes circonstances. Le bleu ne porte jamais le libellé principal : il mentionne une information, et cela reste rare.</p></div>
+      <div class="usage">
+        <article class="usage-card"><h3>Blanc ou noir</h3><p>Titres, sur-titres et libellés principaux. Sur fond clair, le noir&nbsp;; sur fond de nuit, le blanc. Un état — survol, choix, onglet retenu — ne change pas l’encre d’un titre : c’est le fond, le cadre ou le crochet qui le disent.</p><pre>h1, h2, h3      color: var(--ink)
+.eyebrow        color: var(--subtitle-ink)
+.pulse-svc      color: var(--ink)   /* même survolé */</pre><button class="copy" data-copy="h1,h2,h3{color:var(--ink)} .eyebrow{color:var(--subtitle-ink)}">Copier la règle</button></article>
+        <article class="usage-card"><h3>Bleu, et rarement</h3><p>Un montant, un lien, une pastille, un glyphe, le cadre d’un contrôle retenu. Sur fond de nuit, la marque devient de l’encre illisible (2,5:1)&nbsp;: c’est <code>--brand-on-surface</code> qui prend le relais, jamais <code>--brand</code> nu. Le mot du lockup, lui, EST de l’encre : blanc sur la nuit, noir sur le jour, comme un titre — seul le point final reste bleu.</p><pre>.nc-h-amt       color: var(--brand)
+.chip.is-on     color: var(--brand-on-surface)
+.brand-word     color: var(--brand-word-ink)</pre><button class="copy" data-copy=".nc-h-amt{color:var(--brand)} .chip.is-on{color:var(--brand-on-surface)} .brand-word{color:var(--brand-word-ink)}">Copier la règle</button></article>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="layout-title">
+      <div class="section-head"><h2 id="layout-title">Mise en page commune</h2><p>Les mêmes repères guident le site, le guide de marque, le plan d’affaires et la présentation.</p></div>
+      <div class="usage">
+        <article class="usage-card"><h3>En-tête et menu</h3><p>Logo à gauche, commandes à droite. Sur téléphone, les commandes des documents se rangent dans le menu.</p><p>Hauteur : 52 px. Tuile du logo : 28 px. Cible des commandes : 44 px.</p><p>Dans les en-têtes, le badge utilise un fond gris adapté au thème et un texte de 9 px minimum. Les ressources de marque conservent le badge bleu.</p></article>
+        <article class="usage-card"><h3>Titres et sous-titres</h3><p>Sora 700 pour les titres. Inter pour le texte, les introductions et les commandes. L’encre suit le thème.</p><p>Titre de page : 26–36 px. Section : 19–24 px. Carte : 17 px. Petit titre : 15 px.</p></article>
+        <article class="usage-card"><h3>Marges et espacement</h3><p>Une marge latérale de 16 à 28 px et une largeur maximale de 1 600 px. Les paragraphes longs gardent une mesure de lecture plus étroite.</p><p>Texte courant et introduction : 16 px. Espacement des sections du guide : 32 px.</p></article>
+      </div>
+    </section>
+
+    <section class="section" aria-labelledby="downloads-title">
+      <div class="section-head"><h2 id="downloads-title">Ressources officielles</h2><p>Pour votre portfolio, votre site ou votre présentation, utilisez uniquement les fichiers ci-dessous. Les planches exploratoires ne sont pas des variantes approuvées.</p></div>
+      <div class="usage">
+        <article class="usage-card"><h3>Logo sur fond clair</h3><img src="nota-logo-light.svg" alt="Nota" width="230" height="96" style="background:#fbfdfd;max-width:100%"><p><a href="nota-logo-light.svg" download>Télécharger le logo pour fond clair</a></p></article>
+        <article class="usage-card"><h3>Logo sur fond sombre</h3><img src="nota-logo-dark.svg" alt="Nota" width="230" height="96" style="background:#101820;max-width:100%"><p><a href="nota-logo-dark.svg" download>Télécharger le logo pour fond sombre</a></p></article>
+        <article class="usage-card"><h3>Signature de courriel</h3><p>Ouvrez le modèle, copiez la signature dans votre logiciel de courriel, puis remplacez le nom et le rôle par les vôtres.</p><a href="signature-courriel.html">Ouvrir la signature</a></article>
+        <article class="usage-card"><h3>Règles de reproduction</h3><p>Conservez les proportions, les couleurs et l’espace libre intégré au SVG. Ne redessinez pas les lettres, ne retirez pas le carré du N et n’ajoutez ni ombre ni contour. Affichez le logo à au moins 115 px de largeur; en dessous, utilisez le monogramme.</p><p>Utilisez Sora pour les titres et Inter pour le texte. Les polices et leur licence sont offertes dans le dossier fonts.</p><a href="favicon.svg" download>Télécharger le monogramme</a></article>
       </div>
     </section>
 
     <section class="section" aria-labelledby="usage-title">
       <div class="section-head"><h2 id="usage-title">Utiliser Nota correctement</h2><p>Gardez le logo intact, conservez son espace libre et utilisez les tokens sémantiques plutôt que des couleurs arbitraires.</p></div>
       <div class="usage">
-        <article class="usage-card"><h3>Logo hébergé</h3><p>Pour une référence toujours à jour, utilisez l’asset public :</p><pre>&lt;img src="https://brand.nota.ca/favicon.svg"
-  alt="Nota" width="64" height="64"&gt;</pre><button class="copy" data-copy='<img src="https://brand.nota.ca/favicon.svg" alt="Nota" width="64" height="64">'>Copier le HTML</button></article>
+        <article class="usage-card"><h3>Logo hébergé</h3><p>Pour une référence toujours à jour, utilisez l’asset public :</p><pre>&lt;img src="https://brand.gonota.ca/favicon.svg"
+  alt="Nota" width="64" height="64"&gt;</pre><button class="copy" data-copy='<img src="https://brand.gonota.ca/favicon.svg" alt="Nota" width="64" height="64">'>Copier le HTML</button></article>
         <article class="usage-card"><h3>Tokens CSS</h3><p>Ce sont les noms exacts que Nota utilise dans son propre code (ADR 0048) : un site partenaire parle ainsi la même langue.</p><pre>:root {
-  --nota-blue-950: #101b26; /* encre du mot-symbole */
+  --nota-blue-950: #101b26; /* bleu nuit */
   --nota-blue-900: #264961; /* carré du logo */
   --nota-blue-800: #274a62; /* survol / profond */
   --nota-blue-600: #386888; /* action primaire */
@@ -301,13 +562,18 @@
 
     <footer class="footer"><span>Nota · kit de marque public · 2026</span><a href="mailto:bonjour@gonota.ca">Une question sur l’utilisation du logo?</a></footer>
   </main>
+  <script src="i18n.js"></script>
   <script>
     (function () {
       var buttons = document.querySelectorAll('[data-copy]');
       buttons.forEach(function (button) {
+        // Preserve the swatch and its hex code; feedback changes only the label.
+        var label = button.querySelector('.swatch-copy strong') || button;
+        var originalLabel = label.textContent;
+        var resetTimer;
         button.addEventListener('click', function () {
           var value = button.getAttribute('data-copy') || '';
-          var done = function () { var old = button.textContent; button.textContent = 'Copié'; window.setTimeout(function () { button.textContent = old; }, 1400); };
+          var done = function () { window.clearTimeout(resetTimer); label.textContent = window.NotaI18N.t('Copié'); resetTimer = window.setTimeout(function () { label.textContent = originalLabel; }, 1400); };
           if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(value).then(done).catch(function () {});
           else { var area = document.createElement('textarea'); area.value = value; area.setAttribute('readonly', ''); area.style.position = 'fixed'; area.style.opacity = '0'; document.body.appendChild(area); area.select(); try { document.execCommand('copy'); done(); } catch (e) {} area.remove(); }
         });
@@ -332,5 +598,24 @@
       sync();
     }());
   </script>
+<script data-nota-navigation>
+(() => {
+  const menu = document.querySelector('.nota-menu');
+  if (!menu) return;
+  const mobile = matchMedia('(max-width: 700px)');
+  const sync = () => { menu.open = !mobile.matches; };
+  sync();
+  mobile.addEventListener('change', sync);
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && mobile.matches && menu.open) {
+      menu.open = false;
+      menu.querySelector('summary').focus();
+    }
+  });
+  document.addEventListener('click', event => {
+    if (mobile.matches && menu.open && !menu.contains(event.target)) menu.open = false;
+  });
+})();
+</script>
 </body>
 </html>

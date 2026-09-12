@@ -153,13 +153,18 @@ test('message/request-key validation rejects malformed retry credentials before 
   }
 });
 
-test('a stalled callback returns a retryable bounded result and retains its delivery lease', async () => {
-  const f = fixture('memory', { async onSupportReply() { return new Promise(() => {}); } });
+test('a stalled callback returns a retryable bounded result and retains its delivery lease', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const entered = deferred();
+  const f = fixture('memory', { async onSupportReply() { entered.resolve(); return new Promise(() => {}); } });
   await f.repo.putSupportThread({ id: 'thread', courriel: 'client@example.ca', messages: [] });
-  const start = Date.now();
-  const result = await f.service({ notifyFlushMs: 20 }).reply({ threadId: 'thread', texte: 'Réponse.', messageId: 'slow-reply' });
+  const pending = f.service({ notifyFlushMs: 20 }).reply({ threadId: 'thread', texte: 'Réponse.', messageId: 'slow-reply' });
+  await entered.promise;
+  // Exercise the configured deadline without depending on host CPU scheduling.
+  t.mock.timers.tick(20);
+  const result = await pending;
   assert.equal(result.ok, true);
   assert.equal(result.notification.timedOut, true);
-  assert.ok(Date.now() - start < 1000);
+  assert.equal(result.notification.retryable, true);
   assert.equal((await f.repo.getSupportThread('thread')).messages[0].delivery.state, 'sending');
 });

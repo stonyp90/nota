@@ -130,8 +130,12 @@ test.describe('la salle de signature (ADR 0047)', () => {
       'frame-ancestors': ["'none'"],
       'img-src': ["'self'", 'data:'],
       'media-src': ["'self'", 'blob:'],
-      'style-src': ["'self'", "'unsafe-inline'", 'https://rsms.me', 'https://fonts.googleapis.com'],
-      'font-src': ["'self'", 'https://rsms.me', 'https://fonts.gstatic.com', 'data:'],
+      // Nota sert ses propres polices depuis le 2026-09-12 : aucun hôte tiers
+      // n'est plus nommé ici, donc une feuille tierce ajoutée par mégarde est
+      // simplement bloquée. `data:` reste, les deux documents partagés (deck,
+      // plan d'affaires) embarquant leurs fontes en base64.
+      'style-src': ["'self'", "'unsafe-inline'"],
+      'font-src': ["'self'", 'data:'],
       'script-src': ["'self'", "'unsafe-inline'", 'https://www.googletagmanager.com'],
       'connect-src': [
         "'self'",

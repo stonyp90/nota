@@ -113,3 +113,28 @@ When('un client envoie {string} par le formulaire Nous joindre avec le courriel 
   this.supportToken = j.token;
   this.supportThreadId = j.threadId;
 });
+
+Given('une réponse de soutien générale dans les deux langues', function () {
+  this.reviewedSupport = {
+    fr: { question: 'Où changer la langue du site ?', answer: 'Utilisez le sélecteur de langue dans l’en-tête.' },
+    en: { question: 'Where can I change the site language?', answer: 'Use the language selector in the header.' },
+  };
+});
+Then('cette réponse de soutien exige une approbation explicite', function () {
+  assert.equal(require('@nota/domain').validateSupportKnowledge(this.reviewedSupport).ok, false);
+});
+When('cette réponse de soutien est approuvée', function () {
+  this.reviewedSupport = { ...this.reviewedSupport, approved: true, active: true, id: 'reviewed' };
+  assert.equal(require('../../apps/api/src/support-knowledge').validateKnowledge(this.reviewedSupport).ok, true);
+});
+Then('une question correspondante reçoit la réponse approuvée sans appel au modèle', async function () {
+  const assistant = require('../../apps/api/src/support-assistant').createSupportAssistant({ knowledge: [this.reviewedSupport] });
+  for (const locale of ['fr', 'en']) {
+    const answer = await assistant.answer({ question: this.reviewedSupport[locale].question, locale });
+    assert.equal(answer.texte, this.reviewedSupport[locale].answer);
+    assert.equal(answer.escalade, false);
+  }
+});
+Then('une question différente ne réutilise pas cette réponse', function () {
+  assert.equal(require('../../apps/api/src/support-knowledge').matchKnowledge([this.reviewedSupport], 'Une autre question', 'fr'), null);
+});

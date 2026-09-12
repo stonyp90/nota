@@ -102,3 +102,22 @@ posaient 15–21 px, une graisse 700 ou leur propre approche.
    de `signature.css` et teintait encore la scène vidéo, les plaques et le
    document — et son titre de document (`.paper h3`) passe de Georgia 25 px au
    barreau h2 en Sora 800.
+
+## Addendum — 2026-09-12: quieter typography, translucent panels and motion
+
+The owner asked for balanced text sizes, less opaque panels, subtle shadows
+and animation throughout the Nota experience. The shared scale is now h1
+`clamp(26px, 2.25vw, 36px)` / 1.12, compact h1 `clamp(26px, 6vw, 32px)`,
+h2 `clamp(19px, 1.5vw, 24px)` / 1.2 and lead 16 px / 1.6. Sora headings use
+weight 700. Body text remains 16 px; h3 and h4 remain 17 and 15 px. Web, admin,
+signing, brand references and document generators share these values.
+
+Partner codes and reward amounts sit below the page title in the hierarchy.
+The partner lead selector targets only introductory copy: it must not enlarge
+the reward timing notes or eligibility text. Panel paint uses an 84% surface
+mix, with softer borders and layered shadows; text keeps full opacity.
+
+Short fades and small translations support navigation, panel entry and focus.
+Reduced-motion preferences suppress these animations, transitions and smooth
+scrolling. Browser checks cover text hierarchy, blended contrast, overflow,
+light/dark themes and reduced motion at phone, laptop and desktop widths.

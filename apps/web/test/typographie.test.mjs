@@ -51,10 +51,10 @@ test('les jetons de l’échelle vivent dans :root, copiés de la bêta', () => 
     assert.match(CSS, new RegExp('(^|[;\\s])' + t + ':', 'm'), t + ' manque dans styles.css');
   }
   assert.match(CSS, /--font-display:\s*'Sora'/, 'la face d’affichage est Sora');
-  assert.match(CSS, /--type-h1:\s*clamp\(30px, 2\.6vw, 44px\)/, 'h1 = la taille de la bêta, verbatim');
-  assert.match(CSS, /--type-h2:\s*clamp\(20px, 1\.6vw, 26px\)/, 'h2 = la taille de la bêta, verbatim');
+  assert.match(CSS, /--type-h1:\s*clamp\(26px, 2\.25vw, 36px\)/, 'h1 = la taille de la bêta, verbatim');
+  assert.match(CSS, /--type-h2:\s*clamp\(19px, 1\.5vw, 24px\)/, 'h2 = la taille de la bêta, verbatim');
   assert.match(CSS, /--type-h3:\s*17px/, 'h3 = la taille de la bêta, verbatim');
-  assert.match(CSS, /--type-lead:\s*17px/, 'lede = la taille de la bêta, verbatim');
+  assert.match(CSS, /--type-lead:\s*16px/, 'lede = la taille de la bêta, verbatim');
   // Le barreau h4 (addendum 2026-09-11) : les kickers de carte, déclaré dans
   // les DEUX :root avec les mêmes valeurs — jamais dans un seul.
   const h4 = (src) => (src.match(/--type-h4:\s*([^;]+);\s*--type-h4-lh:\s*([^;]+);\s*--type-h4-ls:\s*([^;]+);/) || []).slice(1).map((v) => v.trim());
@@ -176,14 +176,14 @@ test('aucune classe posée sur un titre ne pose sa propre taille, graisse ou fac
 });
 
 test('les ledes et surtitres des trois portes lisent les mêmes jetons que la bêta', () => {
-  for (const sel of ['.intro p', '.pr-hero p', '.beta-lead']) {
-    const m = CSS.match(new RegExp('^' + sel.replace(/[.]/g, '\\.') + ' \\{([^}]*)\\}', 'm'));
+  for (const sel of ['.intro p', '.pr-hero-copy > p:not(.pr-eligibility)', '.beta-lead']) {
+    const m = CSS.match(new RegExp('^' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\{([^}]*)\\}', 'm'));
     assert.ok(m, sel + ' existe');
     assert.match(m[1], /font-size: var\(--type-lead\)/, sel + ' lit --type-lead');
     assert.match(m[1], /line-height: var\(--type-lead-lh\)/, sel + ' lit --type-lead-lh');
   }
   for (const sel of ['.eyebrow', '.beta-eyebrow']) {
-    const m = CSS.match(new RegExp('^' + sel.replace(/[.]/g, '\\.') + ' \\{([^}]*)\\}', 'm'));
+    const m = CSS.match(new RegExp('^' + sel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\{([^}]*)\\}', 'm'));
     assert.ok(m, sel + ' existe');
     assert.match(m[1], /font-size: var\(--type-eyebrow\)/, sel + ' lit --type-eyebrow');
     assert.match(m[1], /letter-spacing: var\(--type-eyebrow-ls\)/, sel + ' lit --type-eyebrow-ls');
@@ -192,12 +192,21 @@ test('les ledes et surtitres des trois portes lisent les mêmes jetons que la b�
 });
 
 test('les deux faces se chargent partout — le rendu ne dépend plus des polices installées', () => {
-  const both = /fonts\.googleapis\.com\/css2\?[^"]*family=Inter[^"]*family=Sora/;
-  assert.match(HTML, both, 'index.html charge Inter ET Sora');
-  assert.match(SIG_HTML, both, 'signature.html charge Inter ET Sora');
-  assert.match(ADMIN_HTML, both, 'admin charge Inter ET Sora');
-  assert.match(SIG_CSS, /h1,h2,h3\{[^}]*font-family:var\(--font-display\)[^}]*font-weight:var\(--weight-display\)/, 'la salle titre en Sora 800');
-  assert.match(SIG_CSS, /--type-h1:clamp\(30px,2\.6vw,44px\)/, 'la salle porte la même échelle');
+  // Depuis le 2026-09-12 les faces ne viennent plus d'un hôte tiers : chaque
+  // surface les trouve dans la feuille qu'elle charge déjà, servie par Nota
+  // (le détail du réglage vit dans polices-hebergees.test.mjs).
+  const face = (src, famille) => new RegExp("@font-face \\{[^}]*font-family: '" + famille + "'[^}]*url\\('/fonts/").test(src);
+  for (const [nom, feuille, page, lien] of [
+    ['le carnet', CSS, HTML, /<link[^>]+href="styles\.css"/],
+    ['la salle', SIG_CSS, SIG_HTML, /<link[^>]+href="signature\.css"/],
+    ['la console', ADMIN_TOKENS, ADMIN_HTML, /<link[^>]+href="admin\.css"/],
+  ]) {
+    assert.ok(face(feuille, 'Inter') && face(feuille, 'Sora'), nom + ' déclare Inter ET Sora depuis /fonts');
+    assert.match(page, lien, nom + ' charge bien la feuille qui les porte');
+    assert.doesNotMatch(page, /fonts\.googleapis\.com|fonts\.gstatic\.com|rsms\.me/, nom + ' n’appelle plus d’hôte tiers');
+  }
+  assert.match(SIG_CSS, /h1,h2,h3\{[^}]*font-family:var\(--font-display\)[^}]*font-weight:var\(--weight-display\)/, 'la salle suit la graisse d’affichage commune');
+  assert.match(SIG_CSS, /--type-h1:clamp\(26px, 2\.25vw, 36px\)/, 'la salle porte la même échelle');
   assert.match(ADMIN_TOKENS, /--font-display:\s*'Sora'/, 'admin porte la face d’affichage');
   assert.match(ADMIN_CSS, /^h1, h2, h3 \{[^}]*font-family: var\(--font-display\)/m, 'admin titre en Sora');
 });

@@ -350,21 +350,21 @@ test('the logo header spells the variant-C lockup — tile N■ + OTA. + QUÉBEC
     const m = html.match(/<table role="img" aria-label="Nota Québec"[\s\S]*?<\/table>/);
     assert.ok(m, `${name}: the lockup is one table named « Nota Québec »`);
     const h = m[0];
-    // The tile: --nota-blue-900 ground on --radius, a white N at 800, the
+    // The tile: --nota-blue-900 ground on --radius, a white N at 900, the
     // signal dot in --nota-blue-500 at its top-right — hidden from screen readers.
     assert.ok(
-      new RegExp('aria-hidden="true"[^>]*background-color:' + rx(P.markBg) + ';border-radius:' + rx(emails.RADIUS.panel) + ';[^>]*font-weight:800;color:' + rx(P.brandInk) + ';[^>]*>N<span[^>]*vertical-align:top;[^>]*color:' + rx(P.brandBright) + ';">■</span></td>').test(h),
+      new RegExp('aria-hidden="true"[^>]*background-color:' + rx(P.markBg) + ';border-radius:' + rx(emails.RADIUS.panel) + ';[^>]*font-weight:900;color:' + rx(P.brandInk) + ';[^>]*>N<span[^>]*vertical-align:top;[^>]*color:' + rx(P.brandBright) + ';">■</span></td>').test(h),
       `${name}: the tile (N + SQUARE signal on the deep blue-teal square, on the 6 px step)`
     );
-    // The word: O T A — solid, the SAME 800 weight as the N, tight tracking,
+    // The word: O T A — solid, lighter than the N, tight tracking,
     // deep ink — never « Nota », never « nota. », no rule under it.
     const L = emails.LOCKUP;
     assert.equal(L.tile, 40, 'the tile is 40 px');
-    assert.ok(Math.abs(L.word * 0.73 - L.tile * 0.6) <= 1.5, 'the word’s caps (Inter ≈ .73 em) are .60 of the tile');
+    assert.ok(Math.abs(L.word * 0.73 - L.tile * 0.48) <= 1.5, 'the word’s caps (Inter ≈ .73 em) are .48 of the tile');
     assert.equal(L.gap, Math.round(L.tile * 0.12), 'tile→word gap = .12 × tile');
     assert.equal(L.badgeGap, Math.round(L.tile * 0.16), 'word→badge gap = .16 × tile');
     assert.equal(L.badgeSize, Math.ceil(L.tile * 0.16), 'badge font-size = .16 × tile (rounded up to stay legible)');
-    assert.ok(new RegExp('class="nm-ink"[^>]*padding-left:' + L.gap + 'px;[^>]*font-size:' + L.word + 'px;line-height:' + L.tile + 'px;font-weight:800;letter-spacing:-0\\.07em;color:' + rx(P.ink) + ';white-space:nowrap;">OTA<span style="color:' + rx(P.brandBright) + ';">\\.</span></td>').test(h), `${name}: the word OTA. (800, -0.07em, ink, centred on the tile, the period in the signal colour)`);
+    assert.ok(new RegExp('class="nm-ink"[^>]*padding-left:' + L.gap + 'px;[^>]*font-size:' + L.word + 'px;line-height:' + L.tile + 'px;font-weight:800;letter-spacing:-0\\.02em;color:' + rx(P.ink) + ';white-space:nowrap;">OTA<span style="color:' + rx(P.brandBright) + ';">\\.</span></td>').test(h), `${name}: the word OTA. (800, -0.02em, ink, centred on the tile, the period in the signal colour)`);
     assert.ok(!/●/.test(h), `${name}: the round signal is retired (variant C)`);
     assert.ok(!/>Nota</.test(h) && !/nota\./i.test(h), `${name}: the header must not spell « N Nota » or « nota. »`);
     assert.ok(!/border-bottom|border-top|text-decoration:underline/.test(h), `${name}: no rule under the word (ADR 0048 amendment)`);
@@ -462,7 +462,7 @@ test('the personal email signature (docs/signature-courriel.html) carries the sa
   // The lockup, in order, on the lockup's constants.
   const L = emails.LOCKUP;
   assert.ok(new RegExp('background-color:' + P.markBg + ';border-radius:' + emails.RADIUS.panel + ';[^>]*>N<span[^>]*color:' + P.brandBright + '[^>]*>■</span>').test(sig), 'signature: the tile N■ on the 6 px step');
-  assert.ok(new RegExp('padding-left:' + L.gap + 'px;[^"]*font-size:' + L.word + 'px;line-height:' + L.tile + 'px;font-weight:800;letter-spacing:-0\\.07em;color:' + P.ink + ';[^"]*">OTA<span style="color:' + P.brandBright + ';">\\.</span><').test(sig), 'signature: the word OTA. on the LOCKUP constants');
+  assert.ok(new RegExp('padding-left:' + L.gap + 'px;[^"]*font-size:' + L.word + 'px;line-height:' + L.tile + 'px;font-weight:800;letter-spacing:-0\\.02em;color:' + P.ink + ';[^"]*">OTA<span style="color:' + P.brandBright + ';">\\.</span><').test(sig), 'signature: the word OTA. on the LOCKUP constants');
   assert.ok(new RegExp('padding:0 0 0 ' + L.badgeGap + 'px;"><span style="[^"]*background-color:' + P.brandBright + ';[^"]*font-size:' + L.badgeSize + 'px;[^"]*font-weight:800;letter-spacing:0\\.1em;color:' + P.brandInk + '[^"]*">QUÉBEC<').test(sig), 'signature: the QUÉBEC badge on the signal colour');
   assert.ok(!/●/.test(sig), 'signature: the round signal is retired');
   assert.ok(sig.indexOf('>N<span') < sig.indexOf('>OTA<') && sig.indexOf('>OTA<') < sig.indexOf('>QUÉBEC<'), 'signature: tile, word, badge');

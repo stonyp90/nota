@@ -326,6 +326,12 @@ stops all five. Ports are overridable (`NOTA_PORT_API`, `NOTA_PORT_WEB`,
 there (`npm run dev`, `api:local`, `dev:admin`, `admin:local`) when you want one
 of them alone.
 
+The signing rehearsal is enabled in this local stack at
+`http://localhost:4173/signature.html`. Open a retained dossier as its client
+or notary to enter the two-party flow. This remains a demonstration, not a
+legal signature. Set `NOTA_SIGNING_BETA_ENABLED=false` to test the disabled
+state; production configuration is unchanged.
+
 **Signing into the admin console.** Open http://localhost:4174 and request a
 link for `admin@nota.local` (or set `NOTA_ADMIN_EMAILS`). Outside production the
 API returns the magic link **in the response**, and the page shows it — so the

@@ -16,6 +16,7 @@
 #   CF_DISTRIBUTION_ID   - CloudFront distribution id
 #   PLAN_URL             - optional public plan URL (for the post-deploy smoke check)
 #   PITCH_URL            - optional public pitch-deck URL (for the post-deploy smoke check)
+#   BRAND_URL            - optional public brand-guide URL (for the post-deploy smoke check)
 
 name: Deploy
 
@@ -83,13 +84,6 @@ jobs:
           # The plan is a separate static surface on the same private S3
           # origin. Keep its linked summary/model/review beside it so the
           # shareable hostname does not point back into the repository.
-          cp docs/business-plan.html apps/web/dist/business-plan.html
-          cp docs/pitch-deck.html apps/web/dist/pitch-deck.html
-          cp -R docs/pitch-deck apps/web/dist/pitch-deck
-          cp docs/plan-affaires-sommaire.md apps/web/dist/plan-affaires-sommaire.md
-          cp docs/nota-pitch-deck-legal.pptx apps/web/dist/nota-pitch-deck-legal.pptx
-          mkdir -p apps/web/dist/planning
-          cp docs/planning/business-plan-model.json docs/planning/business-plan-review-2026-09-09.md apps/web/dist/planning/
 
       - name: Verify build output
         shell: bash
@@ -261,6 +255,14 @@ jobs:
               --cache-control "public,max-age=31536000,immutable"
           done
 
+          # Passe 2 bis — les polices. Leur contenu ne bouge JAMAIS sous ce nom
+          # (une nouvelle version arriverait sous un autre nom de fichier),
+          # alors elles méritent la même année immuable que les fichiers
+          # empreintés — sinon chaque visiteur les retélécharge toutes les
+          # heures depuis que Nota les sert lui-même (2026-09-12).
+          aws s3 cp apps/web/dist/fonts "s3://${{ vars.WEB_BUCKET }}/fonts" --recursive \
+            --cache-control "public,max-age=31536000,immutable"
+
           # Passe 3 — index.html et sw.js : jamais mis en cache. Ce sont les
           # deux fichiers non empreintés qui DÉSIGNENT les empreintes courantes ;
           # un déploiement doit être vu tout de suite.
@@ -285,32 +287,36 @@ jobs:
           PUBLIC_URL: ${{ vars.PUBLIC_URL }}
           PLAN_URL: ${{ vars.PLAN_URL }}
           PITCH_URL: ${{ vars.PITCH_URL }}
+          BRAND_URL: ${{ vars.BRAND_URL }}
         run: |
           set -euo pipefail
           test -n "$PUBLIC_URL"
           curl --fail --silent --show-error --retry 5 --retry-all-errors "$PUBLIC_URL/api/health" | jq -e '.ok == true'
           curl --fail --silent --show-error --retry 5 --retry-all-errors "$PUBLIC_URL/" -o /tmp/public.html
           grep -q 'nota:site' /tmp/public.html
-          curl --fail --silent --show-error --retry 5 --retry-all-errors "$PUBLIC_URL/nota-pitch-deck-legal.pptx" -o /tmp/nota-pitch-deck-legal.pptx
-          unzip -tq /tmp/nota-pitch-deck-legal.pptx >/dev/null
+          grep -q 'data-nota-surface="web"' /tmp/public.html
+          grep -q 'data-nota-foundations' /tmp/public.html
+          curl --fail --silent --show-error --retry 5 --retry-all-errors "$PUBLIC_URL/nota-pitch-deck.pdf" -o /tmp/nota-pitch-deck.pdf
+          head -c 5 /tmp/nota-pitch-deck.pdf | grep -q '%PDF-'
           # The plan is uploaded in the same release. Once DNS/ACM is live,
           # PLAN_URL makes the deployment fail if the shareable host is stale
           # or serving the application shell instead of the plan.
           if [ -n "$PLAN_URL" ]; then
             curl --fail --silent --show-error --retry 5 --retry-all-errors "$PLAN_URL/" -o /tmp/plan.html
-            grep -q 'Version' /tmp/plan.html
-            grep -qi '#386888' /tmp/plan.html
-            grep -q 'Business plan' /tmp/plan.html
-            if grep -q 'Slide 1 of 16' /tmp/plan.html; then
-              echo 'PLAN_URL is serving the pitch deck instead of the business plan' >&2
-              exit 1
-            fi
+            grep -q 'data-nota-surface="plan"' /tmp/plan.html
+            grep -q 'data-nota-foundations' /tmp/plan.html
           fi
           # The pitch hostname is a dedicated entry point to the same
           # interactive deck. Keep this probe optional until DNS/ACM is live.
           if [ -n "$PITCH_URL" ]; then
             curl --fail --silent --show-error --retry 5 --retry-all-errors "$PITCH_URL/" -o /tmp/pitch.html
             grep -q 'Nota · Pitch deck' /tmp/pitch.html
-            grep -q 'Slide 1 of 16' /tmp/pitch.html
-            grep -q 'Legal framework for notaries' /tmp/pitch.html
+            grep -q 'data-nota-surface="pitch"' /tmp/pitch.html
+            grep -q 'data-nota-foundations' /tmp/pitch.html
+            grep -q 'nota-pitch-deck-fr.pdf' /tmp/pitch.html
+          fi
+          if [ -n "$BRAND_URL" ]; then
+            curl --fail --silent --show-error --retry 5 --retry-all-errors "$BRAND_URL/" -o /tmp/brand.html
+            grep -q 'data-nota-surface="brand"' /tmp/brand.html
+            grep -q 'data-nota-foundations' /tmp/brand.html
           fi

@@ -497,7 +497,9 @@ test('the composed console strings read in English — and the retired client on
   // « Vous gardez la main » reste légitime : ce qui doit disparaître, c'est
   // « vous gardez X % », la part d'honoraires.
   assert.ok(!/vous gardez [^.\n]*%/i.test(src), 'aucune entrée ne parle encore d’une part gardée');
-  assert.ok(!/frais Nota/i.test(src), 'ni de « frais Nota » comme pourcentage');
+  // The client's separate service fee may be named; a percentage share of
+  // the notary's fees must not return through a translation entry.
+  assert.ok(!/frais Nota[^\n]*%/i.test(src), 'ni de « frais Nota » comme pourcentage');
   assert.ok(!/Commission Nota/i.test(src), 'ni d’une commission');
 
   assert.ok(!/Le barème/.test(src), 'ni du barème');

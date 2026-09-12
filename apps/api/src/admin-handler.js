@@ -208,6 +208,18 @@ function createAdminApp(repo, opts = {}) {
       return json(200, info);
     }
 
+    // contract: /admin/support-knowledge
+    if (route === '/admin/support-knowledge' && ['GET', 'POST'].includes(method)) {
+      let payload = {};
+      if (method === 'POST') {
+        try { payload = parseBody(request) || {}; } catch { return json(400, { errors: [{ code: 'json_invalide', message: 'Corps JSON invalide.' }] }); }
+      }
+      const result = method === 'GET'
+        ? await admin.getSupportKnowledge(bearer(request), { ip: clientIp(request) })
+        : await admin.saveSupportKnowledge(bearer(request), payload, { ip: clientIp(request) });
+      return json(result.ok ? 200 : result.status || 401, result);
+    }
+
     // The admin console reads and replies to the very same support records as
     // the public widget and inbound email. RBAC and audit live in admin.js.
     // contract: /admin/support

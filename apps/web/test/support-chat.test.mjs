@@ -187,7 +187,7 @@ test('the intro is said once — and it no longer promises a response time (ADR 
   const panel = $(doc, 'chat-panel');
   const txt = FLAT(panel.textContent);
   assert.equal(
-    txt.split('Explorez les sujets d’aide ou posez votre question. Une personne peut reprendre la conversation.').length - 1,
+    txt.split('Posez votre question ici, en tout temps. Un assistant IA peut vous guider; une personne peut prendre le relais dans cette conversation.').length - 1,
     1,
     'the header sub, once'
   );
@@ -332,7 +332,7 @@ test('unread: a Nota reply arriving while the panel is closed lights the FAB; op
   assert.ok(dot && dot.hidden, 'the dot exists and starts dark');
   assert.equal(Nota.support.pollMs(), 0, 'no thread, no poll');
   await ask(doc, 'Une question');
-  assert.equal(Nota.support.pollMs(), 8000, 'open: live cadence');
+  assert.equal(Nota.support.pollMs(), 3000, 'open: live cadence');
   $(doc, 'chat-close').click();
   assert.equal(Nota.support.pollMs(), 30000, 'closed with a thread: slow cadence');
   const t = [...stub.threads.values()][0];
@@ -408,7 +408,7 @@ test('the emailed #reponse= link opens the operator reply box, clears the hash, 
   await Nota.support.refreshReply();
   await wait(10);
   assert.match($(doc, 'chat-reply-log').textContent, /Et en soirée \?/, 'the follow-up lands');
-  assert.equal(Nota.support.replyPollMs(), 8000, 'the box polls live while open');
+  assert.equal(Nota.support.replyPollMs(), 3000, 'the box polls live while open');
   // Second reply keeps working.
   $(doc, 'chat-reply-text').value = 'Oui, jusqu’à 19 h.';
   submit($(doc, 'chat-reply-form'));
@@ -546,23 +546,23 @@ test('polling suspends in hidden or offline tabs and resumes when available', as
   assert.equal(Nota.support.pollMs(), 0);
   Object.defineProperty(doc, 'hidden', { configurable: true, value: false });
   doc.dispatchEvent(new win.Event('visibilitychange')); await wait(10);
-  assert.equal(Nota.support.pollMs(), 8000);
+  assert.equal(Nota.support.pollMs(), 3000);
   Object.defineProperty(win.navigator, 'onLine', { configurable: true, value: false });
   win.dispatchEvent(new win.Event('offline'));
   assert.equal(Nota.support.pollMs(), 0);
   Object.defineProperty(win.navigator, 'onLine', { configurable: true, value: true });
   win.dispatchEvent(new win.Event('online')); await wait(10);
-  assert.equal(Nota.support.pollMs(), 8000);
+  assert.equal(Nota.support.pollMs(), 3000);
 });
 
 test('poll failures back off and success restores the normal cadence', async () => {
   const { doc, win, Nota, stub } = await boot();
   await ask(doc, 'Fil existant');
   win.fetch = async () => response({}, 503);
-  await Nota.support.refresh(); assert.equal(Nota.support.pollMs(), 16000);
-  await Nota.support.refresh(); assert.equal(Nota.support.pollMs(), 32000);
+  await Nota.support.refresh(); assert.equal(Nota.support.pollMs(), 6000);
+  await Nota.support.refresh(); assert.equal(Nota.support.pollMs(), 12000);
   win.fetch = stub.handler;
-  await Nota.support.refresh(); assert.equal(Nota.support.pollMs(), 8000);
+  await Nota.support.refresh(); assert.equal(Nota.support.pollMs(), 3000);
 });
 
 test('topic search ignores accents, filters locally, and has a recoverable empty state', async () => {

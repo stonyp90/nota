@@ -202,6 +202,14 @@ jobs:
               --cache-control "public,max-age=31536000,immutable"
           done
 
+          # Passe 2 bis — les polices. Leur contenu ne bouge JAMAIS sous ce nom
+          # (une nouvelle version arriverait sous un autre nom de fichier),
+          # alors elles méritent la même année immuable que les fichiers
+          # empreintés — sinon chaque visiteur les retélécharge toutes les
+          # heures depuis que Nota les sert lui-même (2026-09-12).
+          aws s3 cp apps/admin/dist/fonts "s3://${{ vars.ADMIN_WEB_BUCKET }}/fonts" --recursive \
+            --cache-control "public,max-age=31536000,immutable"
+
           # Passe 3 — index.html : jamais mis en cache. C'est le seul fichier
           # non empreinté qui DÉSIGNE les empreintes courantes.
           aws s3 cp apps/admin/dist/index.html "s3://${{ vars.ADMIN_WEB_BUCKET }}/index.html" \

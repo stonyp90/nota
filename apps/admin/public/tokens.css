@@ -10,6 +10,29 @@
    bottom, leaving the copied palette untouched.
    ========================================================================== */
 
+/* ==========================================================================
+   Les polices, servies par Nota — jamais par un tiers.
+   Inter (texte) et Sora (titres) arrivaient de fonts.googleapis.com : l'adresse
+   IP et l'agent de CHAQUE visiteur atteignaient Google avant toute bannière, sur
+   un site qui vend des actes notariés (propriétaire, 2026-09-12). Les octets
+   vivent désormais dans /fonts, licence OFL jointe (fonts/OFL.txt).
+   Ce sont les versions VARIABLES : un seul fichier par tranche couvre toutes
+   les graisses. `swap` garde le texte lisible pendant le chargement.
+   ========================================================================== */
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url('/fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 100 900; font-display: swap;
+  src: url('/fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Sora'; font-style: normal; font-weight: 100 800; font-display: swap;
+  src: url('/fonts/sora-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF; }
+@font-face { font-family: 'Sora'; font-style: normal; font-weight: 100 800; font-display: swap;
+  src: url('/fonts/sora-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+
 :root {
   /* Nota blue ramp, kept in lockstep with apps/web/public/styles.css. */
   --nota-blue-50: #ebf1f5;
@@ -38,6 +61,8 @@
   /* Semantic tokens (light) */
   --brand: var(--nota-blue-700);
   --brand-bright: var(--nota-blue-500);
+  --brand-on-surface: var(--brand);
+  --brand-word-ink: var(--nota-blue-800);
   --brand-ink: #ffffff;
   --brand-hover: var(--nota-blue-800);
   --on-accent: #ffffff; /* text/knob on saturated accents (tier pills, toggle) — white in every theme */
@@ -87,13 +112,13 @@
   /* Same display face and scale as the public site (the Signature beta page is
      the reference for the whole app, owner 2026-09-10). */
   --font-display: 'Sora', var(--font-sans);
-  --weight-display: 800;
-  --type-h1: clamp(30px, 2.6vw, 44px); --type-h1-lh: 1.02; --type-h1-ls: -.055em;
-  --type-h1-compact: clamp(28px, 8vw, 38px); /* the stacked (narrow) hero */
-  --type-h2: clamp(20px, 1.6vw, 26px); --type-h2-lh: 1.15; --type-h2-ls: -.045em;
+  --weight-display: 700;
+  --type-h1: clamp(26px, 2.25vw, 36px); --type-h1-lh: 1.12; --type-h1-ls: -.04em;
+  --type-h1-compact: clamp(26px, 6vw, 32px); /* the stacked (narrow) hero */
+  --type-h2: clamp(19px, 1.5vw, 24px); --type-h2-lh: 1.2; --type-h2-ls: -.035em;
   --type-h3: 17px; --type-h3-lh: 1.3; --type-h3-ls: -.02em;
   --type-h4: 15px; --type-h4-lh: 1.3; --type-h4-ls: -.01em; /* dense card kickers (.nc-h, .nc-live-h, .nc-conformite-h) — ADR 0050, addendum 2026-09-11 */
-  --type-lead: 17px; --type-lead-lh: 1.7;
+  --type-lead: 16px; --type-lead-lh: 1.6;
   --type-eyebrow: 12px; --type-eyebrow-ls: .1em;
   --type-body: 16px; --type-body-lh: 1.5; /* running text — the same step as styles.css (typographie.test.mjs) */
 
@@ -113,6 +138,8 @@
   :root:not([data-theme='light']) {
     --brand: var(--nota-blue-500);
     --brand-bright: var(--nota-blue-400);
+    --brand-on-surface: var(--brand-bright); /* l’encre des états vivants : sur fond de nuit --brand est plus sombre que l’encre, le libellé s’éteindrait */
+    --brand-word-ink: var(--nota-blue-300);
     --brand-ink: #061c2a;
     --brand-hover: var(--nota-blue-400);
     --accent-warm: var(--nota-orange-400);
@@ -148,6 +175,8 @@
 :root[data-theme='dark'] {
   --brand: var(--nota-blue-500);
   --brand-bright: var(--nota-blue-400);
+  --brand-on-surface: var(--brand-bright); /* l’encre des états vivants : sur fond de nuit --brand est plus sombre que l’encre, le libellé s’éteindrait */
+  --brand-word-ink: var(--nota-blue-300);
   --brand-ink: #061c2a;
   --brand-hover: var(--nota-blue-400);
   --accent-warm: var(--nota-orange-400);
@@ -192,8 +221,8 @@
      background a button shows on interaction. The signal channel is Nota blue-teal,
      faint enough to read the same in light and dark. --neutral-wash
      is a theme-neutral ink veil for non-brand controls. */
-  --brand-wash: rgb(var(--nota-blue-500-rgb) / 0.10);
-  --brand-wash-strong: rgb(var(--nota-blue-500-rgb) / 0.18);
+  --brand-tint-solid: rgb(var(--nota-blue-500-rgb) / 0.10);
+  --brand-tint-solid-strong: rgb(var(--nota-blue-500-rgb) / 0.18);
   --neutral-wash: rgb(96 121 134 / 0.10);
   --focus-ring: rgb(var(--nota-blue-500-rgb) / 0.15); /* input/control focus glow (3px) — theme-neutral, same as the washes */
 }
