@@ -23,7 +23,7 @@ const token=(name,source=css)=>{
 const family=name=>css.match(new RegExp(name+":\\s*'([^']+)'"))[1];
 const captureDir=join(root,'demo/calendar-captures');
 const captures=JSON.parse(readFileSync(join(captureDir,'manifest.json'),'utf8'));
-for(const lang of ['fr','en']) for(const name of ['subscribe','offer','confirm']) {
+for(const lang of ['fr','en']) for(const name of ['subscribe','offer','confirm','retained']) {
   const capture=captures[lang][name],filename=capture.file||name+'-'+lang+'.png';
   const path=join(captureDir,filename);
   const probe=spawnSync(process.env.FFPROBE||'ffprobe',['-v','error','-show_entries','stream=width,height','-of','json',path],{encoding:'utf8'});
@@ -35,7 +35,7 @@ for(const lang of ['fr','en']) for(const name of ['subscribe','offer','confirm']
   capture.image='data:image/'+(filename.endsWith('.jpg')?'jpeg':'png')+';base64,'+readFileSync(path).toString('base64');
 }
 const box={NotaDomain:require('../packages/domain/index.js'),NotaCalendarBrand:{
-  captures,logo:'data:image/svg+xml;base64,'+readFileSync(join(publicDir,'nota-logo-light.svg')).toString('base64'),demoOffer:JSON.parse(readFileSync(join(captureDir,'offer.json'),'utf8')),
+  captures,demoOffer:JSON.parse(readFileSync(join(captureDir,'offer.json'),'utf8')),
   heading:family('--font-display'),body:family('--font-sans'),
   colors:{bg:token('--bg',dark),surface:token('--surface',dark),ink:token('--ink',dark),
     muted:token('--ink-muted',dark),border:token('--border',dark),accent:token('--nota-blue-400'),
@@ -62,7 +62,7 @@ const frame=t=>{
 };
 if(process.argv.includes('--frames-only')){
   const previews=join(root,'output/calendar-brand-review');mkdirSync(previews,{recursive:true});
-  for(const t of [1,3.9,4,5.5,7.5,9.5,10.5,12,14.8,film.duration-.001])writeFileSync(join(previews,lang+'-'+t+'.png'),frame(t));
+  for(const t of [1,3.9,4,5.5,7.5,9.5,10.5,12,14.8,15.5,film.duration-.001])writeFileSync(join(previews,lang+'-'+t+'.png'),frame(t));
   console.log(previews);process.exit(0);
 }
 writeFileSync(join(destination,'nota-agenda-'+lang+'.png'),frame(10));

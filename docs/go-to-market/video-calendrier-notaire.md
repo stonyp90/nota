@@ -1,6 +1,6 @@
 # Calendar-to-acceptance film
 
-The notary landing contains a silent, 15.5-second demonstration. It shows the
+The notary landing contains a silent, 18-second demonstration. It shows the
 journey from calendar subscription to confirmation in the actual Nota application:
 
 1. **0–4 s:** the real subscription choices beside a preview of the month. A cursor
@@ -15,8 +15,11 @@ journey from calendar subscription to confirmation in the actual Nota applicatio
    the fees and signing details. The real sticky **Retenir** footer stays visible.
    The application contains the complete documents, criteria and terms; the
    film frames the part relevant to this decision.
+4. **15.5–18 s:** the real retained file shows that the request has a notary
+   and that the client/notary conversation can begin. No message is sent by
+   the film.
 
-The film loops directly after confirmation, without showing the retained file.
+The film loops after showing the confirmed result.
 
 The same offer's service, date and amount persist across every scene. Service
 names and money formatting come from `@nota/domain`; captions use the product's
@@ -25,8 +28,10 @@ synthetic public offer are in `demo/calendar-captures/`. See its README for the
 isolated capture workflow. No production account or provider calendar was
 changed. No credentials or access tokens are included in the source assets.
 
-The 16:9 frame uses the product's pale canvas, official logo and Sora/Inter
-typography. The header contains the logo and demo label. The real
+The 16:9 frame uses the product's pale canvas and Sora/Inter typography. The
+page header already carries the Nota logo, so the film repeats neither the
+logo nor the top-right demo label. Its short instruction starts at the top;
+the recovered 50 px increase the visible calendar and review area. The real
 subscription and acceptance buttons preserve Nota's outlined style; the
 illustrated calendar link uses the same brand colour and radius. The calendar
 opens to a full-width month after subscription. Opaque cuts separate the

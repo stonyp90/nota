@@ -35,6 +35,7 @@ To refresh the captures, use full browser screenshots and update the crop rectan
 in the manifest. Capture after entry animations and scrolling have stopped.
 Keep the true dialog contents, including the confirmation step. The source
 images remain available for reviewers to compare against the displayed crop.
-The offer-card and retained-file captures remain as historical source
-references; the current film goes straight from the calendar event to the real
-review and loops after confirmation.
+The offer-card capture remains a historical source reference. The current
+film goes from the calendar event to the real review, then shows the retained
+file before looping. The retained crop starts below the page header to avoid
+repeating the logo already visible around the embedded film.

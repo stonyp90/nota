@@ -145,6 +145,8 @@
   "Votre décision est confirmée dans Nota.": "Your decision is confirmed in Nota.",
   "Les coordonnées du client sont débloquées.": "The client’s contact details are unlocked.",
   "Exemple de démonstration": "Demo example",
+  "Le client a maintenant son notaire.": "The client now has a notary.",
+  "La demande est retenue. Les échanges peuvent commencer.": "The request is accepted. The conversation can begin.",
   "Confirmez l’ajout dans votre calendrier.": "Confirm the subscription in your calendar.",
   "Nouvelle offre": "New offer",
   "Mercredi 23 septembre": "Wednesday, September 23",

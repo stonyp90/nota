@@ -34,16 +34,17 @@ for (const source of ['i18n.js', 'agenda-demo-render.js']) vm.runInNewContext(re
 const film = context.NotaCalendarFilm;
 
 for (const lang of ['fr', 'en']) {
-  test(`${lang}: real Nota sources, logo and visible content remain at every scene boundary`, () => {
-    for (const t of [0, 3.999, 4, 7.5, 9.5, 10.499, 10.5, 14.9, film.duration - .001]) {
+  test(`${lang}: real Nota sources fill the film without a repeated logo or demo label`, () => {
+    for (const t of [0, 3.999, 4, 7.5, 9.5, 10.499, 10.5, 14.9, 15.499, 15.5, film.duration - .001]) {
       const svg = film.render(t, lang);
       assert.doesNotMatch(svg, /NaN|Infinity|rgba\(255,255,255/, `valid opaque frame at ${t}s`);
       const doc = new JSDOM(svg, { contentType: 'image/svg+xml' }).window.document;
       assert.equal(doc.documentElement.getAttribute('viewBox'), '0 0 1120 630');
-      assert.ok(doc.querySelector('image[href="official-nota-logo"]'), 'official logo stays visible');
+      assert.equal(doc.querySelector('image[href="official-nota-logo"]'), null, 'the page header already carries the brand');
+      assert.doesNotMatch(doc.documentElement.textContent, /Exemple de démonstration|Demo example/, 'no repeated demo label above the experience');
       assert.equal(doc.querySelector('rect').getAttribute('fill'), brand.colors.lightBg);
-      const scene = t < 4 ? 'subscribe' : t < 10.5 ? null : 'confirm';
-      assert.equal(doc.querySelector(`image[href="capture-retained-${lang}"]`), null, 'skip the retained-file scene');
+      const scene = t < 4 ? 'subscribe' : t < 10.5 ? null : t < 15.5 ? 'confirm' : 'retained';
+      assert.equal(!!doc.querySelector(`image[href="capture-retained-${lang}"]`), t >= 15.5, 'show the real result after confirmation');
       if (scene) assert.ok(doc.querySelector(`image[href="capture-${scene}-${lang}"]`));
       else assert.ok(doc.querySelector('#month'), 'the connected month remains visible');
       if (t >= 8 && t < 10.5) {
