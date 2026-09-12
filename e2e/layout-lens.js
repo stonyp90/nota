@@ -42,7 +42,12 @@ function measure({ rootSel, touch, vw, vh, allowOverlap }) {
     return false;
   };
   const label = (el) => `${el.tagName.toLowerCase()}${el.id ? '#' + el.id : ''}${typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : ''}`;
-  const flatten = (el) => [...el.children].flatMap((k) => (getComputedStyle(k).display === 'contents' ? flatten(k) : [k]));
+  // SVG groups are inline wrappers with no own text. Read their visible
+  // children, not the group's box, so missing content still leaves a gap.
+  const flatten = (el) => [...el.children].flatMap((k) => (
+    getComputedStyle(k).display === 'contents' || (k instanceof SVGElement && k.tagName === 'g' && vis(k))
+      ? flatten(k) : [k]
+  ));
 
   const offenders = [];
   document.querySelectorAll('body *').forEach((el) => {
@@ -222,7 +227,9 @@ async function settle(page) {
   await page.evaluate(async () => {
     if (document.fonts) { try { await document.fonts.ready; } catch (e) { /* no font API */ } }
     const finite = document.getAnimations().filter((a) => { const t = a.effect && a.effect.getComputedTiming(); return t && t.iterations !== Infinity; });
-    await Promise.race([Promise.all(finite.map((a) => a.finished.catch(() => {}))), new Promise((r) => setTimeout(r, 2000))]);
+    // Staggered SVG reveals run past 3s. Bound the wait in case a surface
+    // pauses an animation without cancelling it.
+    await Promise.race([Promise.all(finite.map((a) => a.finished.catch(() => {}))), new Promise((r) => setTimeout(r, 5000))]);
     await new Promise((r) => setTimeout(r, 120));
   });
 }

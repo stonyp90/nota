@@ -53,11 +53,14 @@ test('partner booking → calendar link → ' + (counterOffer ? 'counter-offer a
     await notary.addInitScript(() => { localStorage.setItem('nota.onboarded.v1', '1'); localStorage.setItem('nota.introSeen', '1'); });
     await notary.goto(link);
     await expect(notary.locator('#pane-notaires')).toBeVisible();
-    const verified = notary.waitForResponse(r => r.url().endsWith('/notary/session/verify'));
     await notary.locator('#notary-calendar-access > summary').click();
     await notary.locator('#nc-email').fill('calendar-notary-' + Date.now() + '@example.test');
-    await notary.locator('#notary-console-signin').click();
-    const session = await (await verified).json();
+    const [verified] = await Promise.all([
+      notary.waitForResponse(r => r.url().endsWith('/notary/session/verify') && r.request().method() === 'POST'),
+      notary.locator('#notary-console-signin').click(),
+    ]);
+    expect(verified.ok(), await verified.text()).toBeTruthy();
+    const session = await verified.json();
     await expect(notary.locator('#notary-authed')).toBeVisible();
     // Complete this isolated test identity's required contact profile.
     const saved = await notary.request.post(api + '/notary/profile', {
@@ -133,6 +136,8 @@ test('partner booking → calendar link → ' + (counterOffer ? 'counter-offer a
     expect((await sent).ok()).toBeTruthy();
     await notary.reload();
     const retainedCard = notary.locator('#notary-retained-list .nc-card[data-id="' + bid.id + '"]');
+    // Retained files reopen in their summary view after a reload.
+    await retainedCard.locator('.nc-contact-open').click();
     await expect(retainedCard).toContainText('Bonjour, voici mon message de test calendrier.');
     await retainedCard.locator('.chat-input').fill('Bien reçu, réponse du notaire de test.');
     const replied = notary.waitForResponse(r => r.url().endsWith('/notary/bids/message'));

@@ -52,7 +52,7 @@ test('the plan remains branded in full screen and navigates with the keyboard',a
  await page.locator('[data-plan-fs="motion"]').click();assert.equal(await page.locator('#planMotion').getAttribute('aria-pressed'),'true');
  await page.locator('[data-plan-fs="replay"]').click();assert.equal(await page.locator('#planMotion').getAttribute('aria-pressed'),'false');
  await page.keyboard.press('ArrowRight');assert.match(await page.locator('#planStage').getAttribute('aria-label'),/5:/);
- await page.locator('[data-plan-fs="exit"]').click();assert.equal(await page.locator('.plan-fullscreen-brand').isVisible(),false);
+ await page.locator('[data-plan-fs="exit"]').click();await page.waitForFunction(()=>!document.fullscreenElement);assert.equal(await page.locator('.plan-fullscreen-brand').isVisible(),false);
  await page.close();
 });
 
