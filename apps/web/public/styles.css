@@ -7761,10 +7761,3 @@ html[data-theme='dark'] #pane-beta {
     padding-top: var(--space-6);
   }
 }
-
-@media (max-width: 640px) {
-  /* On a one-column phone inventory the overflow tile follows the last real
-     card. Top-aligning its message keeps the tile useful without a centered
-     dead pocket between two consecutive demand rows. */
-  #pane-notaires .nc-live-more { justify-content: flex-start; }
-}

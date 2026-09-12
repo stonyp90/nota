@@ -952,7 +952,10 @@ select.input { height: 44px; }
 .admin-section-label { font-size: .8rem; font-weight: 600; }
 .admin-section-search { width: 100%; min-width: 0; margin-bottom: .5rem; }
 .admin-rail-link[hidden] { display: none; }
-.page-heading { min-width: 0; flex: 1; }
+.page-heading { min-width: min(100%, 280px); flex: 1 1 280px; }
+/* 280px is the least a heading needs to stay a heading: below it the four-field
+   audit bar beside it squeezed the title to one word a line (iPad lens, CI
+   2026-09-11) and the bar wraps under the heading instead. */
 .page-heading .page-sub { max-width: 75ch; }
 .admin-content .field { min-width: 0; }
 .admin-content input, .admin-content textarea, .admin-content select { max-width: 100%; }
