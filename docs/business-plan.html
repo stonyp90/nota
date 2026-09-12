@@ -353,7 +353,7 @@ code{overflow-wrap:anywhere}
 .tswitch svg{position:relative;z-index:1;display:block;flex:none;margin:0 5.5px}
 .tswitch::after{content:'';position:absolute;top:2px;left:2px;z-index:0;width:24px;height:24px;border-radius:var(--radius-sm);background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow);transition:transform .16s ease;transform:translateX(var(--tswitch-x))}
 .tswitch .tswitch-sun{color:var(--tswitch-sun)}.tswitch .tswitch-moon{color:var(--tswitch-moon)}
-@media (pointer:coarse){.tswitch::before{content:'';position:absolute;inset:-8px -4px}}
+@media (pointer:coarse){.tswitch::before{content:'';position:absolute;inset:-8px -4px}.language-bar [data-plan-lang]{min-width:44px}}
 /* The lockup, centred at 50% (ADR 0048, optical sizing amendment): every length derives from the tile's rendered height,
    --lockup-tile, through five ratios — OTA cap height .48 of the tile, vertically centred; .12 of tile
    between tile and word; .16 between word and badge; the badge at .16 of tile, on --nota-blue-500 with

@@ -250,11 +250,25 @@ test.describe('notary inventory keeps its footprint', () => {
           const floor = count ? 6 : 3;
           await expect(page.locator('#notary-live-grid .nc-live-slot')).toHaveCount(Math.max(0, floor - Math.min(count, 12)));
           await settled(page);
-          const geometry = { hero: await boxOf(page, '#pane-notaires .intro--hero') };
+          const geometry = {
+            hero: await boxOf(page, '#pane-notaires .intro--hero'),
+            subscription: await boxOf(page, '#notary-carnet .nc-calendar-guide'),
+            preview: await boxOf(page, '#notary-carnet .nc-calendar-preview'),
+          };
           for (const id of ['notary-live-grid', 'notary-console', 'notary-carnet', 'nc-conformite']) {
             geometry[id] = await boxOf(page, '#' + id);
           }
-          expect(geometry['notary-carnet'].top, `${count} offers: calendar follows the hero`).toBeGreaterThanOrEqual(geometry.hero.bottom - 1);
+          // The desktop calendar wrapper spans the hero row because it also
+          // contains the preview beside it. The subscription guide itself
+          // follows the hero in the left column; narrow screens stack both.
+          expect(geometry.subscription.top, `${count} offers: subscription follows the hero`).toBeGreaterThanOrEqual(geometry.hero.bottom - 1);
+          expect(Math.abs(geometry.subscription.left - geometry.hero.left), `${count} offers: subscription shares the hero's left edge`).toBeLessThanOrEqual(1);
+          if (vp.width > 960) {
+            expect(geometry.preview.left, `${count} offers: preview stays beside the hero and subscription`).toBeGreaterThanOrEqual(Math.max(geometry.hero.right, geometry.subscription.right) - 1);
+            expect(Math.abs(geometry.preview.top - geometry.hero.top), `${count} offers: preview aligns with the hero`).toBeLessThanOrEqual(1);
+          } else {
+            expect(geometry.preview.top, `${count} offers: preview follows subscription`).toBeGreaterThanOrEqual(geometry.subscription.bottom - 1);
+          }
           expect(geometry['notary-live-grid'].top, `${count} offers: optional inventory follows subscription`).toBeGreaterThanOrEqual(geometry['notary-carnet'].bottom - 1);
           expect(geometry['notary-console'].top, `${count} offers: optional access follows subscription`).toBeGreaterThanOrEqual(geometry['notary-carnet'].bottom - 1);
           expect(geometry['nc-conformite'].top, `${count} offers: obligations stay secondary`).toBeGreaterThanOrEqual(geometry['notary-console'].bottom - 1);
@@ -278,16 +292,17 @@ test.describe('notary inventory keeps its footprint', () => {
   }
 });
 
-// The partners pane has a denser story than the other public doors: a reward
-// hero, audience chips, an estimator, a timeline and a claim form. Keep its
-// own geometry contract explicit at every supported width so a translation or
-// a new partner type cannot create a blank rail or a clipped action.
+// The partners pane reads as a reward hero, a code explainer, then the claim
+// form and fine print. Check consecutive sections so real content is never
+// mistaken for an empty band, while gaps and overlapping sections still fail.
 test.describe('partners pane at every supported resolution', () => {
   for (const vp of VIEWPORTS) {
-    test(`${vp.name}: the two amounts and the claim form keep one readable flow`, async ({ page }) => {
+    test(`${vp.name}: the rewards, code explainer and claim form keep one readable flow`, async ({ page }) => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       await gotoHome(page, { suppressOnboarding: true });
       await openPane(page, 'partenaires', '#pane-partenaires');
+      await expect(page.locator('#pr-flow')).toBeVisible();
+      await expect(page.locator('#partner-form')).toBeVisible();
 
       const geometry = await page.evaluate(() => {
         const rect = (sel) => {
@@ -314,7 +329,7 @@ test.describe('partners pane at every supported resolution', () => {
         return {
           viewport: { width: innerWidth, scrollWidth: document.documentElement.scrollWidth },
           hero, copy, rewards, earned, headingRight, cards, chips,
-          grid: rect('.pr-grid'), form: rect('.pr-form-panel'), note: rect('.pr-grid .note'),
+          flow: rect('#pr-flow'), grid: rect('.pr-grid'), form: rect('.pr-form-panel'), note: rect('.pr-grid .note'),
           submit: rect('#partner-submit'),
         };
       });
@@ -324,11 +339,18 @@ test.describe('partners pane at every supported resolution', () => {
       expect(geometry.cards.every((c) => c.width > 0 && c.right <= geometry.hero.right + 1), 'reward cards stay inside the hero').toBe(true);
       expect(geometry.chips.every((c) => c.width > 0 && c.right <= geometry.form.right + 1), 'the profession chips stay inside the form').toBe(true);
       expect(geometry.submit.width, 'the claim action remains visible').toBeGreaterThanOrEqual(160);
-      expect(geometry.grid.top - geometry.hero.bottom, 'no empty band opens between the offer and the form').toBeLessThanOrEqual(48);
+      for (const [label, before, after] of [
+        ['hero to code explainer', geometry.hero, geometry.flow],
+        ['code explainer to form grid', geometry.flow, geometry.grid],
+        ['form to fine print', geometry.form, geometry.note],
+      ]) {
+        const gap = after.top - before.bottom;
+        expect(gap, `${label}: sections never overlap`).toBeGreaterThanOrEqual(-1);
+        expect(gap, `${label}: no empty band opens`).toBeLessThanOrEqual(48);
+      }
+      expect(Math.abs(geometry.form.top - geometry.grid.top), 'the unclaimed form leads the grid without an empty share row').toBeLessThanOrEqual(1);
       expect(geometry.earned.top - geometry.rewards.bottom, 'the acquisition rule stays under its two amounts').toBeLessThanOrEqual(24);
-      // Sous le héros il n'y a plus qu'une colonne : le formulaire, puis la
-      // mention du prix du client — jamais côte à côte.
-      expect(geometry.note.top, 'the fine print stacks under the form').toBeGreaterThanOrEqual(geometry.form.bottom - 1);
+      // The fine print follows the form on the same left edge at every size.
       expect(geometry.form.left).toBeCloseTo(geometry.note.left, 0);
 
       if (vp.width < 901) {

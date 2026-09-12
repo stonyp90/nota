@@ -1,6 +1,7 @@
 'use strict';
 const { test, expect } = require('@playwright/test');
 const { gotoHome } = require('./helpers');
+const { NOTARY_CONTACT } = require('../apps/api/test-support/notary-fixture');
 const geometry = import('./offer-card-geometry.mjs');
 
 for (const lang of ['fr', 'en']) for (const width of [390, 768, 1280]) {
@@ -27,8 +28,25 @@ for (const lang of ['fr', 'en']) for (const width of [390, 768, 1280]) {
     await gotoHome(page, { suppressOnboarding: true });
     await page.goto(`/?lang=${lang}#t=notaires`);
     await page.locator('#notary-calendar-access > summary').click();
-    await page.locator('#nc-email').fill('notaire.demo@etude.ca');
-    await page.locator('#notary-console-signin').click();
+    await page.locator('#nc-email').fill(`offer-size-${lang}-${width}@example.test`);
+    const [verified] = await Promise.all([
+      page.waitForResponse(r => r.url().endsWith('/notary/session/verify') && r.request().method() === 'POST'),
+      page.locator('#notary-console-signin').click(),
+    ]);
+    expect(verified.ok(), await verified.text()).toBeTruthy();
+    const session = await verified.json();
+    // The first sign-in on this browser opens a modal tour over the agenda.
+    const tour = page.locator('dialog.account-tour');
+    await tour.getByRole('button', { name: lang === 'fr' ? 'Passer la visite' : 'Skip tour', exact: true }).click();
+    await expect(tour).not.toBeVisible();
+    // The API filters by the notary's practice area. A blank profile excludes
+    // the travel offer that shares a signing date with another financing.
+    const saved = await page.request.post(new URL(verified.url()).origin + '/notary/profile', {
+      headers: { authorization: 'Bearer ' + session.token },
+      data: { ...NOTARY_CONTACT, etude: 'Étude Dimensions Test', prefixe: 'G1R', rayonKm: 50 },
+    });
+    expect(saved.ok(), await saved.text()).toBeTruthy();
+    await page.reload();
     const cards = page.locator('#notary-open-list .nc-agenda-grid > .nc-card');
     await expect(cards.first()).toBeVisible();
     const check = async () => {

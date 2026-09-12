@@ -8140,7 +8140,7 @@ html[data-theme='dark'] #pane-beta {
 }
 @media (max-width: 980px) {
   #pane-beta .beta-hero { grid-template-columns: 1fr; gap: 32px; }
-  #pane-beta .beta-intro { max-width: 600px; width: 100%; justify-self: center; }
+  #pane-beta .beta-intro { max-width: 600px; width: 100%; justify-self: start; }
   #pane-beta .beta-intro h1 { max-width: 22ch; }
   #pane-beta .beta-preview { justify-self: center; }
   #pane-beta .beta-caption { max-width: 56ch; }
